@@ -28,15 +28,15 @@ async def authenticate(handshake: HandshakeData) -> UserIdentity | None:
 
 
 async def main() -> None:
-    pool = await asyncpg.create_pool(os.environ.get("DATABASE_URL", "postgresql://rrcp:rrcp@localhost:55432/rrcp_test"))
+    pool = await asyncpg.create_pool(os.environ.get("DATABASE_URL", "postgresql://rfnry_chat:rfnry_chat@localhost:55432/rfnry_chat_test"))
     client = AsyncAnthropic()
 
-    thread_server = ChatServer(
+    chat_server = ChatServer(
         store=PostgresChatStore(pool=pool),
         authenticate=authenticate,
     )
 
-    @thread_server.assistant("claude")
+    @chat_server.assistant("claude")
     async def claude(ctx, send):
         history = await ctx.events()
         messages = []
@@ -60,9 +60,9 @@ async def main() -> None:
                     await stream.append(chunk)
 
     app = FastAPI()
-    app.state.thread_server = thread_server
-    app.include_router(thread_server.router, prefix="/acp")
-    asgi = thread_server.mount_socketio(app)
+    app.state.chat_server = chat_server
+    app.include_router(chat_server.router, prefix="/chat")
+    asgi = chat_server.mount_socketio(app)
 
     config = uvicorn.Config(asgi, host="0.0.0.0", port=8000, loop="asyncio")
     server = uvicorn.Server(config)
