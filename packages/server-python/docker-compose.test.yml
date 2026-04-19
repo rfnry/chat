@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rfnry_chat
+      POSTGRES_PASSWORD: rfnry_chat
+      POSTGRES_DB: rfnry_chat_test
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rfnry_chat -d rfnry_chat_test"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
