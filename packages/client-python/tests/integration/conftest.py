@@ -96,7 +96,17 @@ async def live_server(
     store = PostgresChatStore(pool=clean_db)
 
     async def auth(handshake: HandshakeData) -> Identity:
-        identity_id = handshake.auth.get("identity_id") if isinstance(handshake.auth, dict) else None
+        identity_id: str | None = None
+        if isinstance(handshake.auth, dict):
+            raw = handshake.auth.get("identity_id")
+            if isinstance(raw, str):
+                identity_id = raw
+        # REST calls carry no socket-style auth payload; fall back to a
+        # test-only header so multi-identity tests can distinguish callers.
+        if identity_id is None:
+            header_val = handshake.headers.get("x-identity-id")
+            if isinstance(header_val, str):
+                identity_id = header_val
         if identity_id == DEFAULT_ASSISTANT.id:
             return DEFAULT_ASSISTANT
         return DEFAULT_USER
