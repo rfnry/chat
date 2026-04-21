@@ -19,9 +19,9 @@ logger = logging.getLogger("cs.server")
 
 
 def create_chat_server(store: ChatStore) -> ChatServer:
-    chat_server = ChatServer(store=store, authenticate=authenticate)
+    server = ChatServer(store=store, authenticate=authenticate)
 
-    @chat_server.on("*")
+    @server.on("*")
     async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
         event = ctx.event
         payload: dict[str, object] = {
@@ -41,7 +41,7 @@ def create_chat_server(store: ChatStore) -> ChatServer:
             payload["tool_error"] = event.tool.error
         await send_to_sink("event", payload)
 
-    return chat_server
+    return server
 
 
 def _text_preview(event: MessageEvent, *, limit: int = 80) -> str:

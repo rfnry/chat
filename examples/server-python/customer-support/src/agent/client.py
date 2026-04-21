@@ -12,13 +12,13 @@ from src.settings import settings
 logger = logging.getLogger("cs.agent.client")
 
 
-def create_chat_connector(base_url: str) -> ChatClient:
+def create_chat_client(base_url: str) -> ChatClient:
     identity = AssistantIdentity(id=settings.ASSISTANT_ID, name=settings.ASSISTANT_NAME)
 
     async def authenticate() -> dict[str, Any]:
         return {"auth": {"token": settings.ASSISTANT_TOKEN}}
 
-    chat_client = ChatClient(base_url=base_url, identity=identity, authenticate=authenticate)
-    assistant.register(chat_client, identity)
-    logger.info("agent connector built id=%s base_url=%s", identity.id, base_url)
-    return chat_client
+    client = ChatClient(base_url=base_url, identity=identity, authenticate=authenticate)
+    assistant.register(client, identity)
+    logger.info("agent client built id=%s base_url=%s", identity.id, base_url)
+    return client

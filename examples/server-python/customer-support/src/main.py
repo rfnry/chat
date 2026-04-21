@@ -10,8 +10,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from rfnry_chat_server import ChatStore
 
-from src import chat
-from src.agent import client as agent_client
+from src.chat import create_chat_server
+from src.agent import create_chat_client
+
 from src.db import LazyStore, create_pool
 from src.settings import settings
 
@@ -23,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger("cs.main")
 
 store = LazyStore()
-chat_server = chat.create_chat_server(store=cast(ChatStore, store))
+chat_server_instance = create_chat_server(store=cast(ChatStore, store))
 
 
 @asynccontextmanager
@@ -31,11 +32,11 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     pool = await create_pool(settings.DATABASE_URL)
     logger.info("db pool ready")
     store.bind(pool)
-    await chat_server.start()
+    await chat_server_instance.start()
     logger.info("chat server + watchdog running")
 
-    agent_connector = agent_client.create_chat_connector(f"http://127.0.0.1:{settings.PORT}")
-    agent_task = asyncio.create_task(agent_connector.run())
+    agent_client_instance = create_chat_client(f"http://127.0.0.1:{settings.PORT}")
+    agent_task = asyncio.create_task(agent_client_instance.run())
     logger.info("agent scheduled")
 
     try:
@@ -46,14 +47,14 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
             await asyncio.wait_for(agent_task, timeout=5)
         except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
             pass
-        await chat_server.stop()
+        await chat_server_instance.stop()
         await pool.close()
         logger.info("shutdown complete")
 
 
 app = FastAPI(title="cs-example", lifespan=lifespan)
-app.state.chat_server = chat_server
-app.include_router(chat_server.router, prefix="/chat")
+app.state.chat_server = chat_server_instance
+app.include_router(chat_server_instance.router, prefix="/chat")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -68,4 +69,4 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-asgi = chat_server.mount_socketio(app)
+asgi = chat_server_instance.mount_socketio(app)
