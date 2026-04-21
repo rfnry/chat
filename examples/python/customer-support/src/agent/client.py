@@ -18,7 +18,7 @@ def create_chat_client(base_url: str) -> ChatClient:
     async def authenticate() -> dict[str, Any]:
         return {"auth": {"token": settings.ASSISTANT_TOKEN}}
 
-    client = ChatClient(base_url=base_url, identity=identity, authenticate=authenticate)
-    assistant.register(client, identity)
+    chat_client = ChatClient(base_url=base_url, identity=identity, authenticate=authenticate)
+    assistant.register(chat_client, identity)
     logger.info("agent client built id=%s base_url=%s", identity.id, base_url)
-    return client
+    return chat_client

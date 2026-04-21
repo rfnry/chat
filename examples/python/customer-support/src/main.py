@@ -24,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger("cs.main")
 
 store = LazyStore()
-chat_server_instance = create_chat_server(store=cast(ChatStore, store))
+chat_server = create_chat_server(store=cast(ChatStore, store))
 
 
 @asynccontextmanager
@@ -32,11 +32,11 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     pool = await create_pool(settings.DATABASE_URL)
     logger.info("db pool ready")
     store.bind(pool)
-    await chat_server_instance.start()
-    logger.info("chat server + watchdog running")
+    await chat_server.start()
+    logger.info("chat server running")
 
-    agent_client_instance = create_chat_client(f"http://127.0.0.1:{settings.PORT}")
-    agent_task = asyncio.create_task(agent_client_instance.run())
+    chat_client = create_chat_client(f"http://127.0.0.1:{settings.PORT}")
+    agent_task = asyncio.create_task(chat_client.run())
     logger.info("agent scheduled")
 
     try:
@@ -47,14 +47,14 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
             await asyncio.wait_for(agent_task, timeout=5)
         except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
             pass
-        await chat_server_instance.stop()
+        await chat_server.stop()
         await pool.close()
         logger.info("shutdown complete")
 
 
 app = FastAPI(title="cs-example", lifespan=lifespan)
-app.state.chat_server = chat_server_instance
-app.include_router(chat_server_instance.router, prefix="/chat")
+app.state.chat_server = chat_server
+app.include_router(chat_server.router, prefix="/chat")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -69,4 +69,4 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-asgi = chat_server_instance.mount_socketio(app)
+asgi = chat_server.mount_socketio(app)

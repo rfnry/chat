@@ -268,6 +268,7 @@ class ChatServer:
             idempotency_key=idempotency_key,
         )
         created = await self.store.create_run(run)
+        await self.publish_run_updated(created, thread=thread)
         await self.publish_event(_run_started_event(created, thread, actor), thread=thread)
         return created
 
@@ -275,6 +276,7 @@ class ChatServer:
         updated = await self.store.update_run_status(run_id, "cancelled")
         thread = await self.store.get_thread(updated.thread_id)
         if thread is not None:
+            await self.publish_run_updated(updated, thread=thread)
             await self.publish_event(
                 _run_cancelled_event(updated, thread, updated.actor), thread=thread
             )
@@ -285,6 +287,7 @@ class ChatServer:
             updated = await self.store.update_run_status(run_id, "completed")
             thread = await self.store.get_thread(updated.thread_id)
             if thread is not None:
+                await self.publish_run_updated(updated, thread=thread)
                 await self.publish_event(
                     _run_completed_event(updated, thread, updated.actor), thread=thread
                 )
@@ -292,6 +295,7 @@ class ChatServer:
         updated = await self.store.update_run_status(run_id, "failed", error=error)
         thread = await self.store.get_thread(updated.thread_id)
         if thread is not None:
+            await self.publish_run_updated(updated, thread=thread)
             await self.publish_event(
                 _run_failed_event(updated, thread, updated.actor, error), thread=thread
             )
