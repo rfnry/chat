@@ -263,9 +263,9 @@ class ChatClient:
             thread = await self._rest.get_thread(thread_id)
 
         if user is not None:
-            existing = await self._rest.list_members(thread.id)
-            if not any(m.identity_id == user.id for m in existing):
-                await self.add_member(thread.id, user)
+            # add_member is idempotent server-side (ON CONFLICT DO NOTHING);
+            # no pre-flight needed.
+            await self.add_member(thread.id, user)
 
         await self.join_thread(thread.id)
 

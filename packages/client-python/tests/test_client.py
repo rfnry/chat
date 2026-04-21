@@ -274,8 +274,6 @@ async def test_open_thread_with_creates_thread_adds_user_joins_and_sends() -> No
                     "updated_at": now,
                 },
             )
-        if req.method == "GET" and "/members" in req.url.path:
-            return httpx.Response(200, json=[])
         if req.method == "POST" and req.url.path.endswith("/members"):
             return httpx.Response(
                 201,
@@ -312,3 +310,49 @@ async def test_open_thread_with_creates_thread_adds_user_joins_and_sends() -> No
     assert len(sent) == 1
     assert sent[0][1]["draft"]["content"][0]["text"] == "ping"
     assert sent[0][1]["draft"]["recipients"] == ["u_alice"]
+
+
+async def test_open_thread_with_calls_add_member_without_preflight() -> None:
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    get_members_hits = 0
+    post_members_hits = 0
+
+    async def http_handler(req: httpx.Request) -> httpx.Response:
+        nonlocal get_members_hits, post_members_hits
+        if req.method == "POST" and req.url.path == "/chat/threads":
+            now = datetime.now(UTC).isoformat()
+            return httpx.Response(201, json={
+                "id": "th_new", "tenant": {}, "metadata": {},
+                "created_at": now, "updated_at": now,
+            })
+        if req.method == "GET" and "/members" in req.url.path:
+            get_members_hits += 1
+            return httpx.Response(200, json=[])
+        if req.method == "POST" and req.url.path.endswith("/members"):
+            post_members_hits += 1
+            return httpx.Response(201, json={
+                "thread_id": "th_new",
+                "identity_id": "u_alice",
+                "identity": {"role": "user", "id": "u_alice", "name": "Alice", "metadata": {}},
+                "role": "member",
+                "added_at": datetime.now(UTC).isoformat(),
+                "added_by": {"role": "assistant", "id": "a_me", "name": "Me", "metadata": {}},
+            })
+        return httpx.Response(404)
+
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(http_handler)),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+    await client.connect()
+
+    await client.open_thread_with(
+        message=[TextPart(text="ping")],
+        user=UserIdentity(id="u_alice", name="Alice"),
+    )
+
+    assert get_members_hits == 0, "should not preflight with GET /members — add_member is idempotent"
+    assert post_members_hits == 1
