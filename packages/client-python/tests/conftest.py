@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -48,4 +49,27 @@ class FakeSioClient:
     async def call(self, event: str, data: Any = None, *, timeout: float | None = None) -> Any:
         self.emitted.append((event, data))
         self.calls.append((event, data))
-        return self.ack_replies.get(event, {})
+        if event in self.ack_replies:
+            return self.ack_replies[event]
+        if event == "message:send":
+            draft = data["draft"] if isinstance(data, dict) else {}
+            now = datetime.now(UTC).isoformat()
+            return {
+                "event": {
+                    "id": "evt_stub",
+                    "thread_id": data["thread_id"] if isinstance(data, dict) else "t_stub",
+                    "author": {
+                        "role": "assistant",
+                        "id": "a_me",
+                        "name": "Me",
+                        "metadata": {},
+                    },
+                    "created_at": now,
+                    "metadata": draft.get("metadata") or {},
+                    "client_id": draft.get("client_id"),
+                    "recipients": draft.get("recipients"),
+                    "type": "message",
+                    "content": draft.get("content") or [],
+                }
+            }
+        return {}

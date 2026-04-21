@@ -13,6 +13,7 @@ from rfnry_chat_protocol import (
     Identity,
     Run,
     RunError,
+    Thread,
     ThreadMember,
     parse_event,
 )
@@ -237,6 +238,42 @@ class ChatClient:
 
     async def remove_member(self, thread_id: str, identity_id: str) -> None:
         await self._rest.remove_member(thread_id, identity_id)
+
+    async def open_thread_with(
+        self,
+        *,
+        message: list[ContentPart],
+        user: Identity | None = None,
+        thread_id: str | None = None,
+        tenant: dict[str, str] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> tuple[Thread, Event]:
+        """Proactively open (or reuse) a thread, optionally invite a user, and send a message.
+
+        - If ``thread_id`` is None, creates a new thread (this client becomes first member).
+        - If ``user`` is provided and not already a member, adds them.
+        - Joins the thread room (idempotent).
+        - Sends the message, recipients defaulting to ``[user.id]`` if user was specified.
+
+        Returns ``(thread, sent_event)``.
+        """
+        if thread_id is None:
+            thread = await self._rest.create_thread(tenant=tenant, metadata=metadata)
+        else:
+            thread = await self._rest.get_thread(thread_id)
+
+        if user is not None:
+            existing = await self._rest.list_members(thread.id)
+            if not any(m.identity_id == user.id for m in existing):
+                await self.add_member(thread.id, user)
+
+        await self.join_thread(thread.id)
+
+        recipients = [user.id] if user is not None else None
+        event = await self.send_message(
+            thread.id, content=message, recipients=recipients
+        )
+        return thread, event
 
     def on(
         self,
