@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from rfnry_chat_protocol import Event, Identity, Run, StreamDeltaFrame, StreamEndFrame, StreamStartFrame, Thread
+from rfnry_chat_protocol import (
+    Event,
+    Identity,
+    Run,
+    StreamDeltaFrame,
+    StreamEndFrame,
+    StreamStartFrame,
+    Thread,
+    ThreadInvitedFrame,
+)
 
 
 class Broadcaster(Protocol):
@@ -16,6 +25,12 @@ class Broadcaster(Protocol):
         namespace: str | None = None,
     ) -> None: ...
     async def broadcast_run_updated(self, run: Run, *, namespace: str | None = None) -> None: ...
+    async def broadcast_thread_invited(
+        self,
+        frame: ThreadInvitedFrame,
+        *,
+        namespace: str | None = None,
+    ) -> None: ...
     async def broadcast_stream_start(
         self,
         frame: StreamStartFrame,

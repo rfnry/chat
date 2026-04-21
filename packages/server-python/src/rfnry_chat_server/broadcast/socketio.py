@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 import socketio
-from rfnry_chat_protocol import Event, Identity, Run, StreamDeltaFrame, StreamEndFrame, StreamStartFrame, Thread
+from rfnry_chat_protocol import (
+    Event,
+    Identity,
+    Run,
+    StreamDeltaFrame,
+    StreamEndFrame,
+    StreamStartFrame,
+    Thread,
+    ThreadInvitedFrame,
+)
 
 
 def _thread_room(thread_id: str) -> str:
@@ -52,6 +61,17 @@ class SocketIOBroadcaster:
             room=_thread_room(run.thread_id),
             namespace=namespace or "/",
         )
+
+    async def broadcast_thread_invited(
+        self,
+        frame: ThreadInvitedFrame,
+        *,
+        namespace: str | None = None,
+    ) -> None:
+        # Task 4 will implement emitting to the invitee's inbox room. This
+        # stub keeps SocketIOBroadcaster structurally compatible with the
+        # Broadcaster Protocol once broadcast_thread_invited is declared.
+        raise NotImplementedError
 
     async def broadcast_stream_start(
         self,

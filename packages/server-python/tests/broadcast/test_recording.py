@@ -6,7 +6,15 @@ import asyncpg
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from rfnry_chat_protocol import Identity, MessageEvent, TextPart, Thread, UserIdentity
+from rfnry_chat_protocol import (
+    AssistantIdentity,
+    Identity,
+    MessageEvent,
+    TextPart,
+    Thread,
+    ThreadInvitedFrame,
+    UserIdentity,
+)
 
 from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
 from rfnry_chat_server.server.auth import HandshakeData
@@ -94,5 +102,19 @@ async def test_rest_message_send_triggers_broadcast(
     assert len(rec.events) == 1
     assert rec.events[0].thread_id == thread_id
     assert len(rec.members_updated) == 1
+
+
+async def test_recording_broadcaster_records_thread_invited() -> None:
+    now = datetime.now(UTC)
+    frame = ThreadInvitedFrame(
+        thread=Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now),
+        added_member=UserIdentity(id="u_alice", name="Alice", metadata={}),
+        added_by=AssistantIdentity(id="a_bot", name="Bot", metadata={}),
+    )
+    b = RecordingBroadcaster()
+    await b.broadcast_thread_invited(frame, namespace="/A")
+
+    assert b.thread_invited == [frame]
+    assert b.thread_invited_with_namespace == [(frame, "/A")]
 
 

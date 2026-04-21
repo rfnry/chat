@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from rfnry_chat_protocol import Event, Identity, Run, StreamDeltaFrame, StreamEndFrame, StreamStartFrame, Thread
+from rfnry_chat_protocol import (
+    Event,
+    Identity,
+    Run,
+    StreamDeltaFrame,
+    StreamEndFrame,
+    StreamStartFrame,
+    Thread,
+    ThreadInvitedFrame,
+)
 
 
 class RecordingBroadcaster:
@@ -13,6 +22,8 @@ class RecordingBroadcaster:
         self.threads_updated_with_namespace: list[tuple[Thread, str | None]] = []
         self.members_updated_with_namespace: list[tuple[str, list[Identity], str | None]] = []
         self.runs_updated_with_namespace: list[tuple[Run, str | None]] = []
+        self.thread_invited: list[ThreadInvitedFrame] = []
+        self.thread_invited_with_namespace: list[tuple[ThreadInvitedFrame, str | None]] = []
         self.stream_starts: list[StreamStartFrame] = []
         self.stream_deltas: list[StreamDeltaFrame] = []
         self.stream_ends: list[StreamEndFrame] = []
@@ -38,6 +49,15 @@ class RecordingBroadcaster:
     async def broadcast_run_updated(self, run: Run, *, namespace: str | None = None) -> None:
         self.runs_updated.append(run)
         self.runs_updated_with_namespace.append((run, namespace))
+
+    async def broadcast_thread_invited(
+        self,
+        frame: ThreadInvitedFrame,
+        *,
+        namespace: str | None = None,
+    ) -> None:
+        self.thread_invited.append(frame)
+        self.thread_invited_with_namespace.append((frame, namespace))
 
     async def broadcast_stream_start(
         self,
