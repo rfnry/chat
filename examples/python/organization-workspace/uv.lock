@@ -944,7 +944,6 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
-    { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "rfnry-chat-client" },
@@ -955,7 +954,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.80.0" },
-    { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "fastapi", specifier = ">=0.136.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "rfnry-chat-client", editable = "../../../packages/client-python" },

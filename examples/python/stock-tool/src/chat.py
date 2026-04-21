@@ -11,8 +11,6 @@ from rfnry_chat_server import (
     MessageEvent,
 )
 
-from src.auth import authenticate
-
 logger = logging.getLogger("stock-tool.chat")
 
 _STOCK = {
@@ -29,7 +27,7 @@ _SHIPMENTS = {
 
 
 def create_chat_server(store: ChatStore) -> ChatServer:
-    chat_server = ChatServer(store=store, authenticate=authenticate)
+    chat_server = ChatServer(store=store)
 
     @chat_server.on_message()
     async def log_message(ctx: HandlerContext, _send: HandlerSend) -> None:

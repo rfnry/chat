@@ -70,6 +70,7 @@ from rfnry_chat_server.server.namespace import (
     parse_namespace_path,
     validate_namespace_value,
 )
+from rfnry_chat_server.store.memory.store import InMemoryChatStore
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 from rfnry_chat_server.store.protocol import ChatStore
 from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
@@ -94,6 +95,7 @@ __all__ = [
     "HandshakeData",
     "Identity",
     "ImagePart",
+    "InMemoryChatStore",
     "MessageEvent",
     "NamespaceViolation",
     "OnAnalyticsCallback",

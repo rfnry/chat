@@ -23,6 +23,7 @@ export type AuthenticatePayload = {
 
 export type ChatClientOptions = {
   url: string
+  identity?: Identity
   authenticate?: () => Promise<AuthenticatePayload>
   path?: string
   socketPath?: string
@@ -43,8 +44,21 @@ export class ChatClient {
     this.path = opts.path ?? '/chat'
     this.socketPath = opts.socketPath ?? '/chat/ws'
 
-    const authHeaders = opts.authenticate
-      ? async () => (await opts.authenticate!()).headers ?? {}
+    let authenticate = opts.authenticate
+    if (!authenticate && opts.identity) {
+      const identity = opts.identity
+      const encoded = btoa(JSON.stringify(identity))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+      authenticate = async () => ({
+        auth: { identity },
+        headers: { 'x-rfnry-identity': encoded },
+      })
+    }
+
+    const authHeaders = authenticate
+      ? async () => (await authenticate!()).headers ?? {}
       : undefined
 
     this.rest = new RestTransport({
@@ -56,7 +70,7 @@ export class ChatClient {
     this.socketTransport = new SocketTransport({
       baseUrl: this.url,
       socketPath: this.socketPath,
-      authenticate: opts.authenticate,
+      authenticate,
     })
   }
 

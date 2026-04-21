@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import cast
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from rfnry_chat_server import ChatStore
+from rfnry_chat_server import InMemoryChatStore
 
 from src.chat import create_chat_server
-from src.db import LazyStore, create_pool
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,28 +17,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("stock-tool.main")
 
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://rfnry_chat:rfnry_chat@localhost:55432/rfnry_chat_test",
-)
-
-store = LazyStore()
-chat_server = create_chat_server(store=cast(ChatStore, store))
+chat_server = create_chat_server(store=InMemoryChatStore())
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
-    pool = await create_pool(DATABASE_URL)
-    logger.info("db pool ready")
-    store.bind(pool)
     await chat_server.start()
-    logger.info("chat server + watchdog running")
+    logger.info("chat server running (in-memory, no auth)")
     try:
         yield
     finally:
         await chat_server.stop()
-        await pool.close()
-        logger.info("shutdown complete")
 
 
 app = FastAPI(title="stock-tool", lifespan=lifespan)

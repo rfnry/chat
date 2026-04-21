@@ -7,7 +7,6 @@ dependencies = [
     "rfnry-chat-server",
     "rfnry-chat-client",
     "anthropic>=0.80.0",
-    "asyncpg>=0.31.0",
     "fastapi>=0.136.0",
     "uvicorn>=0.44.0",
     "httpx>=0.28.1",

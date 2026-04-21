@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-
 from rfnry_chat_server import (
     ChatServer,
     ChatStore,
@@ -10,25 +8,23 @@ from rfnry_chat_server import (
     MessageEvent,
 )
 
-from src.auth import authenticate
-from src.settings import settings
 
-logger = logging.getLogger(f"org.{settings.WORKSPACE}.chat")
-
-
-def create_chat_server(store: ChatStore) -> ChatServer:
-    chat_server = ChatServer(store=store, authenticate=authenticate)
+def create_chat_server(store: ChatStore, *, workspace: str) -> ChatServer:
+    chat_server = ChatServer(store=store)
 
     @chat_server.on_message()
     async def log_message(ctx: HandlerContext, _send: HandlerSend) -> None:
         assert isinstance(ctx.event, MessageEvent)
         preview = next(
-            (getattr(p, "text", "") for p in ctx.event.content if getattr(p, "type", None) == "text"),
+            (
+                getattr(p, "text", "")
+                for p in ctx.event.content
+                if getattr(p, "type", None) == "text"
+            ),
             "",
         )
-        logger.info(
-            "msg workspace=%s thread=%s author=%s preview=%r",
-            settings.WORKSPACE,
+        print(
+            "msg thread=%s author=%s preview=%r",
             ctx.thread.id,
             ctx.event.author.id,
             preview[:60],

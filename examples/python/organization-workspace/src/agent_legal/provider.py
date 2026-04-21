@@ -14,7 +14,7 @@ ANTHROPIC_MAX_TOKENS = 2048
 def build_anthropic() -> AsyncAnthropic | None:
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        print("ANTHROPIC_API_KEY unset — provider disabled, assistant will stub replies")
+        print("ANTHROPIC_API_KEY unset — provider disabled, agent will stub replies")
         return None
     return AsyncAnthropic(api_key=api_key)
 

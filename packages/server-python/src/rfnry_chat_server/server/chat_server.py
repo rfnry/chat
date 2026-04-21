@@ -21,6 +21,7 @@ from rfnry_chat_protocol import (
     Thread,
     ThreadInvitedFrame,
     ThreadMember,
+    parse_identity,
 )
 
 from rfnry_chat_server.broadcast.protocol import Broadcaster
@@ -28,7 +29,7 @@ from rfnry_chat_server.handler.dispatcher import HandlerDispatcher
 from rfnry_chat_server.handler.registry import HandlerRegistry
 from rfnry_chat_server.handler.types import HandlerCallable
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
-from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback
+from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback, HandshakeData
 from rfnry_chat_server.server.namespace import NamespaceViolation, derive_namespace_path
 from rfnry_chat_server.server.run_events import (
     run_cancelled as _run_cancelled_event,
@@ -62,12 +63,37 @@ def _validate_namespace_keys(namespace_keys: list[str] | None) -> list[str] | No
     return list(namespace_keys)
 
 
+IDENTITY_HEADER = "x-rfnry-identity"
+
+
+async def _identity_from_handshake(handshake: HandshakeData) -> Identity | None:
+    raw = handshake.auth.get("identity")
+    if not isinstance(raw, dict):
+        encoded = handshake.headers.get(IDENTITY_HEADER, "")
+        if not encoded:
+            return None
+        import base64
+        import json as _json
+
+        try:
+            padded = encoded + "=" * (-len(encoded) % 4)
+            raw = _json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
+        except Exception:
+            return None
+        if not isinstance(raw, dict):
+            return None
+    try:
+        return parse_identity(raw)
+    except Exception:
+        return None
+
+
 class ChatServer:
     def __init__(
         self,
         *,
         store: ChatStore,
-        authenticate: AuthenticateCallback,
+        authenticate: AuthenticateCallback | None = None,
         authorize: AuthorizeCallback | None = None,
         replay_cap: int = 500,
         broadcaster: Broadcaster | None = None,
@@ -77,7 +103,7 @@ class ChatServer:
         watchdog_interval_seconds: float = 30.0,
     ) -> None:
         self.store = store
-        self.authenticate = authenticate
+        self.authenticate = authenticate or _identity_from_handshake
         self.authorize = authorize
         self.replay_cap = replay_cap
         self.broadcaster = broadcaster
