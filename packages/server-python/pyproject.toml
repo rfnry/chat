@@ -22,7 +22,11 @@ dependencies = [
     "pydantic>=2.13.2",
     "asyncpg>=0.31.0",
     "python-socketio[asgi]>=5.16.1",
+    "rfnry-chat-protocol",
 ]
+
+[tool.uv.sources]
+rfnry-chat-protocol = { path = "../../../types/packages/chat-python", editable = true }
 
 [project.urls]
 Repository = "https://github.com/rfnry/chat"
