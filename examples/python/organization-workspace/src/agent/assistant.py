@@ -6,7 +6,7 @@ from rfnry_chat_client import ChatClient, HandlerContext, HandlerSend
 from rfnry_chat_protocol import AssistantIdentity, TextPart
 
 from src import tools
-from src.agent import provider
+from src.agent import policy, provider
 from src.settings import settings
 
 
@@ -16,11 +16,29 @@ def register(chat_client: ChatClient, identity: AssistantIdentity) -> None:
 
     @chat_client.on_message()
     async def respond(ctx: HandlerContext, send: HandlerSend):
+        author = ctx.event.author
+
+        # Workspace policy gate — e.g. medical denies non-manager requests.
+        denial = policy.gate_reply(author)
+        if denial is not None:
+            yield send.message(
+                content=[TextPart(text=denial)],
+                recipients=[author.id],
+            )
+            return
+
         history_page = await chat_client.rest.list_events(ctx.event.thread_id, limit=200)
         history = history_page["items"]
         messages = provider.to_anthropic_messages(history, identity.id)
         if not messages:
             return
+
+        # Workspace-specific requester context — legal appends organization +
+        # role to the system prompt so clauses can reference the requester.
+        system_prompt = settings.SYSTEM_PROMPT
+        extra = policy.author_context(author)
+        if extra is not None:
+            system_prompt = f"{system_prompt}\n\n{extra}"
 
         if anthropic is None:
             yield send.message(
@@ -40,7 +58,7 @@ def register(chat_client: ChatClient, identity: AssistantIdentity) -> None:
             response = await provider.call(
                 anthropic,
                 messages=messages,
-                system_prompt=settings.SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 tools=tool_defs,
             )
 
