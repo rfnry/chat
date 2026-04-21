@@ -28,6 +28,7 @@ dependencies = [
 
 [tool.uv.sources]
 rfnry-chat-protocol = { path = "../../../types/packages/chat-python", editable = true }
+rfnry-chat-server = { path = "../server-python", editable = true }
 
 [project.urls]
 Repository = "https://github.com/rfnry/chat"
@@ -48,6 +49,10 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.15.11",
     "build>=1.4.3",
+    "rfnry-chat-server",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.136.0",
+    "uvicorn>=0.44.0",
 ]
 
 [tool.ruff]
