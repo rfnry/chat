@@ -19,6 +19,7 @@ from rfnry_chat_protocol import (
     StreamStartFrame,
     SystemIdentity,
     Thread,
+    ThreadInvitedFrame,
     ThreadMember,
 )
 
@@ -230,6 +231,27 @@ class ChatServer:
                 if thread is not None:
                     namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
             await self.broadcaster.broadcast_members_updated(thread_id, members, namespace=namespace)
+
+    async def publish_thread_invited(
+        self,
+        thread: Thread,
+        *,
+        added_member: Identity,
+        added_by: Identity,
+    ) -> None:
+        if self.broadcaster is None:
+            return
+        if added_member.id == added_by.id:
+            return
+        namespace: str | None = None
+        if self.namespace_keys is not None:
+            namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
+        frame = ThreadInvitedFrame(
+            thread=thread,
+            added_member=added_member,
+            added_by=added_by,
+        )
+        await self.broadcaster.broadcast_thread_invited(frame, namespace=namespace)
 
     async def publish_run_updated(self, run: Run, *, thread: Thread | None = None) -> None:
         if self.broadcaster is not None:

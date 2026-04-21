@@ -40,6 +40,7 @@ def build_router() -> APIRouter:
         member = await server.store.add_member(thread_id, new_identity, added_by=identity, role=body.role)
         members = await server.store.list_members(thread_id)
         await server.publish_members_updated(thread_id, [m.identity for m in members], thread=thread)
+        await server.publish_thread_invited(thread, added_member=new_identity, added_by=identity)
         return member
 
     @router.delete("/{identity_id}", status_code=status.HTTP_204_NO_CONTENT)
