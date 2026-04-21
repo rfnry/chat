@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from rfnry_chat_client import ChatClient, HandlerContext, HandlerSend
@@ -8,9 +7,6 @@ from rfnry_chat_protocol import AssistantIdentity, TextPart
 
 from src import tools
 from src.agent import provider
-from src.settings import settings
-
-logger = logging.getLogger("cs.agent.assistant")
 
 SYSTEM_PROMPT = (
     "You are Filterbuy's customer support assistant. "
@@ -30,26 +26,7 @@ def register(chat_client: ChatClient, identity: AssistantIdentity) -> None:
         if not messages:
             return
 
-        if anthropic is None:
-            yield send.message(
-                content=[
-                    TextPart(
-                        text=(
-                            "[stub reply — set ANTHROPIC_API_KEY to wire the real model] "
-                            f"you said: {provider.last_user_text(history, identity.id)}"
-                        )
-                    )
-                ]
-            )
-            return
-
-        for iteration in range(1, settings.ANTHROPIC_MAX_ITERATIONS + 1):
-            logger.info(
-                "llm.iter=%d thread=%s messages=%d",
-                iteration,
-                ctx.event.thread_id,
-                len(messages),
-            )
+        while True:
             response = await provider.call(
                 anthropic,
                 messages=messages,
@@ -93,5 +70,3 @@ def register(chat_client: ChatClient, identity: AssistantIdentity) -> None:
                     )
 
             messages.append({"role": "user", "content": tool_blocks})
-
-        logger.warning("run exhausted iterations=%d", settings.ANTHROPIC_MAX_ITERATIONS)

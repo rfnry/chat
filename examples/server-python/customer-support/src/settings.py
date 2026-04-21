@@ -16,7 +16,6 @@ class Settings:
     ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
     ANTHROPIC_MODEL: str = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
     ANTHROPIC_MAX_TOKENS: int = int(os.environ.get("ANTHROPIC_MAX_TOKENS", "2048"))
-    ANTHROPIC_MAX_ITERATIONS: int = int(os.environ.get("ANTHROPIC_MAX_ITERATIONS", "5"))
 
 
 settings = Settings()

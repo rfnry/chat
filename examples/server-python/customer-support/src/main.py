@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("cs.main")
 
 store = LazyStore()
-chat_server = chat.build(store=cast(ChatStore, store))
+chat_server = chat.create_chat_server(store=cast(ChatStore, store))
 
 
 @asynccontextmanager
@@ -34,8 +34,8 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     await chat_server.start()
     logger.info("chat server + watchdog running")
 
-    agent = agent_client.build(f"http://127.0.0.1:{settings.PORT}")
-    agent_task = asyncio.create_task(agent_client.run(agent))
+    agent_connector = agent_client.create_chat_connector(f"http://127.0.0.1:{settings.PORT}")
+    agent_task = asyncio.create_task(agent_client.run(agent_connector))
     logger.info("agent scheduled")
 
     try:

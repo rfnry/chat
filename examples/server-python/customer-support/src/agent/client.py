@@ -16,7 +16,7 @@ _CONNECT_RETRIES = 50
 _CONNECT_BACKOFF_SECONDS = 0.2
 
 
-def build(base_url: str) -> ChatClient:
+def create_chat_connector(base_url: str) -> ChatClient:
     identity = AssistantIdentity(id=settings.ASSISTANT_ID, name=settings.ASSISTANT_NAME)
 
     async def authenticate() -> dict[str, Any]:

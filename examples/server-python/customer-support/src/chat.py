@@ -18,11 +18,11 @@ from src.observability import send_to_sink
 logger = logging.getLogger("cs.server")
 
 
-def build(store: ChatStore) -> ChatServer:
+def create_chat_server(store: ChatStore) -> ChatServer:
     chat_server = ChatServer(store=store, authenticate=authenticate)
 
     @chat_server.on("*")
-    async def mirror_events(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
         event = ctx.event
         payload: dict[str, object] = {
             "thread_id": ctx.thread.id,
