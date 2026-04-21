@@ -14,6 +14,7 @@ class FakeSioClient:
         self.headers_sent: dict[str, str] | None = None
         self.handlers: dict[str, Any] = {}
         self.emitted: list[tuple[str, Any]] = []
+        self.calls: list[tuple[str, Any]] = []
         self.ack_replies: dict[str, Any] = {}
         self.disconnected = False
 
@@ -46,4 +47,5 @@ class FakeSioClient:
 
     async def call(self, event: str, data: Any = None, *, timeout: float | None = None) -> Any:
         self.emitted.append((event, data))
+        self.calls.append((event, data))
         return self.ack_replies.get(event, {})

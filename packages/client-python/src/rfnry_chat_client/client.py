@@ -19,6 +19,7 @@ from rfnry_chat_protocol import (
 
 from rfnry_chat_client.dispatch import Dispatcher
 from rfnry_chat_client.handler.types import HandlerCallable
+from rfnry_chat_client.inbox import InboxDispatcher, InviteHandler
 from rfnry_chat_client.transport.rest import RestTransport
 from rfnry_chat_client.transport.socket import SocketTransport
 
@@ -39,6 +40,7 @@ class ChatClient:
         socketio_path: str = "/chat/ws",
         http_client: httpx.AsyncClient | None = None,
         socket_transport: SocketTransport | None = None,
+        auto_join_on_invite: bool = True,
     ) -> None:
         self._identity = identity
         self._authenticate = authenticate
@@ -61,6 +63,7 @@ class ChatClient:
             authenticate=authenticate,
         )
         self._dispatcher = Dispatcher(identity=identity, client=self)
+        self._inbox = InboxDispatcher(client=self, auto_join=auto_join_on_invite)
 
     @property
     def identity(self) -> Identity:
@@ -76,6 +79,7 @@ class ChatClient:
 
     async def connect(self) -> None:
         self._socket.on_raw_event("event", self._dispatcher.feed)
+        self._socket.on_raw_event("thread:invited", self._inbox.feed)
         await self._socket.connect()
 
     async def disconnect(self) -> None:
@@ -279,6 +283,12 @@ class ChatClient:
         self, *, all_events: bool = False
     ) -> Callable[[HandlerCallable], HandlerCallable]:
         return self.on("*", all_events=all_events)
+
+    def on_invited(self) -> Callable[[InviteHandler], InviteHandler]:
+        def decorator(handler: InviteHandler) -> InviteHandler:
+            return self._inbox.register(handler)
+
+        return decorator
 
 
 def _gen_client_id() -> str:
