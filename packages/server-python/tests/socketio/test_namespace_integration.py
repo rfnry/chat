@@ -11,7 +11,7 @@ import pytest
 import socketio
 import uvicorn
 from fastapi import FastAPI
-from rfnry_chat_protocol import Identity, UserIdentity
+from rfnry_chat_protocol import AssistantIdentity, Identity, UserIdentity
 
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.chat_server import ChatServer
@@ -334,4 +334,96 @@ async def test_join_thread_with_mismatched_ns_tenant_returns_not_found(
         assert result.get("error", {}).get("code") == "not_found"
         await client.disconnect()
     finally:
+        await server.stop()
+
+
+async def test_thread_invited_delivered_to_inbox_room_end_to_end(
+    clean_db: asyncpg.Pool,
+) -> None:
+    """Regression anchor for the proactive-agents invite pipeline.
+
+    Alice connects as a user. Bot authenticates as a distinct assistant
+    identity, creates a thread via REST, then invites Alice by POSTing to
+    `/chat/threads/{id}/members`. Alice's socket must receive exactly one
+    `thread:invited` frame, routed via the per-identity `inbox:<id>` room
+    that `ThreadNamespace.on_connect` auto-joins. Exercises the full chain:
+    REST handler → ChatServer.publish_thread_invited → SocketIOBroadcaster
+    → Socket.IO room filtering → AsyncClient.on('thread:invited')."""
+
+    store = PostgresChatStore(pool=clean_db)
+
+    alice = UserIdentity(id="u_alice", name="Alice", metadata={})
+    bot = AssistantIdentity(id="a_bot", name="Bot", metadata={})
+
+    async def auth(handshake: HandshakeData) -> Identity | None:
+        # Socket.IO clients pass creds in the `auth={...}` handshake payload;
+        # REST clients pass them in the `Authorization: Bearer ...` header.
+        token: str = ""
+        if isinstance(handshake.auth, dict):
+            raw = handshake.auth.get("token")
+            if isinstance(raw, str):
+                token = raw
+        if not token:
+            header_val = handshake.headers.get("authorization", "")
+            if header_val.startswith("Bearer "):
+                token = header_val[len("Bearer ") :].strip()
+        if token == "alice-token":
+            return alice
+        if token == "bot-token":
+            return bot
+        return None
+
+    chat_server = ChatServer(store=store, authenticate=auth)
+    asgi = _wire(chat_server)
+    server = _Server(asgi)
+    base = await server.start()
+
+    received: list[dict[str, Any]] = []
+    invited = asyncio.Event()
+
+    alice_sio = socketio.AsyncClient()
+
+    @alice_sio.on("thread:invited")
+    async def on_invited(data: dict[str, Any]) -> None:
+        received.append(data)
+        invited.set()
+
+    try:
+        await alice_sio.connect(
+            base,
+            auth={"token": "alice-token"},
+            transports=["websocket"],
+            socketio_path="/chat/ws",
+        )
+
+        bot_headers = {"authorization": "Bearer bot-token"}
+        async with httpx.AsyncClient(base_url=base, headers=bot_headers) as http:
+            create = await http.post("/chat/threads", json={})
+            assert create.status_code == 201, create.text
+            thread_id = create.json()["id"]
+
+            add = await http.post(
+                f"/chat/threads/{thread_id}/members",
+                json={
+                    "identity": {
+                        "role": "user",
+                        "id": "u_alice",
+                        "name": "Alice",
+                        "metadata": {},
+                    }
+                },
+            )
+            assert add.status_code == 201, add.text
+
+        await asyncio.wait_for(invited.wait(), timeout=5)
+
+        assert len(received) == 1
+        frame = received[0]
+        assert frame["thread"]["id"] == thread_id
+        assert frame["added_member"]["id"] == "u_alice"
+        assert frame["added_by"]["id"] == "a_bot"
+        assert frame["added_by"]["role"] == "assistant"
+    finally:
+        if alice_sio.connected:
+            await alice_sio.disconnect()
         await server.stop()
