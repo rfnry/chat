@@ -15,7 +15,7 @@ The point: **the server is itself a participant**. It reacts to events it unders
 ```
 src/
   main.py      FastAPI app + lifespan wiring
-  server.py    ChatServer build + @server.on_* handlers
+  chat.py      create_chat_server() + @server.on_* handlers
   auth.py      Token-in-header authentication callback
   db.py        LazyStore pattern (FastAPI module-import vs pool-in-lifespan)
 ```

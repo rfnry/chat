@@ -10,8 +10,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from rfnry_chat_server import ChatStore
 
+from src.chat import create_chat_server
 from src.db import LazyStore, create_pool
-from src.server import build
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,7 +26,7 @@ DATABASE_URL = os.environ.get(
 )
 
 store = LazyStore()
-chat_server = build(store=cast(ChatStore, store))
+chat_server = create_chat_server(store=cast(ChatStore, store))
 
 
 @asynccontextmanager

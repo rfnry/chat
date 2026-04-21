@@ -5,15 +5,15 @@ from typing import Any
 
 from rfnry_chat_server import (
     ChatServer,
+    ChatStore,
     HandlerContext,
     HandlerSend,
     MessageEvent,
-    PostgresChatStore,
 )
 
 from src.auth import authenticate
 
-logger = logging.getLogger("stock-tool")
+logger = logging.getLogger("stock-tool.chat")
 
 _STOCK = {
     "FBA-MERV11-16x25x1": 4820,
@@ -28,7 +28,7 @@ _SHIPMENTS = {
 }
 
 
-def build(store: PostgresChatStore) -> ChatServer:
+def create_chat_server(store: ChatStore) -> ChatServer:
     chat_server = ChatServer(store=store, authenticate=authenticate)
 
     @chat_server.on_message()
