@@ -41,18 +41,31 @@ async def main() -> None:
     await uvicorn.Server(uvicorn.Config(asgi, host="0.0.0.0", port=8000)).serve()
 ```
 
-## Server-side tool handlers
+## Server-side handlers
 
-The server exposes a narrow dispatcher so you can answer `tool.call` events directly from the server process, without needing a separate agent service. Handlers run under a server-owned `Run` authored by `SystemIdentity`.
+The server exposes a generic dispatcher so you can react to any event type directly from the server process. Handlers take `(ctx, send)` and may either observe (no yield) or emit events (yield from `send`). Emitted events are authored by the server's `SystemIdentity`.
 
 ```python
+@server.on("message")
+async def audit(ctx, send):
+    logger.info(f"[{ctx.thread.id}] {ctx.event.author.name}: {ctx.event.content}")
+
 @server.on_tool_call("get_company_stock")
-async def handle_stock(ctx):
+async def handle_stock(ctx, send):
     ticker = ctx.event.tool.arguments["ticker"]
-    return {"price": await stock_service.quote(ticker)}
+    price = await stock_service.quote(ticker)
+    yield send.tool_result(ctx.event.tool.id, result={"price": price})
+
+@server.on("thread.member_added")
+async def welcome(ctx, send):
+    yield send.message(content=[TextPart(text=f"Welcome {ctx.event.member.name}")])
 ```
 
-Any authenticated thread member — human or AI agent — can emit a `tool.call` event with `tool.name == "get_company_stock"`, and the server publishes a matching `tool.result` to the caller automatically.
+- `@server.on(event_type)` — observe or emit events of any type.
+- `@server.on_tool_call(name)` — sugar that wraps execution in a `Run` and filters to `tool.call` events with matching `tool.name`.
+- `@server.on_message()` / `@server.on_reasoning()` / `@server.on_tool_result()` — sugar shortcuts.
+
+Loops are prevented automatically: handlers never re-trigger on events they themselves authored, and a chain-depth cap (`MAX_HANDLER_CHAIN_DEPTH`, default 8) limits recursion.
 
 ## Socket API surface
 

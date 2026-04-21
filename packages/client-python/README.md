@@ -36,13 +36,15 @@ async def main() -> None:
         authenticate=authenticate,
     )
 
-    @client.on_message
-    async def handle(event):
-        print(f"[{event.author.name}] {event.content}")
+    @client.on_message()
+    async def handle(ctx, send):
+        print(f"[{ctx.event.author.name}] {ctx.event.content}")
+        yield send.message(content=[TextPart(text="acknowledged")])
 
-    @client.on_tool_call("get_company_policy")
-    async def lookup(event):
-        ...
+    @client.on_tool_call("get_company_policy", in_run=True)
+    async def lookup(ctx, send):
+        policy = await policy_db.get(ctx.event.tool.arguments["topic"])
+        yield send.tool_result(ctx.event.tool.id, result=policy)
 
     await client.connect()
     await client.join_thread("t_1")
@@ -53,22 +55,27 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## Scope (Phase A)
+## Handler API
 
-This release ships the transport and dispatch surface that works against the current server:
+Handlers take `(ctx, send)`. An async function without `yield` is an observer; an async generator that `yield`s events from `send` emits them back to the thread, authored by `self.identity`.
 
-- Connect to a chat server as any `Identity` (assistant, user, or system).
-- Join and leave threads, receive every event type, send text and content messages.
-- Dispatch to per-event-type handlers with sensible filtering defaults:
-  - Self-authored events are skipped.
-  - Events with a recipient list that does not include you are skipped.
-  - Opt out per handler with `all_events=True` for audit or moderation roles.
+- `@client.on(event_type, *, tool=None, in_run=False, all_events=False)` — base decorator.
+- `@client.on_message()`, `@client.on_reasoning()`, `@client.on_tool_result()` — sugar.
+- `@client.on_tool_call(name=None)` — sugar; `name=None` matches any tool call.
+- `@client.on_any_event()` — wildcard across every event type.
 
-## Coming in Phase B (requires server refactor)
+Default filters:
+- Self-authored events are skipped (no self-triggering).
+- Events with a recipient list that does not include you are skipped.
+- Opt out with `all_events=True` for audit / moderation.
+- `in_run=True` wraps the handler in a server-tracked `Run` via `run:begin` / `run:end`.
 
-- Emitting `tool.call`, `tool.result`, and `reasoning` events from the client.
-- Run lifecycle wrapping (`run:begin` and `run:end`) for observability.
-- Streaming emission from the client.
+Chain-depth cap (`MAX_HANDLER_CHAIN_DEPTH = 8`) prevents runaway emit chains.
+
+## Still pending
+
+- Client-side stream emission (`send.stream_message(...)` and `stream:*` socket commands from the client).
+- Full integration tests against a live `rfnry-chat-server`.
 
 ## Development
 
