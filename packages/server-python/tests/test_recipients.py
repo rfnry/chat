@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rfnry_chat_server.protocol.recipients import normalize_recipients
+from rfnry_chat_server.recipients import normalize_recipients
 
 
 def test_none_stays_none() -> None:

@@ -22,7 +22,7 @@ from rfnry_chat_server.broadcast.protocol import Broadcaster
 from rfnry_chat_server.handler.executor import RunExecutor
 from rfnry_chat_server.handler.stream import StreamSink
 from rfnry_chat_server.handler.types import HandlerCallable
-from rfnry_chat_server.protocol.recipients import RecipientNotMemberError, normalize_recipients
+from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
 from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback
 from rfnry_chat_server.server.namespace import NamespaceViolation, derive_namespace_path
 from rfnry_chat_server.store.protocol import ChatStore

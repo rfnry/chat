@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from rfnry_chat_protocol import Event, EventDraft, Identity, MessageEvent, matches
 
-from rfnry_chat_server.protocol.recipients import RecipientNotMemberError
+from rfnry_chat_server.recipients import RecipientNotMemberError
 from rfnry_chat_server.server.rest.deps import get_server, identity_tenant, resolve_identity
 from rfnry_chat_server.store.types import Page
 

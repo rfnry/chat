@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import socketio
 from rfnry_chat_protocol import AssistantIdentity, Identity, MessageEvent, matches, parse_content_part
 
-from rfnry_chat_server.protocol.recipients import RecipientNotMemberError
+from rfnry_chat_server.recipients import RecipientNotMemberError
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.namespace import NamespaceViolation, parse_namespace_path
 from rfnry_chat_server.store.types import EventCursor
