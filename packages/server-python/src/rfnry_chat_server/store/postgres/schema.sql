@@ -11,7 +11,7 @@ CREATE INDEX IF NOT EXISTS threads_created_at ON threads (created_at DESC, id);
 CREATE TABLE IF NOT EXISTS runs (
   id                TEXT PRIMARY KEY,
   thread_id         TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
-  assistant         JSONB NOT NULL,
+  actor             JSONB NOT NULL,
   triggered_by      JSONB NOT NULL,
   status            TEXT NOT NULL,
   error             JSONB,
@@ -20,11 +20,21 @@ CREATE TABLE IF NOT EXISTS runs (
   started_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at      TIMESTAMPTZ
 );
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'runs' AND column_name = 'assistant'
+  ) THEN
+    ALTER TABLE runs RENAME COLUMN assistant TO actor;
+  END IF;
+END$$;
+DROP INDEX IF EXISTS runs_active_per_assistant;
 CREATE UNIQUE INDEX IF NOT EXISTS runs_idempotency
   ON runs (thread_id, idempotency_key)
   WHERE idempotency_key IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS runs_active_per_assistant
-  ON runs (thread_id, (assistant->>'id'))
+CREATE UNIQUE INDEX IF NOT EXISTS runs_active_per_actor
+  ON runs (thread_id, (actor->>'id'))
   WHERE status IN ('pending', 'running');
 CREATE INDEX IF NOT EXISTS runs_thread ON runs (thread_id, started_at DESC);
 
