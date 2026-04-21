@@ -41,28 +41,11 @@ class ChatClient:
         socket_transport: SocketTransport | None = None,
     ) -> None:
         self._identity = identity
-
-        if authenticate is None:
-            import base64
-            import json as _json
-
-            raw = identity.model_dump(mode="json")
-            encoded = base64.urlsafe_b64encode(
-                _json.dumps(raw, separators=(",", ":")).encode("utf-8")
-            ).decode("ascii")
-            identity_payload = {
-                "auth": {"identity": raw},
-                "headers": {"x-rfnry-identity": encoded},
-            }
-
-            async def _default_auth() -> AuthenticatePayload:
-                return identity_payload
-
-            authenticate = _default_auth
-
         self._authenticate = authenticate
 
         async def _auth_headers() -> dict[str, str]:
+            if authenticate is None:
+                return {}
             payload = await authenticate()
             return dict(payload.get("headers") or {})
 
@@ -114,8 +97,14 @@ class ChatClient:
         Handler registrations survive — they live on the dispatcher, which is
         not replaced.
         """
-        await self._socket.disconnect()
-        await self._rest.aclose()
+        try:
+            await self._socket.disconnect()
+        except Exception:
+            pass
+        try:
+            await self._rest.aclose()
+        except Exception:
+            pass
 
         if authenticate is not None:
             self._authenticate = authenticate
