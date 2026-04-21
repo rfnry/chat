@@ -1,78 +1,12 @@
-import {
-  type Event,
-  useChatClient,
-  useCreateThread,
-  useThreadActions,
-  useThreadEvents,
-  useThreadIsWorking,
-  useThreadSession,
-} from '@rfnry/chat-client-react'
-import { useEffect, useState } from 'react'
-
-const THREAD_KEY = 'rfnry-demo-stock-tool-thread-id'
-
-const USER = {
-  role: 'user' as const,
-  id: 'u_alice',
-  name: 'Alice',
-  metadata: {},
-}
+import type { Event } from '@rfnry/chat-client-react'
+import { useChat } from './use-chat'
 
 export function Chat() {
-  const threadId = useDemoThread()
+  const { threadId, status, error, events, isWorking, sku, setSku, askStock } = useChat()
+
   if (!threadId) return <p>Setting up thread…</p>
-  return <Thread threadId={threadId} />
-}
-
-// On first mount, creates a thread and adds the user as a member. Persists
-// the thread id in localStorage so a page refresh reuses the same thread.
-function useDemoThread(): string | null {
-  const [threadId, setThreadId] = useState<string | null>(() =>
-    localStorage.getItem(THREAD_KEY)
-  )
-  const { mutateAsync: createThread } = useCreateThread()
-  const client = useChatClient()
-
-  useEffect(() => {
-    if (threadId) return
-    let cancelled = false
-    void (async () => {
-      const thread = await createThread({ tenant: {} })
-      await client.addMember(thread.id, USER)
-      if (cancelled) return
-      localStorage.setItem(THREAD_KEY, thread.id)
-      setThreadId(thread.id)
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [client, createThread, threadId])
-
-  return threadId
-}
-
-function Thread({ threadId }: { threadId: string }) {
-  const session = useThreadSession(threadId)
-  const events = useThreadEvents(threadId)
-  const isWorking = useThreadIsWorking(threadId)
-  const { emit } = useThreadActions(threadId)
-  const [sku, setSku] = useState('FBA-MERV11-16x25x1')
-
-  if (session.status === 'joining') return <p>Joining…</p>
-  if (session.status === 'error') return <p>Error: {session.error?.message}</p>
-
-  // Server fills in id, author, thread_id, created_at from the socket
-  // session — we pass only the event-specific fields.
-  const askStock = () => {
-    void emit({
-      type: 'tool.call',
-      tool: {
-        id: `call_${crypto.randomUUID()}`,
-        name: 'check_stock',
-        arguments: { sku },
-      },
-    })
-  }
+  if (status === 'joining') return <p>Joining…</p>
+  if (status === 'error') return <p>Error: {error?.message}</p>
 
   return (
     <>
