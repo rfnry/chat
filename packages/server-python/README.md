@@ -67,6 +67,24 @@ async def welcome(ctx, send):
 
 Loops are prevented automatically: handlers never re-trigger on events they themselves authored, and a chain-depth cap (`MAX_HANDLER_CHAIN_DEPTH`, default 8) limits recursion.
 
+## Watchdog
+
+If a client calls `run:begin` and never calls `run:end` (process crash, network drop, handler bug), the run would otherwise sit at `status=running` forever. Start the watchdog on app startup to sweep stale runs and mark them `failed(timeout)`:
+
+```python
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app):
+    await chat_server.start()
+    yield
+    await chat_server.stop()
+
+app = FastAPI(lifespan=lifespan)
+```
+
+Configure via `ChatServer(..., run_timeout_seconds=120, watchdog_interval_seconds=30)`. The sweep queries for runs with `status IN ('pending', 'running') AND started_at < now() - run_timeout_seconds` and transitions each to `failed` with error `code=timeout`, broadcasting `run.failed` so connected clients drop the run from their active-runs state.
+
 ## Socket API surface
 
 - `thread:join`, `thread:leave` — room membership + history replay on join.
