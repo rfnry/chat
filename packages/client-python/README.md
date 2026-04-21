@@ -88,9 +88,9 @@ async def reply(ctx, send):
 
 `send.reasoning_stream()` streams reasoning events the same way. Streaming requires `self.identity` to be an `AssistantIdentity`.
 
-## Still pending
+## Testing
 
-- Full integration tests against a live `rfnry-chat-server`.
+Unit tests mock transports. Integration tests spin up a real `rfnry-chat-server` on a dynamically allocated port, backed by the Postgres instance at `DATABASE_URL` (default `postgresql://rfnry_chat:rfnry_chat@localhost:55432/rfnry_chat_test`; start it via the `docker-compose.test.yml` in `packages/server-python`). Integration tests skip automatically if Postgres is unreachable.
 
 ## Development
 
