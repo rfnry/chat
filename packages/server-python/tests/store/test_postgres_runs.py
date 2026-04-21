@@ -21,7 +21,7 @@ def _new_run(id: str = "run_1", idempotency_key: str | None = None) -> Run:
     return Run(
         id=id,
         thread_id="th_1",
-        assistant=AssistantIdentity(id="a1", name="Helper"),
+        actor=AssistantIdentity(id="a1", name="Helper"),
         triggered_by=UserIdentity(id="u1", name="Alice"),
         status="pending",
         started_at=datetime.now(UTC),
@@ -36,7 +36,7 @@ async def test_create_and_get_run(store: PostgresChatStore) -> None:
 
     got = await store.get_run("run_1")
     assert got is not None
-    assert got.assistant.id == "a1"
+    assert got.actor.id == "a1"
 
 
 async def test_update_run_status_to_running(store: PostgresChatStore) -> None:
@@ -76,12 +76,12 @@ async def test_find_run_by_idempotency_key(store: PostgresChatStore) -> None:
 
 async def test_find_active_run(store: PostgresChatStore) -> None:
     await store.create_run(_new_run())
-    found = await store.find_active_run("th_1", "a1")
+    found = await store.find_active_run("th_1", actor_id="a1")
     assert found is not None
     assert found.id == "run_1"
 
     await store.update_run_status("run_1", "completed")
-    after = await store.find_active_run("th_1", "a1")
+    after = await store.find_active_run("th_1", actor_id="a1")
     assert after is None
 
 

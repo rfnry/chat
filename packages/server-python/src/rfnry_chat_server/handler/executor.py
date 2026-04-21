@@ -107,14 +107,14 @@ class RunExecutor:
             if existing:
                 return existing
 
-        existing_active = await self._store.find_active_run(thread.id, assistant.id)
+        existing_active = await self._store.find_active_run(thread.id, actor_id=assistant.id)
         if existing_active:
             return existing_active
 
         run = Run(
             id=f"run_{secrets.token_hex(8)}",
             thread_id=thread.id,
-            assistant=assistant,
+            actor=assistant,
             triggered_by=triggered_by,
             status="pending",
             started_at=datetime.now(UTC),
@@ -123,7 +123,7 @@ class RunExecutor:
         try:
             run = await self._store.create_run(run)
         except asyncpg.exceptions.UniqueViolationError:
-            existing_active = await self._store.find_active_run(thread.id, assistant.id)
+            existing_active = await self._store.find_active_run(thread.id, actor_id=assistant.id)
             if existing_active:
                 return existing_active
             if idempotency_key:

@@ -42,7 +42,7 @@ def _build_ctx(thread: Thread, update_thread: Any = None) -> HandlerContext:
     run = Run(
         id="r_1",
         thread_id=thread.id,
-        assistant=assistant,
+        actor=assistant,
         triggered_by=UserIdentity(id="u_alice", name="Alice", metadata={}),
         status="running",
         started_at=datetime.now(UTC),

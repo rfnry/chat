@@ -85,7 +85,7 @@ def _build_ctx(events: list[Event], triggerer_id: str, assistant_id: str = "ops-
     run = Run(
         id="r_1",
         thread_id="t_test",
-        assistant=assistant,
+        actor=assistant,
         triggered_by=UserIdentity(id=triggerer_id, name=triggerer_id, metadata={}),
         status="running",
         started_at=datetime.now(UTC),

@@ -6,7 +6,6 @@ from typing import Any
 
 import asyncpg
 from rfnry_chat_protocol import (
-    AssistantIdentity,
     Event,
     Identity,
     Run,
@@ -191,13 +190,13 @@ class PostgresChatStore:
         async with self._pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO runs (id, thread_id, assistant, triggered_by, status,
+                INSERT INTO runs (id, thread_id, actor, triggered_by, status,
                                   error, idempotency_key, metadata, started_at, completed_at)
                 VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6::jsonb, $7, $8::jsonb, $9, $10)
                 """,
                 run.id,
                 run.thread_id,
-                json.dumps(run.assistant.model_dump(mode="json")),
+                json.dumps(run.actor.model_dump(mode="json")),
                 json.dumps(run.triggered_by.model_dump(mode="json")),
                 run.status,
                 json.dumps(run.error.model_dump(mode="json")) if run.error else None,
@@ -212,7 +211,7 @@ class PostgresChatStore:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT id, thread_id, assistant, triggered_by, status, error,
+                SELECT id, thread_id, actor, triggered_by, status, error,
                        idempotency_key, metadata, started_at, completed_at
                 FROM runs WHERE id = $1
                 """,
@@ -233,7 +232,7 @@ class PostgresChatStore:
                 UPDATE runs SET status = $2, error = $3::jsonb,
                                 completed_at = COALESCE($4, completed_at)
                 WHERE id = $1
-                RETURNING id, thread_id, assistant, triggered_by, status, error,
+                RETURNING id, thread_id, actor, triggered_by, status, error,
                           idempotency_key, metadata, started_at, completed_at
                 """,
                 run_id,
@@ -249,7 +248,7 @@ class PostgresChatStore:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT id, thread_id, assistant, triggered_by, status, error,
+                SELECT id, thread_id, actor, triggered_by, status, error,
                        idempotency_key, metadata, started_at, completed_at
                 FROM runs WHERE thread_id = $1 AND idempotency_key = $2
                 """,
@@ -258,18 +257,18 @@ class PostgresChatStore:
             )
         return _row_to_run(row) if row else None
 
-    async def find_active_run(self, thread_id: str, assistant_id: str) -> Run | None:
+    async def find_active_run(self, thread_id: str, actor_id: str) -> Run | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT id, thread_id, assistant, triggered_by, status, error,
+                SELECT id, thread_id, actor, triggered_by, status, error,
                        idempotency_key, metadata, started_at, completed_at
                 FROM runs
-                WHERE thread_id = $1 AND assistant->>'id' = $2
+                WHERE thread_id = $1 AND actor->>'id' = $2
                   AND status IN ('pending', 'running')
                 """,
                 thread_id,
-                assistant_id,
+                actor_id,
             )
         return _row_to_run(row) if row else None
 
@@ -372,14 +371,14 @@ def _row_to_event(row: asyncpg.Record) -> Event:
 
 
 def _row_to_run(row: asyncpg.Record) -> Run:
-    assistant = _decode_jsonb(row["assistant"])
+    actor = _decode_jsonb(row["actor"])
     triggered_by = _decode_jsonb(row["triggered_by"])
     error = _decode_jsonb(row["error"]) if row["error"] is not None else None
     metadata = _decode_jsonb(row["metadata"])
     return Run(
         id=row["id"],
         thread_id=row["thread_id"],
-        assistant=AssistantIdentity.model_validate(assistant),
+        actor=parse_identity(actor),
         triggered_by=parse_identity(triggered_by),
         status=row["status"],
         error=RunError.model_validate(error) if error else None,
