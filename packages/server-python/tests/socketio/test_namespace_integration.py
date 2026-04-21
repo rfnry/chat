@@ -49,7 +49,6 @@ def _make_chat_server_with_ns(store: PostgresChatStore, identity: Identity) -> C
     return ChatServer(
         store=store,
         authenticate=auth,
-        run_timeout_seconds=5,
         namespace_keys=["org"],
     )
 
@@ -77,7 +76,6 @@ def _make_chat_server_multi_identity(store: PostgresChatStore, identities: dict[
     return ChatServer(
         store=store,
         authenticate=auth,
-        run_timeout_seconds=5,
         namespace_keys=["org"],
     )
 
@@ -111,7 +109,7 @@ async def test_connect_to_matching_namespace_succeeds(
 ) -> None:
     base, _ = live_ns_a
     client = socketio.AsyncClient()
-    await client.connect(base, namespaces=["/A"], transports=["websocket"])
+    await client.connect(base, namespaces=["/A"], transports=["websocket"], socketio_path="/chat/ws")
     assert client.connected
     await client.disconnect()
 
@@ -127,7 +125,7 @@ async def test_connect_to_wrong_namespace_rejected(clean_db: asyncpg.Pool) -> No
     try:
         client = socketio.AsyncClient()
         with pytest.raises(socketio.exceptions.ConnectionError):
-            await client.connect(base, namespaces=["/A"], transports=["websocket"])
+            await client.connect(base, namespaces=["/A"], transports=["websocket"], socketio_path="/chat/ws")
     finally:
         await server.stop()
 
@@ -140,7 +138,7 @@ async def test_connect_to_root_rejected_when_keys_set(
     # Connecting without an explicit namespace defaults to `/`, which has
     # zero segments and therefore fails parse_namespace_path.
     with pytest.raises(socketio.exceptions.ConnectionError):
-        await client.connect(base, transports=["websocket"])
+        await client.connect(base, transports=["websocket"], socketio_path="/chat/ws")
 
 
 async def test_join_thread_in_matching_namespace_succeeds(
@@ -160,7 +158,7 @@ async def test_join_thread_in_matching_namespace_succeeds(
 
         # Client connects to /A and can see it
         client = socketio.AsyncClient()
-        await client.connect(base, namespaces=["/A"], transports=["websocket"])
+        await client.connect(base, namespaces=["/A"], transports=["websocket"], socketio_path="/chat/ws")
         join = await client.call("thread:join", {"thread_id": thread_id}, namespace="/A")
         assert join["thread_id"] == thread_id
         await client.disconnect()
@@ -229,12 +227,14 @@ async def test_broadcast_events_do_not_leak_across_namespaces(
             namespaces=["/A"],
             auth={"user": "alice"},
             transports=["websocket"],
+            socketio_path="/chat/ws",
         )
         await bob_client.connect(
             base,
             namespaces=["/B"],
             auth={"user": "bob"},
             transports=["websocket"],
+            socketio_path="/chat/ws",
         )
 
         # Each client joins their own thread.
@@ -329,7 +329,7 @@ async def test_join_thread_with_mismatched_ns_tenant_returns_not_found(
             )
 
         client = socketio.AsyncClient()
-        await client.connect(base, namespaces=["/A"], transports=["websocket"])
+        await client.connect(base, namespaces=["/A"], transports=["websocket"], socketio_path="/chat/ws")
         result = await client.call("thread:join", {"thread_id": "th_foreign"}, namespace="/A")
         assert result.get("error", {}).get("code") == "not_found"
         await client.disconnect()

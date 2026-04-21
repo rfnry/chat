@@ -11,7 +11,7 @@ import pytest
 import socketio
 import uvicorn
 from fastapi import FastAPI
-from rfnry_chat_protocol import Identity, TextPart, UserIdentity
+from rfnry_chat_protocol import Identity, UserIdentity
 
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.chat_server import ChatServer
@@ -48,7 +48,7 @@ def _make_chat_server(store: PostgresChatStore) -> ChatServer:
     async def auth(_h: HandshakeData) -> Identity:
         return alice
 
-    return ChatServer(store=store, authenticate=auth, run_timeout_seconds=5)
+    return ChatServer(store=store, authenticate=auth)
 
 
 def _wire(chat_server: ChatServer) -> Any:
@@ -86,7 +86,7 @@ async def test_join_and_receive_event(live: tuple[str, ChatServer]) -> None:
     async def on_event(data: dict[str, Any]) -> None:
         received.append(data)
 
-    await client.connect(base, transports=["websocket"])
+    await client.connect(base, transports=["websocket"], socketio_path="/chat/ws")
     join = await client.call("thread:join", {"thread_id": thread_id})
     assert join["thread_id"] == thread_id
     assert join["replayed"] == []
@@ -130,7 +130,7 @@ async def test_resume_with_since_cursor(live: tuple[str, ChatServer]) -> None:
 
     cursor_event = events[0]
     client = socketio.AsyncClient()
-    await client.connect(base, transports=["websocket"])
+    await client.connect(base, transports=["websocket"], socketio_path="/chat/ws")
     join = await client.call(
         "thread:join",
         {
@@ -161,7 +161,7 @@ async def test_send_message_via_socket(live: tuple[str, ChatServer]) -> None:
     async def on_event(data: dict[str, Any]) -> None:
         received.append(data)
 
-    await client.connect(base, transports=["websocket"])
+    await client.connect(base, transports=["websocket"], socketio_path="/chat/ws")
     await client.call("thread:join", {"thread_id": thread_id})
 
     response = await client.call(
@@ -187,18 +187,18 @@ async def test_send_message_via_socket(live: tuple[str, ChatServer]) -> None:
     await client.disconnect()
 
 
-async def test_invoke_via_socket(clean_db: asyncpg.Pool) -> None:
+async def test_server_tool_handler_via_socket(clean_db: asyncpg.Pool) -> None:
     store = PostgresChatStore(pool=clean_db)
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
 
     async def auth(_h: HandshakeData) -> Identity:
         return alice
 
-    chat_server = ChatServer(store=store, authenticate=auth, run_timeout_seconds=5)
+    chat_server = ChatServer(store=store, authenticate=auth)
 
-    @chat_server.assistant("a1")
-    async def helper(ctx, send):
-        yield send.message(content=[TextPart(text="hi from socket invoke")])
+    @chat_server.on_tool_call("ping")
+    async def handle_ping(ctx, send):
+        yield send.tool_result(ctx.event.tool.id, result={"pong": True})
 
     asgi = _wire(chat_server)
     server = _Server(asgi)
@@ -207,17 +207,6 @@ async def test_invoke_via_socket(clean_db: asyncpg.Pool) -> None:
         async with httpx.AsyncClient(base_url=base) as http:
             create = await http.post("/chat/threads", json={"tenant": {"org": "A"}})
             thread_id = create.json()["id"]
-            await http.post(
-                f"/chat/threads/{thread_id}/members",
-                json={
-                    "identity": {
-                        "role": "assistant",
-                        "id": "a1",
-                        "name": "Helper",
-                        "metadata": {},
-                    }
-                },
-            )
 
         client = socketio.AsyncClient()
         received: list[dict[str, Any]] = []
@@ -226,25 +215,34 @@ async def test_invoke_via_socket(clean_db: asyncpg.Pool) -> None:
         async def on_event(data: dict[str, Any]) -> None:
             received.append(data)
 
-        await client.connect(base, transports=["websocket"])
+        await client.connect(base, transports=["websocket"], socketio_path="/chat/ws")
         await client.call("thread:join", {"thread_id": thread_id})
 
-        response = await client.call(
-            "assistant:invoke",
-            {"thread_id": thread_id, "assistant_ids": ["a1"]},
+        await client.call(
+            "event:send",
+            {
+                "thread_id": thread_id,
+                "event": {
+                    "type": "tool.call",
+                    "tool": {"id": "call_1", "name": "ping", "arguments": {}},
+                },
+            },
         )
-        run_id = response["runs"][0]["id"]
-        await chat_server.executor.await_run(run_id)
 
         for _ in range(50):
-            if any(e["type"] == "run.completed" for e in received):
+            if any(e["type"] == "tool.result" for e in received):
                 break
             await asyncio.sleep(0.05)
 
         types = [e["type"] for e in received]
+        assert "tool.call" in types
+        assert "tool.result" in types
         assert "run.started" in types
-        assert "message" in types
         assert "run.completed" in types
+
+        result_event = next(e for e in received if e["type"] == "tool.result")
+        assert result_event["tool"]["result"] == {"pong": True}
+        assert result_event["author"]["role"] == "system"
 
         await client.disconnect()
     finally:
