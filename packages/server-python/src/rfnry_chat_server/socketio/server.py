@@ -5,7 +5,19 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import socketio
-from rfnry_chat_protocol import AssistantIdentity, Identity, MessageEvent, matches, parse_content_part
+from pydantic import ValidationError
+from rfnry_chat_protocol import (
+    AssistantIdentity,
+    Identity,
+    MessageEvent,
+    RunError,
+    StreamDeltaFrame,
+    StreamEndFrame,
+    StreamStartFrame,
+    matches,
+    parse_content_part,
+    parse_event,
+)
 
 from rfnry_chat_server.recipients import RecipientNotMemberError
 from rfnry_chat_server.server.auth import HandshakeData
@@ -17,6 +29,17 @@ if TYPE_CHECKING:
 
 
 DEFAULT_REPLAY_CAP = 500
+
+_SERVER_LIFECYCLE_TYPES = frozenset({
+    "thread.created",
+    "thread.member_added",
+    "thread.member_removed",
+    "thread.tenant_changed",
+    "run.started",
+    "run.completed",
+    "run.failed",
+    "run.cancelled",
+})
 
 
 def thread_room(thread_id: str) -> str:
@@ -355,6 +378,152 @@ class ThreadNamespace(socketio.AsyncNamespace):
             return _error("forbidden", "not authorized: run.cancel")
         await self._server.executor.cancel(run_id)
         return {"run_id": run_id, "cancelled": True}
+
+    async def on_event_send(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
+        identity = await _identity(self, sid)
+        thread_id = data.get("thread_id")
+        raw_event = data.get("event")
+        if not isinstance(thread_id, str) or not isinstance(raw_event, dict):
+            return _error("invalid_request", "thread_id and event required")
+
+        raw_event = {
+            **raw_event,
+            "id": raw_event.get("id") or f"evt_{secrets.token_hex(8)}",
+            "thread_id": thread_id,
+            "author": identity.model_dump(mode="json"),
+            "created_at": raw_event.get("created_at") or datetime.now(UTC).isoformat(),
+        }
+
+        try:
+            event = parse_event(raw_event)
+        except ValidationError as exc:
+            return _error("invalid_request", f"event validation failed: {exc}")
+
+        if event.type in _SERVER_LIFECYCLE_TYPES:
+            return _error("forbidden", f"clients cannot emit {event.type} events")
+
+        access = await self._access_check(sid, identity, thread_id, action=f"{event.type}.send")
+        if isinstance(access, dict):
+            return access
+
+        try:
+            appended = await self._server.publish_event(event, thread=access)
+        except RecipientNotMemberError as exc:
+            return _error("recipient_not_member", str(exc))
+        return {"event": appended.model_dump(mode="json", by_alias=True)}
+
+    async def on_run_begin(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
+        identity = await _identity(self, sid)
+        thread_id = data.get("thread_id")
+        triggered_by_event_id = data.get("triggered_by_event_id")
+        idempotency_key = data.get("idempotency_key")
+        if not isinstance(thread_id, str):
+            return _error("invalid_request", "thread_id required")
+
+        access = await self._access_check(sid, identity, thread_id, action="run.begin")
+        if isinstance(access, dict):
+            return access
+
+        triggered_by_identity = identity
+        if isinstance(triggered_by_event_id, str):
+            source_event = await self._server.store.get_event(triggered_by_event_id)
+            if source_event is not None and source_event.thread_id == thread_id:
+                triggered_by_identity = source_event.author
+
+        run = await self._server.begin_run(
+            thread=access,
+            actor=identity,
+            triggered_by=triggered_by_identity,
+            idempotency_key=idempotency_key if isinstance(idempotency_key, str) else None,
+        )
+        return {"run_id": run.id, "status": run.status}
+
+    async def on_run_end(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
+        identity = await _identity(self, sid)
+        run_id = data.get("run_id")
+        error_raw = data.get("error")
+        if not isinstance(run_id, str):
+            return _error("invalid_request", "run_id required")
+
+        run = await self._server.store.get_run(run_id)
+        if run is None:
+            return _error("not_found", "run not found")
+        if run.actor.id != identity.id:
+            return _error("forbidden", "can only end your own runs")
+
+        error: RunError | None = None
+        if isinstance(error_raw, dict):
+            error = RunError(
+                code=str(error_raw.get("code", "error")),
+                message=str(error_raw.get("message", "")),
+            )
+
+        final = await self._server.end_run(run_id=run_id, error=error)
+        return {"run_id": final.id, "status": final.status}
+
+    async def on_stream_start(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
+        identity = await _identity(self, sid)
+        thread_id = data.get("thread_id")
+        if not isinstance(thread_id, str):
+            return _error("invalid_request", "thread_id required")
+        access = await self._access_check(sid, identity, thread_id, action="stream.send")
+        if isinstance(access, dict):
+            return access
+        try:
+            frame = StreamStartFrame.model_validate(data)
+        except ValidationError as exc:
+            return _error("invalid_request", str(exc))
+        await self._server.broadcast_stream_start(frame, thread=access)
+        return {"ok": True}
+
+    async def on_stream_delta(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
+        identity = await _identity(self, sid)
+        thread_id = data.get("thread_id")
+        if not isinstance(thread_id, str):
+            return _error("invalid_request", "thread_id required")
+        access = await self._access_check(sid, identity, thread_id, action="stream.send")
+        if isinstance(access, dict):
+            return access
+        try:
+            frame = StreamDeltaFrame.model_validate(data)
+        except ValidationError as exc:
+            return _error("invalid_request", str(exc))
+        await self._server.broadcast_stream_delta(frame, thread=access)
+        return {"ok": True}
+
+    async def on_stream_end(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
+        identity = await _identity(self, sid)
+        thread_id = data.get("thread_id")
+        if not isinstance(thread_id, str):
+            return _error("invalid_request", "thread_id required")
+        access = await self._access_check(sid, identity, thread_id, action="stream.send")
+        if isinstance(access, dict):
+            return access
+        try:
+            frame = StreamEndFrame.model_validate(data)
+        except ValidationError as exc:
+            return _error("invalid_request", str(exc))
+        await self._server.broadcast_stream_end(frame, thread=access)
+        return {"ok": True}
+
+    async def _access_check(
+        self,
+        sid: str,
+        identity: Identity,
+        thread_id: str,
+        *,
+        action: str,
+    ) -> Any:
+        thread = await self._server.store.get_thread(thread_id)
+        if thread is None or not matches(thread.tenant, _identity_tenant(identity)):
+            return _error("not_found", "thread not found")
+        if not await self._check_namespace_match(sid, thread.tenant):
+            return _error("not_found", "thread not found")
+        if not await self._server.store.is_member(thread_id, identity.id):
+            return _error("forbidden", "not a member of this thread")
+        if not await self._server.check_authorize(identity, thread_id, action):
+            return _error("forbidden", f"not authorized: {action}")
+        return thread
 
 
 class ChatSocketIO:

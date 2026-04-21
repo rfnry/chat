@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import secrets
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter
@@ -10,6 +12,7 @@ from rfnry_chat_protocol import (
     Identity,
     MessageEvent,
     Run,
+    RunError,
     StreamDeltaFrame,
     StreamEndFrame,
     StreamStartFrame,
@@ -25,6 +28,15 @@ from rfnry_chat_server.handler.types import HandlerCallable
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
 from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback
 from rfnry_chat_server.server.namespace import NamespaceViolation, derive_namespace_path
+from rfnry_chat_server.server.run_events import (
+    run_completed as _run_completed_event,
+)
+from rfnry_chat_server.server.run_events import (
+    run_failed as _run_failed_event,
+)
+from rfnry_chat_server.server.run_events import (
+    run_started as _run_started_event,
+)
 from rfnry_chat_server.store.protocol import ChatStore
 
 MAX_AUTO_INVOKE_CHAIN_DEPTH = 8
@@ -242,6 +254,53 @@ class ChatServer:
                 if thread is not None:
                     namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
             await self.broadcaster.broadcast_run_updated(run, namespace=namespace)
+
+    async def begin_run(
+        self,
+        *,
+        thread: Thread,
+        actor: Identity,
+        triggered_by: Identity,
+        idempotency_key: str | None,
+    ) -> Run:
+        if idempotency_key is not None:
+            existing = await self.store.find_run_by_idempotency_key(thread.id, idempotency_key)
+            if existing is not None:
+                return existing
+
+        existing_active = await self.store.find_active_run(thread.id, actor_id=actor.id)
+        if existing_active is not None:
+            return existing_active
+
+        run = Run(
+            id=f"run_{secrets.token_hex(8)}",
+            thread_id=thread.id,
+            actor=actor,
+            triggered_by=triggered_by,
+            status="running",
+            started_at=datetime.now(UTC),
+            idempotency_key=idempotency_key,
+        )
+        created = await self.store.create_run(run)
+        await self.publish_event(_run_started_event(created, thread, actor), thread=thread)
+        return created
+
+    async def end_run(self, *, run_id: str, error: RunError | None) -> Run:
+        if error is None:
+            updated = await self.store.update_run_status(run_id, "completed")
+            thread = await self.store.get_thread(updated.thread_id)
+            if thread is not None:
+                await self.publish_event(
+                    _run_completed_event(updated, thread, updated.actor), thread=thread
+                )
+            return updated
+        updated = await self.store.update_run_status(run_id, "failed", error=error)
+        thread = await self.store.get_thread(updated.thread_id)
+        if thread is not None:
+            await self.publish_event(
+                _run_failed_event(updated, thread, updated.actor, error), thread=thread
+            )
+        return updated
 
     async def broadcast_stream_start(self, frame: StreamStartFrame, *, thread: Thread) -> None:
         if self.broadcaster is None:
