@@ -11,15 +11,27 @@ They share a FastAPI process for convenience. In production you'd split them int
 
 ```
 src/
-  main.py          FastAPI lifespan — starts chat server, schedules agent ChatClient
-  server.py        ChatServer + @server.on("*") observability mirror
-  agent.py         rfnry-chat-client ChatClient + @client.on_message handler
-  tools.py         Tool definitions + fake executors (order_lookup, escalate_to_human)
-  observability.py Simulated sink (stdout JSON)
-  auth.py          Token-based auth — user tokens and assistant token
-  settings.py      Env-driven config
-  db.py            LazyStore + pool factory
+  main.py              FastAPI app + lifespan — wires store, starts chat server, schedules agent
+  chat.py              ChatServer builder + @server.on("*") observability mirror
+  agent/
+    __init__.py
+    client.py          ChatClient lifecycle — build() registers the handler, run() connects + holds
+    assistant.py       Agentic loop — @chat_client.on_message handler; tool-calling business logic
+    provider.py        Anthropic SDK glue — call(), history↔messages conversion, build factory
+  tools.py             Tool definitions + fake executors (order_lookup, escalate_to_human)
+  observability.py     Simulated sink (stdout JSON)
+  auth.py              Token-based auth — user tokens and assistant token
+  settings.py          Env-driven config
+  db.py                LazyStore + pool factory
 ```
+
+The three-file `agent/` split is intentional:
+
+- **`provider.py`** is the *only* file that imports `anthropic`. Swap it for a `provider_openai.py` / `provider_langgraph.py` without touching anything else.
+- **`assistant.py`** is where the business agentic logic lives — the tool-calling loop, the system prompt, the decision to emit a final message vs keep iterating. It depends on the provider's narrow surface (`call`, `to_anthropic_messages`, `tool_result_block`) but not on the SDK directly.
+- **`client.py`** is transport — it knows how to build a `ChatClient`, retry the connection, and register the assistant's handler on it. It knows nothing about Anthropic or tool logic.
+
+`main.py` only touches `chat.build(...)` and `agent.client.build(...)` / `agent.client.run(...)`. Its job is ASGI wiring and lifespan.
 
 ## What this demonstrates vs the old API
 

@@ -10,9 +10,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from rfnry_chat_server import ChatStore
 
-from src import agent
+from src import chat
+from src.agent import client as agent_client
 from src.db import LazyStore, create_pool
-from src.server import build
 from src.settings import settings
 
 logging.basicConfig(
@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("cs.main")
 
 store = LazyStore()
-chat_server = build(store=cast(ChatStore, store))
+chat_server = chat.build(store=cast(ChatStore, store))
 
 
 @asynccontextmanager
@@ -34,11 +34,9 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     await chat_server.start()
     logger.info("chat server + watchdog running")
 
-    base_url = f"http://127.0.0.1:{settings.PORT}"
-    client = agent.build_client(base_url)
-
-    agent_task = asyncio.create_task(_run_agent(client))
-    logger.info("agent client scheduled connect to %s", base_url)
+    agent = agent_client.build(f"http://127.0.0.1:{settings.PORT}")
+    agent_task = asyncio.create_task(agent_client.run(agent))
+    logger.info("agent scheduled")
 
     try:
         yield
@@ -51,25 +49,6 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         await chat_server.stop()
         await pool.close()
         logger.info("shutdown complete")
-
-
-async def _run_agent(client) -> None:
-    for _ in range(50):
-        try:
-            await client.connect()
-            logger.info("agent connected")
-            break
-        except Exception as exc:
-            logger.debug("agent connect retry: %s", exc)
-            await asyncio.sleep(0.2)
-    else:
-        logger.error("agent failed to connect after retries")
-        return
-
-    try:
-        await asyncio.Event().wait()
-    finally:
-        await client.disconnect()
 
 
 app = FastAPI(title="cs-example", lifespan=lifespan)
