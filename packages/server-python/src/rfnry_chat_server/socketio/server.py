@@ -198,8 +198,10 @@ class ThreadNamespace(socketio.AsyncNamespace):
                         "namespace_tenant": ns_tenant,
                     },
                 )
+                await self.enter_room(sid, f"inbox:{identity.id}")
             else:
                 await self.save_session(sid, {"identity": identity})
+                await self.enter_room(sid, f"inbox:{identity.id}")
         except socketio.exceptions.ConnectionRefusedError:
             self._sid_namespaces.pop(sid, None)
             raise

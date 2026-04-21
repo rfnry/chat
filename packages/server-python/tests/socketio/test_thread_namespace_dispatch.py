@@ -18,9 +18,10 @@ from these tests will name exactly what changed.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from rfnry_chat_protocol import UserIdentity
 
 from rfnry_chat_server.socketio.server import ThreadNamespace
 
@@ -195,3 +196,83 @@ class TestTriggerEventDisconnectReasonFallback:
         await ns.trigger_event("disconnect", "/A", "sid_1", "transport closed")
 
         assert "sid_1" not in ns._sid_namespaces
+
+
+class TestOnConnectAutoJoinsInboxRoom:
+    """After `on_connect` resolves the identity and saves the session, the sid
+    must be auto-joined to a namespace-scoped `inbox:<identity_id>` room so
+    Task 4's `broadcast_thread_invited` reaches exactly that sid."""
+
+    async def test_on_connect_auto_joins_identity_inbox_room(self) -> None:
+        # Static-namespace path: no namespace_keys, no wildcard.
+        alice = UserIdentity(id="u_alice", name="Alice", metadata={})
+
+        server = MagicMock()
+        server.namespace_keys = None
+        server.authenticate = AsyncMock(return_value=alice)
+
+        ns = ThreadNamespace("/", server=server, replay_cap=100)
+
+        # Capture side effects without touching a real socketio.Server.
+        entered: list[tuple[str, str]] = []
+
+        async def fake_enter_room(sid: str, room: str, namespace: str | None = None) -> None:
+            entered.append((sid, room))
+
+        saved: list[dict[str, Any]] = []
+
+        async def fake_save_session(sid: str, session: dict[str, Any], namespace: str | None = None) -> None:
+            saved.append(session)
+
+        ns.enter_room = fake_enter_room  # type: ignore[method-assign]
+        ns.save_session = fake_save_session  # type: ignore[method-assign]
+
+        await ns.on_connect("sid_test", environ={}, auth={"identity_id": "u_alice"})
+
+        assert ("sid_test", "inbox:u_alice") in entered
+        assert len(saved) == 1
+        assert saved[0]["identity"] is alice
+
+    async def test_on_connect_auto_joins_identity_inbox_room_wildcard(self) -> None:
+        # Wildcard path: namespace_keys=["org"] and a concrete namespace "/acme".
+        # The identity must carry tenant={"org": "acme"} to pass namespace match.
+        alice = UserIdentity(
+            id="u_alice",
+            name="Alice",
+            metadata={"tenant": {"org": "acme"}},
+        )
+
+        server = MagicMock()
+        server.namespace_keys = ["org"]
+        server.authenticate = AsyncMock(return_value=alice)
+
+        ns = ThreadNamespace("*", server=server, replay_cap=100)
+
+        entered: list[tuple[str, str]] = []
+
+        async def fake_enter_room(sid: str, room: str, namespace: str | None = None) -> None:
+            entered.append((sid, room))
+
+        saved: list[dict[str, Any]] = []
+
+        async def fake_save_session(sid: str, session: dict[str, Any], namespace: str | None = None) -> None:
+            saved.append(session)
+
+        ns.enter_room = fake_enter_room  # type: ignore[method-assign]
+        ns.save_session = fake_save_session  # type: ignore[method-assign]
+
+        # Route through trigger_event with the concrete namespace prepended,
+        # mirroring what python-socketio does under wildcard registration.
+        await ns.trigger_event(
+            "connect",
+            "/acme",  # concrete namespace (prepended by python-socketio)
+            "sid_x",  # sid
+            {},  # environ
+            {"identity_id": "u_alice"},  # auth
+        )
+
+        assert ("sid_x", "inbox:u_alice") in entered
+        assert len(saved) == 1
+        assert saved[0]["identity"] is alice
+        assert saved[0]["namespace"] == "/acme"
+        assert saved[0]["namespace_tenant"] == {"org": "acme"}
