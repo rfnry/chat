@@ -56,10 +56,7 @@ from rfnry_chat_server.analytics.collector import (
 from rfnry_chat_server.broadcast.protocol import Broadcaster
 from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
 from rfnry_chat_server.broadcast.socketio import SocketIOBroadcaster
-from rfnry_chat_server.handler.context import HandlerContext
-from rfnry_chat_server.handler.send import HandlerSend
-from rfnry_chat_server.handler.stream import Stream, StreamSink
-from rfnry_chat_server.handler.types import HandlerCallable
+from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
 from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback, HandshakeData
 from rfnry_chat_server.server.chat_server import ChatServer
 from rfnry_chat_server.server.namespace import (
@@ -71,9 +68,10 @@ from rfnry_chat_server.server.namespace import (
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 from rfnry_chat_server.store.protocol import ChatStore
 from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
+from rfnry_chat_server.tools.registry import ToolCallHandler, ToolRegistry
+from rfnry_chat_server.tools.runner import ToolCallContext, ToolRunner
 
 __all__ = [
-    "ChatServer",
     "AnalyticsEvent",
     "AssistantAnalytics",
     "AssistantIdentity",
@@ -81,6 +79,8 @@ __all__ = [
     "AuthenticateCallback",
     "AuthorizeCallback",
     "Broadcaster",
+    "ChatServer",
+    "ChatStore",
     "ContentPart",
     "DocumentPart",
     "Event",
@@ -88,9 +88,6 @@ __all__ = [
     "EventDraft",
     "FormPart",
     "FormStatus",
-    "HandlerCallable",
-    "HandlerContext",
-    "HandlerSend",
     "HandshakeData",
     "Identity",
     "ImagePart",
@@ -100,6 +97,7 @@ __all__ = [
     "Page",
     "PostgresChatStore",
     "ReasoningEvent",
+    "RecipientNotMemberError",
     "RecordingBroadcaster",
     "Run",
     "RunCancelledEvent",
@@ -109,11 +107,9 @@ __all__ = [
     "RunStartedEvent",
     "RunStatus",
     "SocketIOBroadcaster",
-    "Stream",
     "StreamDeltaFrame",
     "StreamEndFrame",
     "StreamError",
-    "StreamSink",
     "StreamStartFrame",
     "StreamTargetType",
     "SystemIdentity",
@@ -126,16 +122,20 @@ __all__ = [
     "ThreadMemberAddedEvent",
     "ThreadMemberRemovedEvent",
     "ThreadPatch",
-    "ChatStore",
     "ThreadTenantChangedEvent",
     "ToolCall",
+    "ToolCallContext",
     "ToolCallEvent",
+    "ToolCallHandler",
+    "ToolRegistry",
     "ToolResult",
     "ToolResultEvent",
+    "ToolRunner",
     "UserIdentity",
     "__version__",
     "derive_namespace_path",
     "matches",
+    "normalize_recipients",
     "parse_content_part",
     "parse_event",
     "parse_identity",

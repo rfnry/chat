@@ -8,10 +8,8 @@ from typing import Any
 
 from fastapi import APIRouter
 from rfnry_chat_protocol import (
-    AssistantIdentity,
     Event,
     Identity,
-    MessageEvent,
     Run,
     RunError,
     StreamDeltaFrame,
@@ -23,14 +21,13 @@ from rfnry_chat_protocol import (
     ToolCallEvent,
 )
 
-from rfnry_chat_server.analytics.collector import OnAnalyticsCallback
 from rfnry_chat_server.broadcast.protocol import Broadcaster
-from rfnry_chat_server.handler.executor import RunExecutor
-from rfnry_chat_server.handler.stream import StreamSink
-from rfnry_chat_server.handler.types import HandlerCallable
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
 from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback
 from rfnry_chat_server.server.namespace import NamespaceViolation, derive_namespace_path
+from rfnry_chat_server.server.run_events import (
+    run_cancelled as _run_cancelled_event,
+)
 from rfnry_chat_server.server.run_events import (
     run_completed as _run_completed_event,
 )
@@ -43,8 +40,6 @@ from rfnry_chat_server.server.run_events import (
 from rfnry_chat_server.store.protocol import ChatStore
 from rfnry_chat_server.tools.registry import ToolCallHandler, ToolRegistry
 from rfnry_chat_server.tools.runner import ToolRunner
-
-MAX_AUTO_INVOKE_CHAIN_DEPTH = 8
 
 
 def _validate_namespace_keys(namespace_keys: list[str] | None) -> list[str] | None:
@@ -62,24 +57,6 @@ def _validate_namespace_keys(namespace_keys: list[str] | None) -> list[str] | No
     return list(namespace_keys)
 
 
-class _BoundStreamSink:
-    def __init__(self, server: ChatServer, thread: Thread) -> None:
-        self._server = server
-        self._thread = thread
-
-    async def start(self, frame: StreamStartFrame) -> None:
-        await self._server.broadcast_stream_start(frame, thread=self._thread)
-
-    async def delta(self, frame: StreamDeltaFrame) -> None:
-        await self._server.broadcast_stream_delta(frame, thread=self._thread)
-
-    async def end(self, frame: StreamEndFrame) -> None:
-        await self._server.broadcast_stream_end(frame, thread=self._thread)
-
-    async def publish_event(self, event: Event) -> Event:
-        return await self._server.publish_event(event, thread=self._thread)
-
-
 class ChatServer:
     def __init__(
         self,
@@ -87,9 +64,6 @@ class ChatServer:
         store: ChatStore,
         authenticate: AuthenticateCallback,
         authorize: AuthorizeCallback | None = None,
-        auto_invoke_recipients: bool = True,
-        on_analytics: OnAnalyticsCallback | None = None,
-        run_timeout_seconds: int = 120,
         tool_timeout_seconds: int = 30,
         replay_cap: int = 500,
         broadcaster: Broadcaster | None = None,
@@ -99,11 +73,9 @@ class ChatServer:
         self.store = store
         self.authenticate = authenticate
         self.authorize = authorize
-        self.auto_invoke_recipients = auto_invoke_recipients
         self.replay_cap = replay_cap
         self.broadcaster = broadcaster
         self.namespace_keys = _validate_namespace_keys(namespace_keys)
-        self._handlers: dict[str, HandlerCallable] = {}
         self._socketio: Any = None
         self._tool_registry = ToolRegistry()
         self._system_identity = system_identity or SystemIdentity(id="system", name="system")
@@ -113,17 +85,7 @@ class ChatServer:
             timeout_seconds=tool_timeout_seconds,
             system_identity=self._system_identity,
         )
-        self.executor = RunExecutor(
-            store=store,
-            on_analytics=on_analytics,
-            run_timeout_seconds=run_timeout_seconds,
-            publish_event=self.publish_event,
-            publish_thread_updated=self.publish_thread_updated,
-            handler_resolver=self.get_handler,
-            stream_sink_factory=self._make_stream_sink,
-        )
 
-        from rfnry_chat_server.server.rest.invocations import build_router as build_invocations
         from rfnry_chat_server.server.rest.members import build_router as build_members
         from rfnry_chat_server.server.rest.messages import build_router as build_messages
         from rfnry_chat_server.server.rest.runs import build_router as build_runs
@@ -133,21 +95,7 @@ class ChatServer:
         self.router.include_router(build_threads())
         self.router.include_router(build_messages())
         self.router.include_router(build_members())
-        self.router.include_router(build_invocations())
         self.router.include_router(build_runs())
-
-    def register_assistant(self, assistant_id: str, handler: HandlerCallable) -> None:
-        self._handlers[assistant_id] = handler
-
-    def assistant(self, assistant_id: str) -> Callable[[HandlerCallable], HandlerCallable]:
-        def decorator(handler: HandlerCallable) -> HandlerCallable:
-            self.register_assistant(assistant_id, handler)
-            return handler
-
-        return decorator
-
-    def get_handler(self, assistant_id: str) -> HandlerCallable | None:
-        return self._handlers.get(assistant_id)
 
     def on_tool_call(self, name: str) -> Callable[[ToolCallHandler], ToolCallHandler]:
         return self._tool_registry.decorator(name)
@@ -187,18 +135,6 @@ class ChatServer:
                     namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
             await self.broadcaster.broadcast_event(appended, namespace=namespace)
 
-        if self.auto_invoke_recipients and isinstance(appended, MessageEvent) and appended.recipients:
-            if thread is None:
-                thread = await self.store.get_thread(appended.thread_id)
-            if thread is not None:
-                if members is None:
-                    members = await self.store.list_members(appended.thread_id)
-                await self._auto_invoke_recipients(
-                    event=appended,
-                    members=members,
-                    thread=thread,
-                )
-
         if (
             isinstance(appended, ToolCallEvent)
             and self._tool_registry.get(appended.tool.name) is not None
@@ -209,45 +145,6 @@ class ChatServer:
                 asyncio.create_task(self._tool_runner.handle(appended, thread))
 
         return appended
-
-    async def _auto_invoke_recipients(
-        self,
-        *,
-        event: MessageEvent,
-        members: list[ThreadMember],
-        thread: Thread,
-    ) -> None:
-        if not event.recipients:
-            return
-
-        parent_depth = 0
-        if event.run_id is not None:
-            parent_depth = self.executor.chain_depth_for(event.run_id)
-            if parent_depth >= MAX_AUTO_INVOKE_CHAIN_DEPTH:
-                return
-
-        members_by_id = {m.identity_id: m for m in members}
-        for assistant_id in event.recipients:
-            handler = self.get_handler(assistant_id)
-            if handler is None:
-                continue
-            if not await self.check_authorize(
-                event.author,
-                thread.id,
-                "assistant.invoke",
-                target_id=assistant_id,
-            ):
-                continue
-            member = members_by_id.get(assistant_id)
-            if member is None or not isinstance(member.identity, AssistantIdentity):
-                continue
-            await self.executor.execute(
-                thread=thread,
-                assistant=member.identity,
-                triggered_by=event.author,
-                handler=handler,
-                chain_depth=parent_depth + 1,
-            )
 
     async def publish_thread_updated(self, thread: Thread) -> None:
         if self.broadcaster is not None:
@@ -312,6 +209,15 @@ class ChatServer:
         await self.publish_event(_run_started_event(created, thread, actor), thread=thread)
         return created
 
+    async def cancel_run(self, *, run_id: str) -> Run:
+        updated = await self.store.update_run_status(run_id, "cancelled")
+        thread = await self.store.get_thread(updated.thread_id)
+        if thread is not None:
+            await self.publish_event(
+                _run_cancelled_event(updated, thread, updated.actor), thread=thread
+            )
+        return updated
+
     async def end_run(self, *, run_id: str, error: RunError | None) -> Run:
         if error is None:
             updated = await self.store.update_run_status(run_id, "completed")
@@ -346,9 +252,6 @@ class ChatServer:
             return
         namespace = self.namespace_for_thread(thread)
         await self.broadcaster.broadcast_stream_end(frame, namespace=namespace)
-
-    def _make_stream_sink(self, thread: Thread) -> StreamSink:
-        return _BoundStreamSink(self, thread)
 
     def namespace_for_thread(self, thread: Thread) -> str | None:
         if self.namespace_keys is None:

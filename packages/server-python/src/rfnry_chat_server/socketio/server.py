@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 import socketio
 from pydantic import ValidationError
 from rfnry_chat_protocol import (
-    AssistantIdentity,
     Identity,
     MessageEvent,
     RunError,
@@ -313,51 +312,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
             return _error("recipient_not_member", str(exc))
         return {"event": appended.model_dump(mode="json", by_alias=True)}
 
-    async def on_assistant_invoke(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
-        identity = await _identity(self, sid)
-        thread_id = data.get("thread_id")
-        assistant_ids = data.get("assistant_ids") or []
-        idempotency_key = data.get("idempotency_key")
-        if not isinstance(thread_id, str) or not isinstance(assistant_ids, list):
-            return _error("invalid_request", "thread_id and assistant_ids required")
-        if not assistant_ids:
-            return _error("invalid_request", "assistant_ids must be non-empty")
-
-        thread = await self._server.store.get_thread(thread_id)
-        if thread is None or not matches(thread.tenant, _identity_tenant(identity)):
-            return _error("not_found", "thread not found")
-        if not await self._check_namespace_match(sid, thread.tenant):
-            return _error("not_found", "thread not found")
-        if not await self._server.store.is_member(thread_id, identity.id):
-            return _error("forbidden", "not a member of this thread")
-        if not await self._server.check_authorize(identity, thread_id, "assistant.invoke"):
-            return _error("forbidden", "not authorized: assistant.invoke")
-
-        members = await self._server.store.list_members(thread_id)
-        members_by_id = {m.identity_id: m for m in members}
-
-        runs = []
-        for assistant_id in assistant_ids:
-            handler = self._server.get_handler(assistant_id)
-            if handler is None:
-                return _error("not_found", f"assistant not registered: {assistant_id}")
-            member = members_by_id.get(assistant_id)
-            if member is None or not isinstance(member.identity, AssistantIdentity):
-                return _error(
-                    "forbidden",
-                    f"assistant not a member of this thread: {assistant_id}",
-                )
-            run = await self._server.executor.execute(
-                thread=thread,
-                assistant=member.identity,
-                triggered_by=identity,
-                handler=handler,
-                idempotency_key=idempotency_key,
-            )
-            runs.append(run)
-
-        return {"runs": [r.model_dump(mode="json", by_alias=True) for r in runs]}
-
     async def on_run_cancel(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
         identity = await _identity(self, sid)
         run_id = data.get("run_id")
@@ -376,7 +330,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
             return _error("forbidden", "not a member of this thread")
         if not await self._server.check_authorize(identity, run.thread_id, "run.cancel"):
             return _error("forbidden", "not authorized: run.cancel")
-        await self._server.executor.cancel(run_id)
+        await self._server.cancel_run(run_id=run_id)
         return {"run_id": run_id, "cancelled": True}
 
     async def on_event_send(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:

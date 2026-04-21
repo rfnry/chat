@@ -45,7 +45,7 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=403, detail="not a member of this thread")
         if not await server.check_authorize(identity, run.thread_id, "run.cancel"):
             raise HTTPException(status_code=403, detail="not authorized: run.cancel")
-        await server.executor.cancel(run_id)
+        await server.cancel_run(run_id=run_id)
         return Response(status_code=204)
 
     return router
