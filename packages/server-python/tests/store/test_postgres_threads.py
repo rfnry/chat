@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 
 import asyncpg
 import pytest
+from rfnry_chat_protocol import Thread, ThreadPatch
 
-from rfnry_chat_server.protocol.thread import Thread, ThreadPatch
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 
 

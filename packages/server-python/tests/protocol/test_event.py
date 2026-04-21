@@ -2,22 +2,22 @@ from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
-
-from rfnry_chat_server.protocol.content import TextPart
-from rfnry_chat_server.protocol.event import (
+from rfnry_chat_protocol import (
+    AssistantIdentity,
     Event,
     EventDraft,
     MessageEvent,
     ReasoningEvent,
     RunStartedEvent,
+    TextPart,
     ThreadMemberAddedEvent,
     ToolCall,
     ToolCallEvent,
     ToolResult,
     ToolResultEvent,
+    UserIdentity,
     parse_event,
 )
-from rfnry_chat_server.protocol.identity import AssistantIdentity, UserIdentity
 
 
 def _now() -> datetime:

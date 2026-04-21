@@ -5,9 +5,8 @@ from typing import Any
 import asyncpg
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from rfnry_chat_protocol import Identity, TextPart, UserIdentity
 
-from rfnry_chat_server.protocol.content import TextPart
-from rfnry_chat_server.protocol.identity import Identity, UserIdentity
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.chat_server import ChatServer
 from rfnry_chat_server.store.postgres.store import PostgresChatStore

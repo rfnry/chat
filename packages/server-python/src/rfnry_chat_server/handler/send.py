@@ -4,9 +4,9 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
-from rfnry_chat_server.handler.stream import Stream, StreamSink
-from rfnry_chat_server.protocol.content import ContentPart
-from rfnry_chat_server.protocol.event import (
+from rfnry_chat_protocol import (
+    AssistantIdentity,
+    ContentPart,
     MessageEvent,
     ReasoningEvent,
     ToolCall,
@@ -14,7 +14,8 @@ from rfnry_chat_server.protocol.event import (
     ToolResult,
     ToolResultEvent,
 )
-from rfnry_chat_server.protocol.identity import AssistantIdentity
+
+from rfnry_chat_server.handler.stream import Stream, StreamSink
 
 
 def _new_id() -> str:

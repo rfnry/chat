@@ -4,10 +4,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from rfnry_chat_protocol import AssistantIdentity, Identity, Run, matches
 
-from rfnry_chat_server.protocol.identity import AssistantIdentity, Identity
-from rfnry_chat_server.protocol.run import Run
-from rfnry_chat_server.protocol.tenant import matches
 from rfnry_chat_server.server.rest.deps import get_server, identity_tenant, resolve_identity
 
 

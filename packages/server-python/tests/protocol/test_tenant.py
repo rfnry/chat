@@ -1,4 +1,4 @@
-from rfnry_chat_server.protocol.tenant import matches
+from rfnry_chat_protocol import matches
 
 
 def test_subset_match_exact() -> None:

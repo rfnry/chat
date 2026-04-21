@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
-
-from rfnry_chat_server.protocol.identity import Identity
+from rfnry_chat_protocol import Identity
 
 
 class HandshakeData(BaseModel):

@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
 
-from rfnry_chat_server.protocol.identity import UserIdentity
-from rfnry_chat_server.protocol.thread import Thread, ThreadMember, ThreadPatch
+from rfnry_chat_protocol import Thread, ThreadMember, ThreadPatch, UserIdentity
 
 
 def test_thread_minimum() -> None:

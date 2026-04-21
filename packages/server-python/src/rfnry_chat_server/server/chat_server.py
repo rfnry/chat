@@ -4,18 +4,25 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter
+from rfnry_chat_protocol import (
+    AssistantIdentity,
+    Event,
+    Identity,
+    MessageEvent,
+    Run,
+    StreamDeltaFrame,
+    StreamEndFrame,
+    StreamStartFrame,
+    Thread,
+    ThreadMember,
+)
 
 from rfnry_chat_server.analytics.collector import OnAnalyticsCallback
 from rfnry_chat_server.broadcast.protocol import Broadcaster
 from rfnry_chat_server.handler.executor import RunExecutor
 from rfnry_chat_server.handler.stream import StreamSink
 from rfnry_chat_server.handler.types import HandlerCallable
-from rfnry_chat_server.protocol.event import Event, MessageEvent
-from rfnry_chat_server.protocol.identity import AssistantIdentity, Identity
 from rfnry_chat_server.protocol.recipients import RecipientNotMemberError, normalize_recipients
-from rfnry_chat_server.protocol.run import Run
-from rfnry_chat_server.protocol.stream import StreamDeltaFrame, StreamEndFrame, StreamStartFrame
-from rfnry_chat_server.protocol.thread import Thread, ThreadMember
 from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback
 from rfnry_chat_server.server.namespace import NamespaceViolation, derive_namespace_path
 from rfnry_chat_server.store.protocol import ChatStore

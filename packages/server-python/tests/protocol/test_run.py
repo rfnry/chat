@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
 
-from rfnry_chat_server.protocol.identity import AssistantIdentity, UserIdentity
-from rfnry_chat_server.protocol.run import Run, RunStatus
+from rfnry_chat_protocol import AssistantIdentity, Run, RunStatus, UserIdentity
 
 
 def test_run_pending() -> None:

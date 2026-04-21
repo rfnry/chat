@@ -1,6 +1,6 @@
+from rfnry_chat_protocol import AssistantIdentity, TextPart
+
 from rfnry_chat_server.handler.send import HandlerSend
-from rfnry_chat_server.protocol.content import TextPart
-from rfnry_chat_server.protocol.identity import AssistantIdentity
 
 
 def _send() -> HandlerSend:

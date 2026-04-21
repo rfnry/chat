@@ -4,11 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import asyncpg
 import pytest
+from rfnry_chat_protocol import MessageEvent, TextPart, Thread, UserIdentity
 
-from rfnry_chat_server.protocol.content import TextPart
-from rfnry_chat_server.protocol.event import MessageEvent
-from rfnry_chat_server.protocol.identity import UserIdentity
-from rfnry_chat_server.protocol.thread import Thread
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 from rfnry_chat_server.store.types import EventCursor
 

@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from rfnry_chat_server.protocol.event import Event
-from rfnry_chat_server.protocol.identity import Identity
-from rfnry_chat_server.protocol.run import Run
-from rfnry_chat_server.protocol.stream import StreamDeltaFrame, StreamEndFrame, StreamStartFrame
-from rfnry_chat_server.protocol.thread import Thread
+from rfnry_chat_protocol import Event, Identity, Run, StreamDeltaFrame, StreamEndFrame, StreamStartFrame, Thread
 
 
 class RecordingBroadcaster:

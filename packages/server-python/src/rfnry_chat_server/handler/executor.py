@@ -7,23 +7,26 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 import asyncpg
+from rfnry_chat_protocol import (
+    AssistantIdentity,
+    Event,
+    Identity,
+    Run,
+    RunCancelledEvent,
+    RunCompletedEvent,
+    RunError,
+    RunFailedEvent,
+    RunStartedEvent,
+    Thread,
+    ThreadPatch,
+    ThreadTenantChangedEvent,
+)
 
 from rfnry_chat_server.analytics.collector import AssistantAnalytics, OnAnalyticsCallback
 from rfnry_chat_server.handler.context import HandlerContext
 from rfnry_chat_server.handler.send import HandlerSend
 from rfnry_chat_server.handler.stream import StreamSink
 from rfnry_chat_server.handler.types import HandlerCallable
-from rfnry_chat_server.protocol.event import (
-    Event,
-    RunCancelledEvent,
-    RunCompletedEvent,
-    RunFailedEvent,
-    RunStartedEvent,
-    ThreadTenantChangedEvent,
-)
-from rfnry_chat_server.protocol.identity import AssistantIdentity, Identity
-from rfnry_chat_server.protocol.run import Run, RunError
-from rfnry_chat_server.protocol.thread import Thread, ThreadPatch
 from rfnry_chat_server.store.protocol import ChatStore
 
 

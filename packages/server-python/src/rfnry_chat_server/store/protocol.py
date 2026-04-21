@@ -2,11 +2,18 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from rfnry_chat_server.protocol.event import Event
-from rfnry_chat_server.protocol.identity import Identity
-from rfnry_chat_server.protocol.run import Run, RunError, RunStatus
-from rfnry_chat_server.protocol.tenant import TenantScope
-from rfnry_chat_server.protocol.thread import Thread, ThreadMember, ThreadPatch
+from rfnry_chat_protocol import (
+    Event,
+    Identity,
+    Run,
+    RunError,
+    RunStatus,
+    TenantScope,
+    Thread,
+    ThreadMember,
+    ThreadPatch,
+)
+
 from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
 
 

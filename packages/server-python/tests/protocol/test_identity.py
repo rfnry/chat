@@ -1,7 +1,6 @@
 import pytest
 from pydantic import ValidationError
-
-from rfnry_chat_server.protocol.identity import (
+from rfnry_chat_protocol import (
     AssistantIdentity,
     Identity,
     SystemIdentity,

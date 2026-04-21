@@ -8,7 +8,8 @@ from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.namespace import NamespaceViolation
 
 if TYPE_CHECKING:
-    from rfnry_chat_server.protocol.identity import Identity
+    from rfnry_chat_protocol import Identity
+
     from rfnry_chat_server.server.chat_server import ChatServer
 
 

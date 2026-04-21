@@ -4,9 +4,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from rfnry_chat_protocol import Identity, Thread, UserIdentity
 
-from rfnry_chat_server.protocol.identity import Identity, UserIdentity
-from rfnry_chat_server.protocol.thread import Thread
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.chat_server import ChatServer
 from rfnry_chat_server.server.namespace import NamespaceViolation

@@ -3,13 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, cast
 
+from rfnry_chat_protocol import AssistantIdentity, Event, MessageEvent, Run, TextPart, Thread, UserIdentity
+
 from rfnry_chat_server.analytics.collector import AssistantAnalytics
 from rfnry_chat_server.handler.context import HandlerContext
-from rfnry_chat_server.protocol.content import TextPart
-from rfnry_chat_server.protocol.event import Event, MessageEvent
-from rfnry_chat_server.protocol.identity import AssistantIdentity, UserIdentity
-from rfnry_chat_server.protocol.run import Run
-from rfnry_chat_server.protocol.thread import Thread
 from rfnry_chat_server.store.protocol import ChatStore
 from rfnry_chat_server.store.types import Page
 

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import pytest
+from rfnry_chat_protocol import (
+    AssistantIdentity,
+    Event,
+    MessageEvent,
+    StreamDeltaFrame,
+    StreamEndFrame,
+    StreamStartFrame,
+    TextPart,
+)
 
 from rfnry_chat_server.handler.send import HandlerSend
 from rfnry_chat_server.handler.stream import StreamSink
-from rfnry_chat_server.protocol.content import TextPart
-from rfnry_chat_server.protocol.event import Event, MessageEvent
-from rfnry_chat_server.protocol.identity import AssistantIdentity
-from rfnry_chat_server.protocol.stream import StreamDeltaFrame, StreamEndFrame, StreamStartFrame
 
 
 class _FakeSink:

@@ -6,12 +6,9 @@ import asyncpg
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from rfnry_chat_protocol import Identity, MessageEvent, TextPart, Thread, UserIdentity
 
 from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
-from rfnry_chat_server.protocol.content import TextPart
-from rfnry_chat_server.protocol.event import MessageEvent
-from rfnry_chat_server.protocol.identity import Identity, UserIdentity
-from rfnry_chat_server.protocol.thread import Thread
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.chat_server import ChatServer
 from rfnry_chat_server.store.postgres.store import PostgresChatStore

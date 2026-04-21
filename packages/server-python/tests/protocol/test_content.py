@@ -1,7 +1,6 @@
 import pytest
 from pydantic import ValidationError
-
-from rfnry_chat_server.protocol.content import (
+from rfnry_chat_protocol import (
     AudioPart,
     ContentPart,
     DocumentPart,

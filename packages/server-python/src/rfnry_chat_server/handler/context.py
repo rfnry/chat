@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
+from rfnry_chat_protocol import AssistantIdentity, Event, Identity, MessageEvent, Run, Thread, ThreadPatch
+
 from rfnry_chat_server.analytics.collector import AssistantAnalytics
-from rfnry_chat_server.protocol.event import Event, MessageEvent
-from rfnry_chat_server.protocol.identity import AssistantIdentity, Identity
-from rfnry_chat_server.protocol.run import Run
-from rfnry_chat_server.protocol.thread import Thread, ThreadPatch
 from rfnry_chat_server.store.protocol import ChatStore
 
 InvokeAssistantCallable = Callable[[str], Awaitable[Run]]

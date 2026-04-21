@@ -5,12 +5,21 @@ from datetime import UTC, datetime
 from typing import Any
 
 import asyncpg
+from rfnry_chat_protocol import (
+    AssistantIdentity,
+    Event,
+    Identity,
+    Run,
+    RunError,
+    RunStatus,
+    TenantScope,
+    Thread,
+    ThreadMember,
+    ThreadPatch,
+    parse_event,
+    parse_identity,
+)
 
-from rfnry_chat_server.protocol.event import Event, parse_event
-from rfnry_chat_server.protocol.identity import AssistantIdentity, Identity, parse_identity
-from rfnry_chat_server.protocol.run import Run, RunError, RunStatus
-from rfnry_chat_server.protocol.tenant import TenantScope
-from rfnry_chat_server.protocol.thread import Thread, ThreadMember, ThreadPatch
 from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
 
 

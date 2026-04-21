@@ -6,11 +6,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
+from rfnry_chat_protocol import Identity, TenantScope, Thread, ThreadPatch, ThreadTenantChangedEvent, matches
 
-from rfnry_chat_server.protocol.event import ThreadTenantChangedEvent
-from rfnry_chat_server.protocol.identity import Identity
-from rfnry_chat_server.protocol.tenant import TenantScope, matches
-from rfnry_chat_server.protocol.thread import Thread, ThreadPatch
 from rfnry_chat_server.server.rest.deps import get_server, identity_tenant, resolve_identity
 from rfnry_chat_server.store.types import Page, ThreadCursor
 

@@ -5,15 +5,17 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from rfnry_chat_server.protocol.content import TextPart
-from rfnry_chat_server.protocol.event import Event, MessageEvent, ReasoningEvent
-from rfnry_chat_server.protocol.identity import AssistantIdentity
-from rfnry_chat_server.protocol.stream import (
+from rfnry_chat_protocol import (
+    AssistantIdentity,
+    Event,
+    MessageEvent,
+    ReasoningEvent,
     StreamDeltaFrame,
     StreamEndFrame,
     StreamError,
     StreamStartFrame,
     StreamTargetType,
+    TextPart,
 )
 
 

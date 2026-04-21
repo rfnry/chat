@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from rfnry_chat_protocol import Identity, Run, matches
 
-from rfnry_chat_server.protocol.identity import Identity
-from rfnry_chat_server.protocol.run import Run
-from rfnry_chat_server.protocol.tenant import matches
 from rfnry_chat_server.server.rest.deps import get_server, identity_tenant, resolve_identity
 
 
