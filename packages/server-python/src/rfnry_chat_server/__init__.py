@@ -56,6 +56,11 @@ from rfnry_chat_server.analytics.collector import (
 from rfnry_chat_server.broadcast.protocol import Broadcaster
 from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
 from rfnry_chat_server.broadcast.socketio import SocketIOBroadcaster
+from rfnry_chat_server.handler.context import HandlerContext
+from rfnry_chat_server.handler.dispatcher import MAX_HANDLER_CHAIN_DEPTH, HandlerDispatcher
+from rfnry_chat_server.handler.registry import HandlerRegistration, HandlerRegistry
+from rfnry_chat_server.handler.send import HandlerSend
+from rfnry_chat_server.handler.types import HandlerCallable
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
 from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback, HandshakeData
 from rfnry_chat_server.server.chat_server import ChatServer
@@ -68,8 +73,6 @@ from rfnry_chat_server.server.namespace import (
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 from rfnry_chat_server.store.protocol import ChatStore
 from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
-from rfnry_chat_server.tools.registry import ToolCallHandler, ToolRegistry
-from rfnry_chat_server.tools.runner import ToolCallContext, ToolRunner
 
 __all__ = [
     "AnalyticsEvent",
@@ -123,14 +126,17 @@ __all__ = [
     "ThreadMemberRemovedEvent",
     "ThreadPatch",
     "ThreadTenantChangedEvent",
+    "HandlerCallable",
+    "HandlerContext",
+    "HandlerDispatcher",
+    "HandlerRegistration",
+    "HandlerRegistry",
+    "HandlerSend",
+    "MAX_HANDLER_CHAIN_DEPTH",
     "ToolCall",
-    "ToolCallContext",
     "ToolCallEvent",
-    "ToolCallHandler",
-    "ToolRegistry",
     "ToolResult",
     "ToolResultEvent",
-    "ToolRunner",
     "UserIdentity",
     "__version__",
     "derive_namespace_path",

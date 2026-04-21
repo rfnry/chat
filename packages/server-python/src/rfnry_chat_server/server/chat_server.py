@@ -18,10 +18,12 @@ from rfnry_chat_protocol import (
     SystemIdentity,
     Thread,
     ThreadMember,
-    ToolCallEvent,
 )
 
 from rfnry_chat_server.broadcast.protocol import Broadcaster
+from rfnry_chat_server.handler.dispatcher import HandlerDispatcher
+from rfnry_chat_server.handler.registry import HandlerRegistry
+from rfnry_chat_server.handler.types import HandlerCallable
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
 from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback
 from rfnry_chat_server.server.namespace import NamespaceViolation, derive_namespace_path
@@ -38,8 +40,6 @@ from rfnry_chat_server.server.run_events import (
     run_started as _run_started_event,
 )
 from rfnry_chat_server.store.protocol import ChatStore
-from rfnry_chat_server.tools.registry import ToolCallHandler, ToolRegistry
-from rfnry_chat_server.tools.runner import ToolRunner
 
 
 def _validate_namespace_keys(namespace_keys: list[str] | None) -> list[str] | None:
@@ -64,7 +64,6 @@ class ChatServer:
         store: ChatStore,
         authenticate: AuthenticateCallback,
         authorize: AuthorizeCallback | None = None,
-        tool_timeout_seconds: int = 30,
         replay_cap: int = 500,
         broadcaster: Broadcaster | None = None,
         namespace_keys: list[str] | None = None,
@@ -77,12 +76,11 @@ class ChatServer:
         self.broadcaster = broadcaster
         self.namespace_keys = _validate_namespace_keys(namespace_keys)
         self._socketio: Any = None
-        self._tool_registry = ToolRegistry()
         self._system_identity = system_identity or SystemIdentity(id="system", name="system")
-        self._tool_runner = ToolRunner(
-            registry=self._tool_registry,
+        self._handlers = HandlerRegistry()
+        self._handler_dispatcher = HandlerDispatcher(
             server=self,
-            timeout_seconds=tool_timeout_seconds,
+            registry=self._handlers,
             system_identity=self._system_identity,
         )
 
@@ -97,8 +95,26 @@ class ChatServer:
         self.router.include_router(build_members())
         self.router.include_router(build_runs())
 
-    def on_tool_call(self, name: str) -> Callable[[ToolCallHandler], ToolCallHandler]:
-        return self._tool_registry.decorator(name)
+    def on(
+        self,
+        event_type: str,
+        *,
+        tool: str | None = None,
+        in_run: bool = False,
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator(event_type, tool=tool, in_run=in_run)
+
+    def on_message(self) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("message")
+
+    def on_reasoning(self) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("reasoning")
+
+    def on_tool_call(self, name: str) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("tool.call", tool=name, in_run=True)
+
+    def on_tool_result(self) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("tool.result")
 
     async def check_authorize(
         self,
@@ -135,14 +151,10 @@ class ChatServer:
                     namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
             await self.broadcaster.broadcast_event(appended, namespace=namespace)
 
-        if (
-            isinstance(appended, ToolCallEvent)
-            and self._tool_registry.get(appended.tool.name) is not None
-        ):
-            if thread is None:
-                thread = await self.store.get_thread(appended.thread_id)
-            if thread is not None:
-                asyncio.create_task(self._tool_runner.handle(appended, thread))
+        if thread is None:
+            thread = await self.store.get_thread(appended.thread_id)
+        if thread is not None:
+            asyncio.create_task(self._handler_dispatcher.dispatch(appended, thread))
 
         return appended
 
