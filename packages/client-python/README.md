@@ -71,6 +71,7 @@ Registration:
 - `@client.on_message()`, `@client.on_reasoning()`, `@client.on_tool_result()` — sugar.
 - `@client.on_tool_call(name=None)` — sugar; `name=None` matches any tool call.
 - `@client.on_any_event()` — wildcard across every event type.
+- `@client.on_invited()` — fires when this identity is added to a thread. Receives a `ThreadInvitedFrame(thread, added_member, added_by)`. By default, the client auto-joins the thread room before the handler runs, so the handler may assume live event delivery. Pass `auto_join_on_invite=False` to `ChatClient(...)` to opt out.
 
 Default filters (skipped for `all_events=True`):
 - Self-authored events are not dispatched (no self-triggering).
@@ -105,6 +106,36 @@ async def reply(ctx, send):
 ```
 
 Streaming requires `self.identity` to be an `AssistantIdentity`.
+
+## Proactive flows
+
+Two helpers for agents that initiate conversations (webhook-triggered pings, cron-driven alerts, etc.):
+
+```python
+# Open (or reuse) a thread, optionally invite a user, join, send a message — in one call.
+thread, event = await client.open_thread_with(
+    message=[TextPart(text="Disk usage on api-03 crossed 90%.")],
+    user=UserIdentity(id="u_alice", name="Alice"),   # optional
+    thread_id=existing_thread_id_or_None,            # optional; creates if None
+    tenant={"org": "acme"},                          # optional
+)
+
+# Switch the URL (or auth) at runtime without losing registered handlers.
+await client.reconnect(base_url="http://chat-other.internal")
+```
+
+For agents that need to talk to many chat servers from one process, `ChatClientPool` keeps one `ChatClient` per URL:
+
+```python
+from rfnry_chat_client import ChatClientPool
+
+pool = ChatClientPool(factory=build_client)
+client = await pool.get_or_connect("http://chat-a.internal")
+# ... use client ...
+await pool.close_all()  # or await pool.close("http://chat-a.internal")
+```
+
+See `examples/python/monitoring-assistant/` for the canonical webhook-driven shape.
 
 ## Testing
 

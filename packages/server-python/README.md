@@ -94,6 +94,12 @@ Configure via `ChatServer(..., run_timeout_seconds=120, watchdog_interval_second
 - `run:cancel` — cooperative cancel from any authorized member.
 - `stream:start`, `stream:delta`, `stream:end` — relay streaming frames from a client to the thread room.
 
+## Inbox rooms
+
+Every authenticated socket is auto-joined to a room named `inbox:<identity_id>` on connect, scoped to its tenant namespace. When a member is added to a thread via REST (`POST /threads/:id/members`), the server broadcasts a transient `thread:invited` frame to the new member's inbox room in addition to the normal `members:updated` emit on the thread room. Clients use this to hydrate thread metadata and auto-join the thread without any prior socket subscription.
+
+The frame carries `{thread, added_member, added_by}`. Self-adds (`added_member.id == added_by.id`, e.g. the creator auto-joining their own new thread) are suppressed.
+
 ## Scope
 
 The server does:
