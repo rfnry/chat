@@ -6,6 +6,21 @@ from typing import Any
 from rfnry_chat_protocol import AssistantIdentity, UserIdentity
 
 from rfnry_chat_client.dispatch import Dispatcher
+from rfnry_chat_client.handler.context import HandlerContext
+from rfnry_chat_client.handler.send import HandlerSend
+
+
+class _StubClient:
+    def __init__(self) -> None:
+        self.emitted: list[Any] = []
+
+    async def emit_event(self, event: Any) -> Any:
+        self.emitted.append(event)
+        return event
+
+    @property
+    def socket(self) -> Any:
+        return self
 
 
 def _msg(
@@ -40,11 +55,12 @@ def _msg(
 
 async def test_default_drops_self_authored() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
-    dispatcher = Dispatcher(identity=me)
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(event: Any) -> None:
-        calls.append(event)
+    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+        calls.append(ctx.event)
 
     dispatcher.register("message", handler)
     await dispatcher.feed(_msg(author_id="a_me", author_role="assistant"))
@@ -53,11 +69,12 @@ async def test_default_drops_self_authored() -> None:
 
 async def test_default_drops_non_addressed() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
-    dispatcher = Dispatcher(identity=me)
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(event: Any) -> None:
-        calls.append(event)
+    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+        calls.append(ctx.event)
 
     dispatcher.register("message", handler)
     await dispatcher.feed(_msg(recipients=["a_other"]))
@@ -66,11 +83,12 @@ async def test_default_drops_non_addressed() -> None:
 
 async def test_default_fires_for_broadcast() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
-    dispatcher = Dispatcher(identity=me)
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(event: Any) -> None:
-        calls.append(event)
+    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+        calls.append(ctx.event)
 
     dispatcher.register("message", handler)
     await dispatcher.feed(_msg(recipients=None))
@@ -79,11 +97,12 @@ async def test_default_fires_for_broadcast() -> None:
 
 async def test_default_fires_when_addressed() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
-    dispatcher = Dispatcher(identity=me)
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(event: Any) -> None:
-        calls.append(event)
+    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+        calls.append(ctx.event)
 
     dispatcher.register("message", handler)
     await dispatcher.feed(_msg(recipients=["a_me"]))
@@ -92,11 +111,12 @@ async def test_default_fires_when_addressed() -> None:
 
 async def test_all_events_opt_out_bypasses_filters() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
-    dispatcher = Dispatcher(identity=me)
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(event: Any) -> None:
-        calls.append(event)
+    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+        calls.append(ctx.event)
 
     dispatcher.register("message", handler, all_events=True)
     await dispatcher.feed(_msg(author_id="a_me", author_role="assistant"))
@@ -106,15 +126,16 @@ async def test_all_events_opt_out_bypasses_filters() -> None:
 
 async def test_tool_call_name_filter() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
-    dispatcher = Dispatcher(identity=me)
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
     stock_calls: list[Any] = []
     weather_calls: list[Any] = []
 
-    async def on_stock(event: Any) -> None:
-        stock_calls.append(event)
+    async def on_stock(ctx: HandlerContext, _send: HandlerSend) -> None:
+        stock_calls.append(ctx.event)
 
-    async def on_weather(event: Any) -> None:
-        weather_calls.append(event)
+    async def on_weather(ctx: HandlerContext, _send: HandlerSend) -> None:
+        weather_calls.append(ctx.event)
 
     dispatcher.register("tool.call", on_stock, tool_name="get_stock")
     dispatcher.register("tool.call", on_weather, tool_name="get_weather")
@@ -125,11 +146,12 @@ async def test_tool_call_name_filter() -> None:
 
 async def test_wildcard_event_type() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
-    dispatcher = Dispatcher(identity=me)
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(event: Any) -> None:
-        calls.append(event)
+    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+        calls.append(ctx.event)
 
     dispatcher.register("*", handler)
     await dispatcher.feed(_msg())
@@ -139,13 +161,14 @@ async def test_wildcard_event_type() -> None:
 
 async def test_multiple_handlers_fire_concurrently() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
-    dispatcher = Dispatcher(identity=me)
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
     counter = {"value": 0}
 
-    async def handler_a(event: Any) -> None:
+    async def handler_a(_ctx: HandlerContext, _send: HandlerSend) -> None:
         counter["value"] += 1
 
-    async def handler_b(event: Any) -> None:
+    async def handler_b(_ctx: HandlerContext, _send: HandlerSend) -> None:
         counter["value"] += 10
 
     dispatcher.register("message", handler_a)
@@ -156,14 +179,32 @@ async def test_multiple_handlers_fire_concurrently() -> None:
 
 async def test_user_identity_works_as_own_client() -> None:
     me = UserIdentity(id="u_human", name="Operator")
-    dispatcher = Dispatcher(identity=me)
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(event: Any) -> None:
-        calls.append(event)
+    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+        calls.append(ctx.event)
 
     dispatcher.register("message", handler)
     await dispatcher.feed(_msg(author_id="u_human", author_role="user"))
     assert calls == []
     await dispatcher.feed(_msg(author_id="u_other", recipients=["u_human"]))
     assert len(calls) == 1
+
+
+async def test_emitter_handler_publishes_via_client() -> None:
+    from rfnry_chat_protocol import TextPart
+
+    me = AssistantIdentity(id="a_me", name="Me")
+    client = _StubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+
+    async def reply(_ctx: HandlerContext, send: HandlerSend):
+        yield send.message(content=[TextPart(text="hi")])
+
+    dispatcher.register("message", reply)
+    await dispatcher.feed(_msg(author_id="u_other"))
+    assert len(client.emitted) == 1
+    assert client.emitted[0].type == "message"
+    assert client.emitted[0].author.id == "a_me"

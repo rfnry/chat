@@ -8,6 +8,8 @@ from conftest import FakeSioClient
 from rfnry_chat_protocol import AssistantIdentity, TextPart
 
 from rfnry_chat_client.client import ChatClient
+from rfnry_chat_client.handler.context import HandlerContext
+from rfnry_chat_client.handler.send import HandlerSend
 from rfnry_chat_client.transport.socket import SocketTransport
 
 
@@ -60,9 +62,9 @@ async def test_on_message_decorator_fires_on_matching_event() -> None:
     )
     received: list[Any] = []
 
-    @client.on_message
-    async def handle(event: Any) -> None:
-        received.append(event)
+    @client.on_message()
+    async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
+        received.append(ctx.event)
 
     await client.connect()
     raw_handler = sio.handlers["event"]
@@ -81,9 +83,9 @@ async def test_on_message_decorator_respects_recipient_filter() -> None:
     )
     received: list[Any] = []
 
-    @client.on_message
-    async def handle(event: Any) -> None:
-        received.append(event)
+    @client.on_message()
+    async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
+        received.append(ctx.event)
 
     await client.connect()
     raw_handler = sio.handlers["event"]
@@ -103,8 +105,8 @@ async def test_on_tool_call_with_name_filter() -> None:
     hits: list[Any] = []
 
     @client.on_tool_call("get_stock")
-    async def handle(event: Any) -> None:
-        hits.append(event)
+    async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
+        hits.append(ctx.event)
 
     await client.connect()
     raw_handler = sio.handlers["event"]
@@ -113,7 +115,7 @@ async def test_on_tool_call_with_name_filter() -> None:
     assert len(hits) == 1
 
 
-async def test_on_tool_call_naked_decorator_matches_any_tool() -> None:
+async def test_on_tool_call_without_name_matches_any_tool() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
     sio = FakeSioClient()
     client = ChatClient(
@@ -124,15 +126,51 @@ async def test_on_tool_call_naked_decorator_matches_any_tool() -> None:
     )
     hits: list[Any] = []
 
-    @client.on_tool_call
-    async def any_tool(event: Any) -> None:
-        hits.append(event)
+    @client.on_tool_call()
+    async def any_tool(ctx: HandlerContext, _send: HandlerSend) -> None:
+        hits.append(ctx.event)
 
     await client.connect()
     raw_handler = sio.handlers["event"]
     await raw_handler(_tool_call_event_dict(tool_name="get_stock"))
     await raw_handler(_tool_call_event_dict(tool_name="get_weather"))
     assert len(hits) == 2
+
+
+async def test_emitter_handler_routes_through_event_send() -> None:
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    sio.ack_replies["event:send"] = {
+        "event": {
+            "id": "evt_reply",
+            "thread_id": "t_1",
+            "run_id": None,
+            "author": me.model_dump(mode="json"),
+            "created_at": datetime.now(UTC).isoformat(),
+            "metadata": {},
+            "client_id": None,
+            "recipients": None,
+            "type": "message",
+            "content": [{"type": "text", "text": "pong"}],
+        }
+    }
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+
+    @client.on_message()
+    async def reply(_ctx: HandlerContext, send: HandlerSend):
+        yield send.message(content=[TextPart(text="pong")])
+
+    await client.connect()
+    raw_handler = sio.handlers["event"]
+    await raw_handler(_message_event_dict(author_id="u_other", recipients=["a_me"]))
+
+    emitted_names = [ev for ev, _ in sio.emitted]
+    assert "event:send" in emitted_names
 
 
 async def test_send_message_emits_on_socket() -> None:

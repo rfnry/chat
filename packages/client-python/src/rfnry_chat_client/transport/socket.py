@@ -95,6 +95,44 @@ class SocketTransport:
         _raise_if_error(reply)
         return reply
 
+    async def send_event(
+        self, thread_id: str, event: dict[str, Any]
+    ) -> dict[str, Any]:
+        reply = await self._sio.call(
+            "event:send", {"thread_id": thread_id, "event": event}
+        )
+        _raise_if_error(reply)
+        return reply
+
+    async def begin_run(
+        self,
+        thread_id: str,
+        *,
+        triggered_by_event_id: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"thread_id": thread_id}
+        if triggered_by_event_id is not None:
+            payload["triggered_by_event_id"] = triggered_by_event_id
+        if idempotency_key is not None:
+            payload["idempotency_key"] = idempotency_key
+        reply = await self._sio.call("run:begin", payload)
+        _raise_if_error(reply)
+        return reply
+
+    async def end_run(
+        self,
+        run_id: str,
+        *,
+        error: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"run_id": run_id}
+        if error is not None:
+            payload["error"] = error
+        reply = await self._sio.call("run:end", payload)
+        _raise_if_error(reply)
+        return reply
+
     async def cancel_run(self, run_id: str) -> dict[str, Any]:
         reply = await self._sio.call("run:cancel", {"run_id": run_id})
         _raise_if_error(reply)

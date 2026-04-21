@@ -9,11 +9,14 @@ from rfnry_chat_protocol import (
     ContentPart,
     Event,
     Identity,
+    Run,
+    RunError,
     ThreadMember,
     parse_event,
 )
 
-from rfnry_chat_client.dispatch import Dispatcher, EventHandler
+from rfnry_chat_client.dispatch import Dispatcher
+from rfnry_chat_client.handler.types import HandlerCallable
 from rfnry_chat_client.transport.rest import RestTransport
 from rfnry_chat_client.transport.socket import SocketTransport
 
@@ -53,7 +56,7 @@ class ChatClient:
             socketio_path=socketio_path,
             authenticate=authenticate,
         )
-        self._dispatcher = Dispatcher(identity=identity)
+        self._dispatcher = Dispatcher(identity=identity, client=self)
 
     @property
     def identity(self) -> Identity:
@@ -103,6 +106,39 @@ class ChatClient:
         reply = await self._socket.send_message(thread_id, draft)
         return parse_event(reply["event"])
 
+    async def emit_event(self, event: Event) -> Event:
+        reply = await self._socket.send_event(
+            event.thread_id,
+            event.model_dump(mode="json", by_alias=True),
+        )
+        return parse_event(reply["event"])
+
+    async def begin_run(
+        self,
+        thread_id: str,
+        *,
+        triggered_by_event_id: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Run:
+        reply = await self._socket.begin_run(
+            thread_id,
+            triggered_by_event_id=triggered_by_event_id,
+            idempotency_key=idempotency_key,
+        )
+        return await self._rest.get_run(reply["run_id"])
+
+    async def end_run(
+        self,
+        run_id: str,
+        *,
+        error: RunError | None = None,
+    ) -> Run:
+        payload: dict[str, Any] | None = None
+        if error is not None:
+            payload = {"code": error.code, "message": error.message}
+        reply = await self._socket.end_run(run_id, error=payload)
+        return await self._rest.get_run(reply["run_id"])
+
     async def add_member(
         self, thread_id: str, identity: Identity, role: str = "member"
     ) -> ThreadMember:
@@ -111,73 +147,54 @@ class ChatClient:
     async def remove_member(self, thread_id: str, identity_id: str) -> None:
         await self._rest.remove_member(thread_id, identity_id)
 
-    def on_message(
+    def on(
         self,
-        handler: EventHandler | None = None,
+        event_type: str,
         *,
+        tool: str | None = None,
+        in_run: bool = False,
         all_events: bool = False,
-    ) -> Any:
-        return self._register("message", handler, all_events=all_events)
-
-    def on_reasoning(
-        self,
-        handler: EventHandler | None = None,
-        *,
-        all_events: bool = False,
-    ) -> Any:
-        return self._register("reasoning", handler, all_events=all_events)
-
-    def on_tool_result(
-        self,
-        handler: EventHandler | None = None,
-        *,
-        all_events: bool = False,
-    ) -> Any:
-        return self._register("tool.result", handler, all_events=all_events)
-
-    def on_tool_call(
-        self,
-        arg: EventHandler | str | None = None,
-        *,
-        all_events: bool = False,
-    ) -> Any:
-        if callable(arg):
-            self._dispatcher.register("tool.call", arg, all_events=False)
-            return arg
-        tool_name = arg if isinstance(arg, str) else None
-
-        def decorator(handler: EventHandler) -> EventHandler:
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        def decorator(handler: HandlerCallable) -> HandlerCallable:
             self._dispatcher.register(
-                "tool.call", handler, all_events=all_events, tool_name=tool_name
+                event_type,
+                handler,
+                all_events=all_events,
+                tool_name=tool,
+                in_run=in_run,
             )
             return handler
 
         return decorator
 
-    def on_any_event(
+    def on_message(
+        self, *, all_events: bool = False, in_run: bool = False
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self.on("message", all_events=all_events, in_run=in_run)
+
+    def on_reasoning(
+        self, *, all_events: bool = False, in_run: bool = False
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self.on("reasoning", all_events=all_events, in_run=in_run)
+
+    def on_tool_call(
         self,
-        handler: EventHandler | None = None,
+        name: str | None = None,
         *,
         all_events: bool = False,
-    ) -> Any:
-        return self._register("*", handler, all_events=all_events)
+        in_run: bool = False,
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self.on("tool.call", tool=name, all_events=all_events, in_run=in_run)
 
-    def _register(
-        self,
-        event_type: str,
-        handler: EventHandler | None,
-        *,
-        all_events: bool,
-    ) -> Any:
-        if handler is not None:
-            self._dispatcher.register(event_type, handler, all_events=all_events)
-            return handler
+    def on_tool_result(
+        self, *, all_events: bool = False, in_run: bool = False
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self.on("tool.result", all_events=all_events, in_run=in_run)
 
-        def decorator(fn: EventHandler) -> EventHandler:
-            self._dispatcher.register(event_type, fn, all_events=all_events)
-            return fn
-
-        return decorator
+    def on_any_event(
+        self, *, all_events: bool = False, in_run: bool = False
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self.on("*", all_events=all_events, in_run=in_run)
 
 
 def _gen_client_id() -> str:
