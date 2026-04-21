@@ -138,6 +138,21 @@ class SocketTransport:
         _raise_if_error(reply)
         return reply
 
+    async def send_stream_start(self, frame: dict[str, Any]) -> dict[str, Any]:
+        reply = await self._sio.call("stream:start", frame)
+        _raise_if_error(reply)
+        return reply
+
+    async def send_stream_delta(self, frame: dict[str, Any]) -> dict[str, Any]:
+        reply = await self._sio.call("stream:delta", frame)
+        _raise_if_error(reply)
+        return reply
+
+    async def send_stream_end(self, frame: dict[str, Any]) -> dict[str, Any]:
+        reply = await self._sio.call("stream:end", frame)
+        _raise_if_error(reply)
+        return reply
+
 
 def _raise_if_error(reply: Any) -> None:
     if isinstance(reply, dict) and "error" in reply:

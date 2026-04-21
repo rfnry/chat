@@ -85,7 +85,12 @@ class Dispatcher:
             run_id = begin_reply["run_id"]
 
         ctx = HandlerContext(event=event, identity=self._identity, client=self._client)
-        send = HandlerSend(thread_id=event.thread_id, author=self._identity, run_id=run_id)
+        send = HandlerSend(
+            thread_id=event.thread_id,
+            author=self._identity,
+            run_id=run_id,
+            client=self._client,
+        )
 
         try:
             await self._invoke(reg.handler, ctx, send)
