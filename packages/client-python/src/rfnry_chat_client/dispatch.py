@@ -28,7 +28,6 @@ class _Registration:
     handler: HandlerCallable
     all_events: bool
     tool_name: str | None
-    in_run: bool
 
 
 class Dispatcher:
@@ -44,7 +43,6 @@ class Dispatcher:
         *,
         all_events: bool = False,
         tool_name: str | None = None,
-        in_run: bool = False,
     ) -> None:
         self._registrations.append(
             _Registration(
@@ -52,7 +50,6 @@ class Dispatcher:
                 handler=handler,
                 all_events=all_events,
                 tool_name=tool_name,
-                in_run=in_run,
             )
         )
 
@@ -76,13 +73,17 @@ class Dispatcher:
             _chain_depth.reset(token)
 
     async def _run_one(self, reg: _Registration, event: Event) -> None:
-        run_id: str | None = None
-        if reg.in_run:
-            begin_reply = await self._client.socket.begin_run(
-                event.thread_id,
-                triggered_by_event_id=event.id,
-            )
-            run_id = begin_reply["run_id"]
+        if inspect.isasyncgenfunction(reg.handler):
+            await self._run_emitter(reg.handler, event)
+            return
+        await self._run_observer(reg.handler, event)
+
+    async def _run_emitter(self, handler: HandlerCallable, event: Event) -> None:
+        begin_reply = await self._client.socket.begin_run(
+            event.thread_id,
+            triggered_by_event_id=event.id,
+        )
+        run_id = begin_reply["run_id"]
 
         ctx = HandlerContext(event=event, identity=self._identity, client=self._client)
         send = HandlerSend(
@@ -93,26 +94,25 @@ class Dispatcher:
         )
 
         try:
-            await self._invoke(reg.handler, ctx, send)
-        except Exception as exc:
-            if run_id is not None:
-                await self._client.socket.end_run(
-                    run_id,
-                    error={"code": "handler_error", "message": str(exc)},
-                )
-            raise
-
-        if run_id is not None:
-            await self._client.socket.end_run(run_id)
-
-    async def _invoke(
-        self, handler: HandlerCallable, ctx: HandlerContext, send: HandlerSend
-    ) -> None:
-        if inspect.isasyncgenfunction(handler):
-            async for emitted in handler(ctx, send):
+            async for emitted in handler(ctx, send):  # type: ignore[union-attr]
                 await self._client.emit_event(emitted)
-            return
-        result: Any = handler(ctx, send)
+        except Exception as exc:
+            await self._client.socket.end_run(
+                run_id,
+                error={"code": "handler_error", "message": str(exc)},
+            )
+            raise
+        await self._client.socket.end_run(run_id)
+
+    async def _run_observer(self, handler: HandlerCallable, event: Event) -> None:
+        ctx = HandlerContext(event=event, identity=self._identity, client=self._client)
+        send = HandlerSend(
+            thread_id=event.thread_id,
+            author=self._identity,
+            run_id=None,
+            client=self._client,
+        )
+        result: Any = handler(ctx, send)  # type: ignore[call-overload]
         if inspect.isawaitable(result):
             await result
 

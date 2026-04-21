@@ -13,6 +13,8 @@ from rfnry_chat_client.handler.send import HandlerSend
 class _StubClient:
     def __init__(self) -> None:
         self.emitted: list[Any] = []
+        self.runs: list[str] = []
+        self._next_run_id = 0
 
     async def emit_event(self, event: Any) -> Any:
         self.emitted.append(event)
@@ -21,6 +23,15 @@ class _StubClient:
     @property
     def socket(self) -> Any:
         return self
+
+    async def begin_run(self, _thread_id: str, **_kwargs: Any) -> dict[str, Any]:
+        self._next_run_id += 1
+        run_id = f"run_{self._next_run_id}"
+        self.runs.append(run_id)
+        return {"run_id": run_id, "status": "running"}
+
+    async def end_run(self, run_id: str, **_kwargs: Any) -> dict[str, Any]:
+        return {"run_id": run_id, "status": "completed"}
 
 
 def _msg(

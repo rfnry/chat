@@ -138,7 +138,7 @@ async def test_client_run_wrap_emits_run_started_and_completed(
     )
     seen_types: list[str] = []
 
-    @client.on_message(in_run=True)
+    @client.on_message()
     async def reply(_ctx: HandlerContext, send: HandlerSend):
         yield send.message(content=[TextPart(text="ack")])
 
@@ -182,11 +182,17 @@ async def test_client_streams_message(live_server: tuple[str, Any]) -> None:
     )
     message_events: list[Any] = []
 
-    @client.on_message(in_run=True)
-    async def reply(_ctx: HandlerContext, send: HandlerSend) -> None:
-        async with send.message_stream() as stream:
-            await stream.write("hello ")
-            await stream.write("world")
+    @client.on_message()
+    async def reply(ctx: HandlerContext, send: HandlerSend) -> None:
+        run = await client.begin_run(
+            ctx.event.thread_id, triggered_by_event_id=ctx.event.id
+        )
+        try:
+            async with send.message_stream(run_id=run.id) as stream:
+                await stream.write("hello ")
+                await stream.write("world")
+        finally:
+            await client.end_run(run.id)
 
     stream_frames: list[tuple[str, dict[str, Any]]] = []
 

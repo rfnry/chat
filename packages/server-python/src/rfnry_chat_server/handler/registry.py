@@ -13,7 +13,6 @@ class HandlerRegistration:
     event_type: str
     handler: HandlerCallable
     tool_name: str | None
-    in_run: bool
 
 
 class HandlerRegistry:
@@ -26,14 +25,12 @@ class HandlerRegistry:
         handler: HandlerCallable,
         *,
         tool_name: str | None = None,
-        in_run: bool = False,
     ) -> None:
         self._entries.append(
             HandlerRegistration(
                 event_type=event_type,
                 handler=handler,
                 tool_name=tool_name,
-                in_run=in_run,
             )
         )
 
@@ -55,10 +52,9 @@ class HandlerRegistry:
         event_type: str,
         *,
         tool: str | None = None,
-        in_run: bool = False,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
         def wrap(handler: HandlerCallable) -> HandlerCallable:
-            self.register(event_type, handler, tool_name=tool, in_run=in_run)
+            self.register(event_type, handler, tool_name=tool)
             return handler
 
         return wrap

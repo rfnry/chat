@@ -41,7 +41,7 @@ async def main() -> None:
         print(f"[{ctx.event.author.name}] {ctx.event.content}")
         yield send.message(content=[TextPart(text="acknowledged")])
 
-    @client.on_tool_call("get_company_policy", in_run=True)
+    @client.on_tool_call("get_company_policy")
     async def lookup(ctx, send):
         policy = await policy_db.get(ctx.event.tool.arguments["topic"])
         yield send.tool_result(ctx.event.tool.id, result=policy)
@@ -57,36 +57,51 @@ if __name__ == "__main__":
 
 ## Handler API
 
-Handlers take `(ctx, send)`. An async function without `yield` is an observer; an async generator that `yield`s events from `send` emits them back to the thread, authored by `self.identity`.
+Handlers take `(ctx, send)`. Two shapes:
 
-- `@client.on(event_type, *, tool=None, in_run=False, all_events=False)` — base decorator.
+- **Observer** — a plain async function with no `yield`. Reacts to events, emits nothing, no server round trip for run tracking.
+- **Emitter** — an async generator that yields events built from `send.message(...)` / `send.tool_call(...)` / etc. The dispatcher auto-wraps the invocation in a server-tracked `Run` (`run:begin` before, `run:end` after, `run.failed(error)` on exception). Emitted events are stamped with the run id and authored by `self.identity`.
+
+Registration:
+
+- `@client.on(event_type, *, tool=None, all_events=False)` — base.
 - `@client.on_message()`, `@client.on_reasoning()`, `@client.on_tool_result()` — sugar.
 - `@client.on_tool_call(name=None)` — sugar; `name=None` matches any tool call.
 - `@client.on_any_event()` — wildcard across every event type.
 
-Default filters:
-- Self-authored events are skipped (no self-triggering).
+Default filters (skipped for `all_events=True`):
+- Self-authored events are not dispatched (no self-triggering).
 - Events with a recipient list that does not include you are skipped.
-- Opt out with `all_events=True` for audit / moderation.
-- `in_run=True` wraps the handler in a server-tracked `Run` via `run:begin` / `run:end`.
 
 Chain-depth cap (`MAX_HANDLER_CHAIN_DEPTH = 8`) prevents runaway emit chains.
 
 ## Streaming
 
-An assistant can stream tokens for a message or reasoning event. Requires the handler be registered with `in_run=True` so the stream has a run_id to attach to.
+An assistant streams tokens for a message or reasoning event. Because streams require a run id, the idiomatic path is an async-generator handler (auto-wrapped in a run). If you need to stream from a plain coroutine handler, open the run manually and pass its id to `send.*_stream(run_id=...)`.
 
 ```python
-@client.on_message(in_run=True)
+# Idiomatic: generator handler, Run is auto-opened.
+@client.on_message()
 async def reply(ctx, send):
     async with send.message_stream() as stream:
         async for token in my_llm.stream(ctx.event):
             await stream.write(token)
-    # on exit: stream:end frame broadcast + a MessageEvent with concatenated
-    # text is published as the canonical final event.
+    if False:  # keep handler a generator; no actual yield needed
+        yield  # pragma: no cover
+
+# Manual: coroutine handler opens its own run.
+@client.on_message()
+async def reply(ctx, send):
+    run = await client.begin_run(ctx.event.thread_id, triggered_by_event_id=ctx.event.id)
+    try:
+        async with send.message_stream(run_id=run.id) as stream:
+            async for token in my_llm.stream(ctx.event):
+                await stream.write(token)
+    finally:
+        await client.end_run(run.id)
 ```
 
-`send.reasoning_stream()` streams reasoning events the same way. Streaming requires `self.identity` to be an `AssistantIdentity`.
+Streaming requires `self.identity` to be an `AssistantIdentity`.
 
 ## Testing
 

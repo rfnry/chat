@@ -29,9 +29,9 @@ _SHIPMENTS = {
 
 
 def build(store: PostgresChatStore) -> ChatServer:
-    server = ChatServer(store=store, authenticate=authenticate)
+    chat_server = ChatServer(store=store, authenticate=authenticate)
 
-    @server.on_message()
+    @chat_server.on_message()
     async def log_message(ctx: HandlerContext, _send: HandlerSend) -> None:
         assert isinstance(ctx.event, MessageEvent)
         text = next(
@@ -40,7 +40,7 @@ def build(store: PostgresChatStore) -> ChatServer:
         )
         logger.info("msg thread=%s author=%s text=%s", ctx.thread.id, ctx.event.author.id, text)
 
-    @server.on_tool_call("check_stock")
+    @chat_server.on_tool_call("check_stock")
     async def check_stock(ctx: HandlerContext, send: HandlerSend):
         sku = _arg(ctx.event.tool.arguments, "sku", required=True)
         quantity = _STOCK.get(sku)
@@ -52,7 +52,7 @@ def build(store: PostgresChatStore) -> ChatServer:
             return
         yield send.tool_result(ctx.event.tool.id, result={"sku": sku, "available": quantity})
 
-    @server.on_tool_call("shipping_status")
+    @chat_server.on_tool_call("shipping_status")
     async def shipping_status(ctx: HandlerContext, send: HandlerSend):
         shipment_id = _arg(ctx.event.tool.arguments, "shipment_id", required=True)
         row = _SHIPMENTS.get(shipment_id)
@@ -64,7 +64,7 @@ def build(store: PostgresChatStore) -> ChatServer:
             return
         yield send.tool_result(ctx.event.tool.id, result={"shipment_id": shipment_id, **row})
 
-    return server
+    return chat_server
 
 
 def _arg(arguments: Any, key: str, *, required: bool = False) -> Any:

@@ -56,7 +56,8 @@ The problem: the agent is *inside* the server. Two responsibilities (transport +
 client = ChatClient(base_url="http://chat-server", identity=me, authenticate=...)
 
 # Same (ctx, send) shape, but now on the client side.
-@client.on_message(in_run=True)
+# Async generator → dispatcher auto-wraps each invocation in a server-tracked Run.
+@client.on_message()
 async def respond(ctx, send):
     history_page = await client.rest.list_events(ctx.event.thread_id, limit=200)
     # ... call Anthropic, yield events (which emit via socket event:send) ...

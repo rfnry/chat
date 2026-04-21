@@ -118,30 +118,44 @@ class HandlerSend:
         )
 
 
-    def message_stream(self, *, metadata: dict[str, Any] | None = None) -> Stream:
-        return self._make_stream("message", metadata=metadata)
+    def message_stream(
+        self,
+        *,
+        metadata: dict[str, Any] | None = None,
+        run_id: str | None = None,
+    ) -> Stream:
+        return self._make_stream("message", metadata=metadata, run_id=run_id)
 
-    def reasoning_stream(self, *, metadata: dict[str, Any] | None = None) -> Stream:
-        return self._make_stream("reasoning", metadata=metadata)
+    def reasoning_stream(
+        self,
+        *,
+        metadata: dict[str, Any] | None = None,
+        run_id: str | None = None,
+    ) -> Stream:
+        return self._make_stream("reasoning", metadata=metadata, run_id=run_id)
 
     def _make_stream(
         self,
         target_type: str,
         *,
         metadata: dict[str, Any] | None,
+        run_id: str | None,
     ) -> Stream:
         if self._client is None:
             raise RuntimeError(
                 "streaming requires a ChatClient; HandlerSend was constructed without one"
             )
-        if self._run_id is None:
+        effective_run_id = run_id or self._run_id
+        if effective_run_id is None:
             raise RuntimeError(
-                "streaming requires a run_id; register the handler with in_run=True"
+                "streaming requires a run_id. Either write the handler as an async generator "
+                "(auto-wrapped in a Run), or open a run manually via client.begin_run(...) "
+                "and pass it as send.message_stream(run_id=run.id)."
             )
         return Stream(
             client=self._client,
             thread_id=self._thread_id,
-            run_id=self._run_id,
+            run_id=effective_run_id,
             author=self._author,
             target_type=target_type,  # type: ignore[arg-type]
             metadata=metadata,

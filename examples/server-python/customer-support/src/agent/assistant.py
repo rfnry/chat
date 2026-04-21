@@ -18,7 +18,7 @@ SYSTEM_PROMPT = (
 def register(chat_client: ChatClient, identity: AssistantIdentity) -> None:
     anthropic = provider.build_anthropic()
 
-    @chat_client.on_message(in_run=True)
+    @chat_client.on_message()
     async def respond(ctx: HandlerContext, send: HandlerSend):
         history_page = await chat_client.rest.list_events(ctx.event.thread_id, limit=200)
         history = history_page["items"]

@@ -144,7 +144,7 @@ async def test_emitter_handler_routes_through_event_send() -> None:
         "event": {
             "id": "evt_reply",
             "thread_id": "t_1",
-            "run_id": None,
+            "run_id": "run_1",
             "author": me.model_dump(mode="json"),
             "created_at": datetime.now(UTC).isoformat(),
             "metadata": {},
@@ -154,6 +154,8 @@ async def test_emitter_handler_routes_through_event_send() -> None:
             "content": [{"type": "text", "text": "pong"}],
         }
     }
+    sio.ack_replies["run:begin"] = {"run_id": "run_1", "status": "running"}
+    sio.ack_replies["run:end"] = {"run_id": "run_1", "status": "completed"}
     client = ChatClient(
         base_url="http://chat.test",
         identity=me,

@@ -151,9 +151,8 @@ class ChatServer:
         event_type: str,
         *,
         tool: str | None = None,
-        in_run: bool = False,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator(event_type, tool=tool, in_run=in_run)
+        return self._handlers.decorator(event_type, tool=tool)
 
     def on_message(self) -> Callable[[HandlerCallable], HandlerCallable]:
         return self._handlers.decorator("message")
@@ -162,7 +161,7 @@ class ChatServer:
         return self._handlers.decorator("reasoning")
 
     def on_tool_call(self, name: str) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("tool.call", tool=name, in_run=True)
+        return self._handlers.decorator("tool.call", tool=name)
 
     def on_tool_result(self) -> Callable[[HandlerCallable], HandlerCallable]:
         return self._handlers.decorator("tool.result")
