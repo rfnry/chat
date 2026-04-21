@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import secrets
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -16,8 +17,10 @@ from rfnry_chat_protocol import (
     StreamDeltaFrame,
     StreamEndFrame,
     StreamStartFrame,
+    SystemIdentity,
     Thread,
     ThreadMember,
+    ToolCallEvent,
 )
 
 from rfnry_chat_server.analytics.collector import OnAnalyticsCallback
@@ -38,6 +41,8 @@ from rfnry_chat_server.server.run_events import (
     run_started as _run_started_event,
 )
 from rfnry_chat_server.store.protocol import ChatStore
+from rfnry_chat_server.tools.registry import ToolCallHandler, ToolRegistry
+from rfnry_chat_server.tools.runner import ToolRunner
 
 MAX_AUTO_INVOKE_CHAIN_DEPTH = 8
 
@@ -85,9 +90,11 @@ class ChatServer:
         auto_invoke_recipients: bool = True,
         on_analytics: OnAnalyticsCallback | None = None,
         run_timeout_seconds: int = 120,
+        tool_timeout_seconds: int = 30,
         replay_cap: int = 500,
         broadcaster: Broadcaster | None = None,
         namespace_keys: list[str] | None = None,
+        system_identity: SystemIdentity | None = None,
     ) -> None:
         self.store = store
         self.authenticate = authenticate
@@ -98,6 +105,14 @@ class ChatServer:
         self.namespace_keys = _validate_namespace_keys(namespace_keys)
         self._handlers: dict[str, HandlerCallable] = {}
         self._socketio: Any = None
+        self._tool_registry = ToolRegistry()
+        self._system_identity = system_identity or SystemIdentity(id="system", name="system")
+        self._tool_runner = ToolRunner(
+            registry=self._tool_registry,
+            server=self,
+            timeout_seconds=tool_timeout_seconds,
+            system_identity=self._system_identity,
+        )
         self.executor = RunExecutor(
             store=store,
             on_analytics=on_analytics,
@@ -133,6 +148,9 @@ class ChatServer:
 
     def get_handler(self, assistant_id: str) -> HandlerCallable | None:
         return self._handlers.get(assistant_id)
+
+    def on_tool_call(self, name: str) -> Callable[[ToolCallHandler], ToolCallHandler]:
+        return self._tool_registry.decorator(name)
 
     async def check_authorize(
         self,
@@ -180,6 +198,15 @@ class ChatServer:
                     members=members,
                     thread=thread,
                 )
+
+        if (
+            isinstance(appended, ToolCallEvent)
+            and self._tool_registry.get(appended.tool.name) is not None
+        ):
+            if thread is None:
+                thread = await self.store.get_thread(appended.thread_id)
+            if thread is not None:
+                asyncio.create_task(self._tool_runner.handle(appended, thread))
 
         return appended
 
