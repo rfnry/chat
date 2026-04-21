@@ -48,6 +48,16 @@ export {
 export { useChatClient, useChatStore } from './hooks/useChatClient'
 export { useConnectionStatus } from './hooks/useConnectionStatus'
 export { type CreateThreadInput, useCreateThread } from './hooks/useCreateThread'
+export {
+  type EventHandler,
+  type UseHandlerOptions,
+  useAnyEventHandler,
+  useHandler,
+  useMessageHandler,
+  useReasoningHandler,
+  useToolCallHandler,
+  useToolResultHandler,
+} from './hooks/useHandler'
 export { useSuspenseThread } from './hooks/useSuspenseThread'
 export { type UseThreadActions, useThreadActions } from './hooks/useThreadActions'
 export { useThreadActiveRuns } from './hooks/useThreadActiveRuns'
@@ -70,6 +80,7 @@ export {
   type ConnectionStatus,
   createChatStore,
 } from './store/chatStore'
+export { Stream, type StreamOptions } from './stream'
 export {
   type MentionSpan,
   type ParseMentionsResult,

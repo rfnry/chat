@@ -1,13 +1,18 @@
 import type {
+  AssistantIdentity,
   Event,
   EventDraft,
   Identity,
+  MessageEvent,
+  ReasoningEvent,
   Run,
+  RunError,
   Thread,
   ThreadMember,
   ThreadPatch,
 } from '@rfnry/chat-protocol'
 import type { Socket } from 'socket.io-client'
+import { Stream } from './stream'
 import { type Page, RestTransport } from './transport/rest'
 import { SocketTransport } from './transport/socket'
 
@@ -108,6 +113,59 @@ export class ChatClient {
     return this.rest.cancelRun(runId)
   }
 
+  async emitEvent(event: Record<string, unknown> & { threadId: string }): Promise<Event> {
+    return this.socketTransport.sendEvent(event.threadId, toEventWire(event))
+  }
+
+  async beginRun(
+    threadId: string,
+    opts: { triggeredByEventId?: string; idempotencyKey?: string } = {}
+  ): Promise<Run> {
+    const { runId } = await this.socketTransport.beginRun(threadId, opts)
+    return this.rest.getRun(runId)
+  }
+
+  async endRun(runId: string, opts: { error?: RunError } = {}): Promise<Run> {
+    await this.socketTransport.endRun(runId, { error: opts.error })
+    return this.rest.getRun(runId)
+  }
+
+  streamMessage(opts: {
+    threadId: string
+    runId: string
+    author: AssistantIdentity
+    metadata?: Record<string, unknown>
+    onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
+  }): Stream {
+    return new Stream({
+      socket: this.socketTransport,
+      threadId: opts.threadId,
+      runId: opts.runId,
+      author: opts.author,
+      targetType: 'message',
+      metadata: opts.metadata,
+      onFinalEvent: opts.onFinalEvent,
+    })
+  }
+
+  streamReasoning(opts: {
+    threadId: string
+    runId: string
+    author: AssistantIdentity
+    metadata?: Record<string, unknown>
+    onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
+  }): Stream {
+    return new Stream({
+      socket: this.socketTransport,
+      threadId: opts.threadId,
+      runId: opts.runId,
+      author: opts.author,
+      targetType: 'reasoning',
+      metadata: opts.metadata,
+      onFinalEvent: opts.onFinalEvent,
+    })
+  }
+
   connect(): Promise<void> {
     return this.socketTransport.connect()
   }
@@ -134,4 +192,25 @@ export class ChatClient {
   get rawSocket(): Socket | null {
     return this.socketTransport.rawSocket
   }
+}
+
+function toEventWire(event: Record<string, unknown>): Record<string, unknown> {
+  const copy: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(event)) {
+    copy[camelToSnake(key)] = value
+  }
+  const author = copy.author as Record<string, unknown> | undefined
+  if (author && typeof author === 'object') {
+    copy.author = {
+      role: author.role,
+      id: author.id,
+      name: author.name,
+      metadata: author.metadata,
+    }
+  }
+  return copy
+}
+
+function camelToSnake(key: string): string {
+  return key.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`)
 }

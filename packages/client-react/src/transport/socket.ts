@@ -83,6 +83,103 @@ export class SocketTransport {
     await this.socket.emitWithAck('thread:leave', { thread_id: threadId })
   }
 
+  async sendEvent(threadId: string, event: Record<string, unknown>): Promise<Event> {
+    if (!this.socket) throw new Error('not connected')
+    const reply = (await this.socket.emitWithAck('event:send', {
+      thread_id: threadId,
+      event,
+    })) as { event?: unknown; error?: { code: string; message: string } }
+    if (reply.error) {
+      throw new ChatHttpError(0, `${reply.error.code}: ${reply.error.message}`)
+    }
+    return toEvent(reply.event as never)
+  }
+
+  async beginRun(
+    threadId: string,
+    opts: { triggeredByEventId?: string; idempotencyKey?: string } = {}
+  ): Promise<{ runId: string; status: string }> {
+    if (!this.socket) throw new Error('not connected')
+    const payload: Record<string, unknown> = { thread_id: threadId }
+    if (opts.triggeredByEventId) payload.triggered_by_event_id = opts.triggeredByEventId
+    if (opts.idempotencyKey) payload.idempotency_key = opts.idempotencyKey
+    const reply = (await this.socket.emitWithAck('run:begin', payload)) as {
+      run_id?: string
+      status?: string
+      error?: { code: string; message: string }
+    }
+    if (reply.error) {
+      throw new ChatHttpError(0, `${reply.error.code}: ${reply.error.message}`)
+    }
+    return { runId: reply.run_id!, status: reply.status! }
+  }
+
+  async endRun(
+    runId: string,
+    opts: { error?: { code: string; message: string } } = {}
+  ): Promise<{ runId: string; status: string }> {
+    if (!this.socket) throw new Error('not connected')
+    const payload: Record<string, unknown> = { run_id: runId }
+    if (opts.error) payload.error = opts.error
+    const reply = (await this.socket.emitWithAck('run:end', payload)) as {
+      run_id?: string
+      status?: string
+      error?: { code: string; message: string }
+    }
+    if (reply.error) {
+      throw new ChatHttpError(0, `${reply.error.code}: ${reply.error.message}`)
+    }
+    return { runId: reply.run_id!, status: reply.status! }
+  }
+
+  async sendStreamStart(frame: {
+    eventId: string
+    threadId: string
+    runId: string
+    targetType: 'message' | 'reasoning'
+    author: Record<string, unknown>
+  }): Promise<void> {
+    await this._sendStreamFrame('stream:start', {
+      event_id: frame.eventId,
+      thread_id: frame.threadId,
+      run_id: frame.runId,
+      target_type: frame.targetType,
+      author: frame.author,
+    })
+  }
+
+  async sendStreamDelta(frame: { eventId: string; threadId: string; text: string }): Promise<void> {
+    await this._sendStreamFrame('stream:delta', {
+      event_id: frame.eventId,
+      thread_id: frame.threadId,
+      text: frame.text,
+    })
+  }
+
+  async sendStreamEnd(frame: {
+    eventId: string
+    threadId: string
+    error?: { code: string; message: string } | null
+  }): Promise<void> {
+    const payload: Record<string, unknown> = {
+      event_id: frame.eventId,
+      thread_id: frame.threadId,
+    }
+    if (frame.error) payload.error = frame.error
+    await this._sendStreamFrame('stream:end', payload)
+  }
+
+  private async _sendStreamFrame(event: string, payload: Record<string, unknown>): Promise<void> {
+    if (!this.socket) throw new Error('not connected')
+    const reply = (await this.socket.emitWithAck(event, payload)) as {
+      ok?: boolean
+      error?: { code: string; message: string }
+    }
+    if (reply.error) {
+      throw new ChatHttpError(0, `${reply.error.code}: ${reply.error.message}`)
+    }
+  }
+
   get rawSocket(): Socket | null {
     return this.socket
   }
