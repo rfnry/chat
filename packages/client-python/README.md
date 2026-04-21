@@ -46,14 +46,17 @@ async def main() -> None:
         policy = await policy_db.get(ctx.event.tool.arguments["topic"])
         yield send.tool_result(ctx.event.tool.id, result=policy)
 
-    await client.connect()
-    await client.join_thread("t_1")
-    await asyncio.Event().wait()
+    async def on_connect() -> None:
+        await client.join_thread("t_1")
+
+    await client.run(on_connect=on_connect)
 
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+`ChatClient.run()` handles the common long-lived-agent lifecycle: retry the initial connect with backoff, invoke an optional `on_connect` hook (the idiomatic place to join threads / subscribe), hold the task open, and disconnect cleanly on cancellation. If you need lower-level control, call `connect()` / `disconnect()` yourself.
 
 ## Handler API
 

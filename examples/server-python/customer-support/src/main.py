@@ -35,7 +35,7 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
     logger.info("chat server + watchdog running")
 
     agent_connector = agent_client.create_chat_connector(f"http://127.0.0.1:{settings.PORT}")
-    agent_task = asyncio.create_task(agent_client.run(agent_connector))
+    agent_task = asyncio.create_task(agent_connector.run())
     logger.info("agent scheduled")
 
     try:

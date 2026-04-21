@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import secrets
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -22,6 +24,8 @@ from rfnry_chat_client.transport.socket import SocketTransport
 
 AuthenticatePayload = dict[str, Any]
 AuthenticateCallable = Callable[[], Awaitable[AuthenticatePayload]]
+
+_log = logging.getLogger("rfnry_chat_client.runner")
 
 
 class ChatClient:
@@ -77,6 +81,37 @@ class ChatClient:
     async def disconnect(self) -> None:
         await self._socket.disconnect()
         await self._rest.aclose()
+
+    async def run(
+        self,
+        *,
+        connect_retries: int = 50,
+        connect_backoff_seconds: float = 0.2,
+        on_connect: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
+        last_error: BaseException | None = None
+        for attempt in range(1, connect_retries + 1):
+            try:
+                await self.connect()
+                _log.info("connected on attempt=%d", attempt)
+                last_error = None
+                break
+            except Exception as exc:
+                last_error = exc
+                _log.debug("connect retry=%d: %s", attempt, exc)
+                await asyncio.sleep(connect_backoff_seconds)
+        if last_error is not None:
+            raise ConnectionError(
+                f"failed to connect after {connect_retries} attempts"
+            ) from last_error
+
+        try:
+            if on_connect is not None:
+                await on_connect()
+            await asyncio.Event().wait()
+        finally:
+            await self.disconnect()
+            _log.info("disconnected")
 
     async def join_thread(
         self, thread_id: str, since: dict[str, str] | None = None
