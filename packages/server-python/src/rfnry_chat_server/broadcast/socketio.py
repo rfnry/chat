@@ -17,6 +17,10 @@ def _thread_room(thread_id: str) -> str:
     return f"thread:{thread_id}"
 
 
+def _inbox_room(identity_id: str) -> str:
+    return f"inbox:{identity_id}"
+
+
 class SocketIOBroadcaster:
     def __init__(self, sio: socketio.AsyncServer) -> None:
         self._sio = sio
@@ -68,10 +72,12 @@ class SocketIOBroadcaster:
         *,
         namespace: str | None = None,
     ) -> None:
-        # Task 4 will implement emitting to the invitee's inbox room. This
-        # stub keeps SocketIOBroadcaster structurally compatible with the
-        # Broadcaster Protocol once broadcast_thread_invited is declared.
-        raise NotImplementedError
+        await self._sio.emit(
+            "thread:invited",
+            frame.model_dump(mode="json", by_alias=True),
+            room=_inbox_room(frame.added_member.id),
+            namespace=namespace or "/",
+        )
 
     async def broadcast_stream_start(
         self,
