@@ -72,9 +72,24 @@ Default filters:
 
 Chain-depth cap (`MAX_HANDLER_CHAIN_DEPTH = 8`) prevents runaway emit chains.
 
+## Streaming
+
+An assistant can stream tokens for a message or reasoning event. Requires the handler be registered with `in_run=True` so the stream has a run_id to attach to.
+
+```python
+@client.on_message(in_run=True)
+async def reply(ctx, send):
+    async with send.message_stream() as stream:
+        async for token in my_llm.stream(ctx.event):
+            await stream.write(token)
+    # on exit: stream:end frame broadcast + a MessageEvent with concatenated
+    # text is published as the canonical final event.
+```
+
+`send.reasoning_stream()` streams reasoning events the same way. Streaming requires `self.identity` to be an `AssistantIdentity`.
+
 ## Still pending
 
-- Client-side stream emission (`send.stream_message(...)` and `stream:*` socket commands from the client).
 - Full integration tests against a live `rfnry-chat-server`.
 
 ## Development
