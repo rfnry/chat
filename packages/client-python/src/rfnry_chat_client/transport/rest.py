@@ -32,6 +32,14 @@ class RestTransport:
         self._http = http_client or httpx.AsyncClient()
         self._authenticate = authenticate
 
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    @property
+    def path(self) -> str:
+        return self._path
+
     async def aclose(self) -> None:
         await self._http.aclose()
 

@@ -224,3 +224,34 @@ async def test_disconnect_tears_down_both_transports() -> None:
     await client.disconnect()
     assert sio.disconnected is True
     assert http.is_closed
+
+
+async def test_reconnect_switches_url_and_preserves_handlers() -> None:
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio1 = FakeSioClient()
+    sio2 = FakeSioClient()
+    client = ChatClient(
+        base_url="http://chat-a.test",
+        identity=me,
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(_noop_handler)),
+        socket_transport=SocketTransport(base_url="http://chat-a.test", sio_client=sio1),
+    )
+    received: list[Any] = []
+
+    @client.on_message()
+    async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
+        received.append(ctx.event)
+
+    await client.connect()
+    # Switch to a different URL with a different fake sio
+    await client.reconnect(
+        base_url="http://chat-b.test",
+        socket_transport=SocketTransport(base_url="http://chat-b.test", sio_client=sio2),
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(_noop_handler)),
+    )
+    # The handler registered BEFORE reconnect must still fire after.
+    raw_handler = sio2.handlers["event"]
+    await raw_handler(_message_event_dict(author_id="u_other", recipients=["a_me"]))
+    assert len(received) == 1
+    assert sio1.disconnected is True
+    assert sio2.connected_url == "http://chat-b.test"

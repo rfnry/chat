@@ -51,6 +51,14 @@ class SocketTransport:
         self._socketio_path = socketio_path
         self._authenticate = authenticate
 
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    @property
+    def socketio_path(self) -> str:
+        return self._socketio_path
+
     async def connect(self) -> None:
         auth_payload: AuthenticatePayload = {}
         if self._authenticate is not None:

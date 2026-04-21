@@ -41,11 +41,28 @@ class ChatClient:
         socket_transport: SocketTransport | None = None,
     ) -> None:
         self._identity = identity
+
+        if authenticate is None:
+            import base64
+            import json as _json
+
+            raw = identity.model_dump(mode="json")
+            encoded = base64.urlsafe_b64encode(
+                _json.dumps(raw, separators=(",", ":")).encode("utf-8")
+            ).decode("ascii")
+            identity_payload = {
+                "auth": {"identity": raw},
+                "headers": {"x-rfnry-identity": encoded},
+            }
+
+            async def _default_auth() -> AuthenticatePayload:
+                return identity_payload
+
+            authenticate = _default_auth
+
         self._authenticate = authenticate
 
         async def _auth_headers() -> dict[str, str]:
-            if authenticate is None:
-                return {}
             payload = await authenticate()
             return dict(payload.get("headers") or {})
 
@@ -81,6 +98,52 @@ class ChatClient:
     async def disconnect(self) -> None:
         await self._socket.disconnect()
         await self._rest.aclose()
+
+    async def reconnect(
+        self,
+        *,
+        base_url: str | None = None,
+        authenticate: AuthenticateCallable | None = None,
+        http_client: httpx.AsyncClient | None = None,
+        socket_transport: SocketTransport | None = None,
+        path: str | None = None,
+        socketio_path: str | None = None,
+    ) -> None:
+        """Disconnect, rebuild transports with new options, reconnect.
+
+        Handler registrations survive — they live on the dispatcher, which is
+        not replaced.
+        """
+        await self._socket.disconnect()
+        await self._rest.aclose()
+
+        if authenticate is not None:
+            self._authenticate = authenticate
+
+        new_base = base_url if base_url is not None else self._rest.base_url
+        new_path = path if path is not None else self._rest.path
+        new_sio_path = (
+            socketio_path if socketio_path is not None else self._socket.socketio_path
+        )
+
+        async def _auth_headers() -> dict[str, str]:
+            if self._authenticate is None:
+                return {}
+            payload = await self._authenticate()
+            return dict(payload.get("headers") or {})
+
+        self._rest = RestTransport(
+            base_url=new_base,
+            http_client=http_client,
+            path=new_path,
+            authenticate=_auth_headers,
+        )
+        self._socket = socket_transport or SocketTransport(
+            base_url=new_base,
+            socketio_path=new_sio_path,
+            authenticate=self._authenticate,
+        )
+        await self.connect()
 
     async def run(
         self,
