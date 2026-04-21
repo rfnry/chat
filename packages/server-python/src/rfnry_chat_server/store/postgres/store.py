@@ -272,6 +272,29 @@ class PostgresChatStore:
             )
         return _row_to_run(row) if row else None
 
+    async def find_runs_started_before(
+        self,
+        *,
+        statuses: tuple[RunStatus, ...],
+        threshold: datetime,
+        limit: int = 100,
+    ) -> list[Run]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, thread_id, actor, triggered_by, status, error,
+                       idempotency_key, metadata, started_at, completed_at
+                FROM runs
+                WHERE status = ANY($1::text[]) AND started_at < $2
+                ORDER BY started_at
+                LIMIT $3
+                """,
+                list(statuses),
+                threshold,
+                limit,
+            )
+        return [_row_to_run(row) for row in rows]
+
     async def add_member(
         self,
         thread_id: str,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 
 from rfnry_chat_protocol import (
@@ -50,6 +51,13 @@ class ChatStore(Protocol):
     ) -> Run: ...
     async def find_run_by_idempotency_key(self, thread_id: str, key: str) -> Run | None: ...
     async def find_active_run(self, thread_id: str, actor_id: str) -> Run | None: ...
+    async def find_runs_started_before(
+        self,
+        *,
+        statuses: tuple[RunStatus, ...],
+        threshold: datetime,
+        limit: int = 100,
+    ) -> list[Run]: ...
 
     async def add_member(
         self,

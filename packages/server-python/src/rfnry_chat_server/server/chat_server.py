@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import logging
 import secrets
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter
@@ -41,6 +43,8 @@ from rfnry_chat_server.server.run_events import (
 )
 from rfnry_chat_server.store.protocol import ChatStore
 
+_log = logging.getLogger(__name__)
+
 
 def _validate_namespace_keys(namespace_keys: list[str] | None) -> list[str] | None:
     if namespace_keys is None:
@@ -68,6 +72,8 @@ class ChatServer:
         broadcaster: Broadcaster | None = None,
         namespace_keys: list[str] | None = None,
         system_identity: SystemIdentity | None = None,
+        run_timeout_seconds: int = 120,
+        watchdog_interval_seconds: float = 30.0,
     ) -> None:
         self.store = store
         self.authenticate = authenticate
@@ -75,6 +81,8 @@ class ChatServer:
         self.replay_cap = replay_cap
         self.broadcaster = broadcaster
         self.namespace_keys = _validate_namespace_keys(namespace_keys)
+        self.run_timeout_seconds = run_timeout_seconds
+        self.watchdog_interval_seconds = watchdog_interval_seconds
         self._socketio: Any = None
         self._system_identity = system_identity or SystemIdentity(id="system", name="system")
         self._handlers = HandlerRegistry()
@@ -83,6 +91,7 @@ class ChatServer:
             registry=self._handlers,
             system_identity=self._system_identity,
         )
+        self._watchdog_task: asyncio.Task[None] | None = None
 
         from rfnry_chat_server.server.rest.members import build_router as build_members
         from rfnry_chat_server.server.rest.messages import build_router as build_messages
@@ -94,6 +103,48 @@ class ChatServer:
         self.router.include_router(build_messages())
         self.router.include_router(build_members())
         self.router.include_router(build_runs())
+
+    async def start(self) -> None:
+        if self._watchdog_task is not None and not self._watchdog_task.done():
+            return
+        self._watchdog_task = asyncio.create_task(self._watchdog_loop())
+
+    async def stop(self) -> None:
+        task = self._watchdog_task
+        if task is None:
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        self._watchdog_task = None
+
+    async def _watchdog_loop(self) -> None:
+        while True:
+            try:
+                await asyncio.sleep(self.watchdog_interval_seconds)
+                await self._sweep_stale_runs()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                _log.exception("watchdog sweep failed; continuing")
+
+    async def _sweep_stale_runs(self) -> None:
+        threshold = datetime.now(UTC) - timedelta(seconds=self.run_timeout_seconds)
+        stale = await self.store.find_runs_started_before(
+            statuses=("pending", "running"),
+            threshold=threshold,
+        )
+        for run in stale:
+            try:
+                await self.end_run(
+                    run_id=run.id,
+                    error=RunError(
+                        code="timeout",
+                        message=f"run exceeded {self.run_timeout_seconds}s without end signal",
+                    ),
+                )
+            except Exception:
+                _log.exception("watchdog failed to timeout run %s", run.id)
 
     def on(
         self,
