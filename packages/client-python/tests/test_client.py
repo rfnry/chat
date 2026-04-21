@@ -1,0 +1,186 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+import httpx
+from conftest import FakeSioClient
+from rfnry_chat_protocol import AssistantIdentity, TextPart
+
+from rfnry_chat_client.client import ChatClient
+from rfnry_chat_client.transport.socket import SocketTransport
+
+
+def _message_event_dict(
+    *, author_id: str = "u_other", recipients: list[str] | None = None
+) -> dict[str, Any]:
+    now = datetime.now(UTC).isoformat()
+    return {
+        "id": "evt_1",
+        "thread_id": "t_1",
+        "run_id": None,
+        "author": {"role": "user", "id": author_id, "name": author_id, "metadata": {}},
+        "created_at": now,
+        "metadata": {},
+        "client_id": None,
+        "recipients": recipients,
+        "type": "message",
+        "content": [{"type": "text", "text": "hi"}],
+    }
+
+
+def _tool_call_event_dict(*, tool_name: str) -> dict[str, Any]:
+    now = datetime.now(UTC).isoformat()
+    return {
+        "id": "evt_2",
+        "thread_id": "t_1",
+        "run_id": None,
+        "author": {"role": "user", "id": "u_1", "name": "U", "metadata": {}},
+        "created_at": now,
+        "metadata": {},
+        "client_id": None,
+        "recipients": None,
+        "type": "tool.call",
+        "tool": {"id": "c_1", "name": tool_name, "arguments": {"ticker": "R"}},
+    }
+
+
+async def _noop_handler(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={})
+
+
+async def test_on_message_decorator_fires_on_matching_event() -> None:
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(_noop_handler)),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+    received: list[Any] = []
+
+    @client.on_message
+    async def handle(event: Any) -> None:
+        received.append(event)
+
+    await client.connect()
+    raw_handler = sio.handlers["event"]
+    await raw_handler(_message_event_dict(author_id="u_other", recipients=["a_me"]))
+    assert len(received) == 1
+
+
+async def test_on_message_decorator_respects_recipient_filter() -> None:
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(_noop_handler)),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+    received: list[Any] = []
+
+    @client.on_message
+    async def handle(event: Any) -> None:
+        received.append(event)
+
+    await client.connect()
+    raw_handler = sio.handlers["event"]
+    await raw_handler(_message_event_dict(author_id="u_other", recipients=["a_other"]))
+    assert received == []
+
+
+async def test_on_tool_call_with_name_filter() -> None:
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+    hits: list[Any] = []
+
+    @client.on_tool_call("get_stock")
+    async def handle(event: Any) -> None:
+        hits.append(event)
+
+    await client.connect()
+    raw_handler = sio.handlers["event"]
+    await raw_handler(_tool_call_event_dict(tool_name="get_stock"))
+    await raw_handler(_tool_call_event_dict(tool_name="get_weather"))
+    assert len(hits) == 1
+
+
+async def test_on_tool_call_naked_decorator_matches_any_tool() -> None:
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+    hits: list[Any] = []
+
+    @client.on_tool_call
+    async def any_tool(event: Any) -> None:
+        hits.append(event)
+
+    await client.connect()
+    raw_handler = sio.handlers["event"]
+    await raw_handler(_tool_call_event_dict(tool_name="get_stock"))
+    await raw_handler(_tool_call_event_dict(tool_name="get_weather"))
+    assert len(hits) == 2
+
+
+async def test_send_message_emits_on_socket() -> None:
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    now = datetime.now(UTC).isoformat()
+    sio.ack_replies["message:send"] = {
+        "event": {
+            "id": "evt_1",
+            "thread_id": "t_1",
+            "run_id": None,
+            "author": me.model_dump(mode="json"),
+            "created_at": now,
+            "metadata": {},
+            "client_id": "c_1",
+            "recipients": None,
+            "type": "message",
+            "content": [{"type": "text", "text": "hi"}],
+        }
+    }
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+    await client.connect()
+    event = await client.send_message(
+        "t_1", content=[TextPart(text="hi")], client_id="c_1"
+    )
+    assert event.type == "message"
+    emitted_event, emitted_data = sio.emitted[0]
+    assert emitted_event == "message:send"
+    assert emitted_data["thread_id"] == "t_1"
+    assert emitted_data["draft"]["client_id"] == "c_1"
+
+
+async def test_disconnect_tears_down_both_transports() -> None:
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    http = httpx.AsyncClient()
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=http,
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+    await client.connect()
+    await client.disconnect()
+    assert sio.disconnected is True
+    assert http.is_closed
