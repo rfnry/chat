@@ -1,7 +1,7 @@
 import { act, render, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { ChatClient } from '../../src/client/ChatClient'
+import type { ChatClient } from '../../src/client'
 import { useThreadActions } from '../../src/hooks/useThreadActions'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
@@ -134,56 +134,5 @@ describe('useThreadActions isPending', () => {
       expect(getByTestId('pending').textContent).toBe('false')
     })
     expect(caught.err?.message).toBe('boom')
-  })
-
-  it('flips true during invoke and ask as well', async () => {
-    let resolveInvoke: ((value: unknown) => void) | null = null
-    const client = {
-      sendMessage: vi.fn().mockResolvedValue({
-        id: 'evt_1',
-        threadId: 'th_1',
-        type: 'message',
-        author: { role: 'user', id: 'u1', name: 'A', metadata: {} },
-        createdAt: '2026-04-10T00:00:00Z',
-        metadata: {},
-        content: [],
-      }),
-      invoke: vi.fn(
-        () =>
-          new Promise((resolve) => {
-            resolveInvoke = resolve as (value: unknown) => void
-          })
-      ),
-    } as unknown as ChatClient
-    const Wrapper = harness(client)
-    let latest: ReturnType<typeof useThreadActions> | null = null
-
-    const { getByTestId } = render(
-      <Wrapper>
-        <Probe
-          onState={({ actions }) => {
-            latest = actions
-          }}
-        />
-      </Wrapper>
-    )
-
-    let invokePromise: Promise<unknown> | null = null
-    act(() => {
-      invokePromise = latest!.invoke(['asst_1'])
-    })
-
-    await waitFor(() => {
-      expect(getByTestId('pending').textContent).toBe('true')
-    })
-
-    await act(async () => {
-      resolveInvoke!({ runs: [] })
-      await invokePromise
-    })
-
-    await waitFor(() => {
-      expect(getByTestId('pending').textContent).toBe('false')
-    })
   })
 })

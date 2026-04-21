@@ -1,6 +1,6 @@
 import { act, render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { ChatClient } from '../../src/client/ChatClient'
+import type { ChatClient } from '../../src/client'
 import { useThreadMembers } from '../../src/hooks/useThreadMembers'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'

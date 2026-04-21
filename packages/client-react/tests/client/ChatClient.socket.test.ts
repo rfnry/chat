@@ -15,7 +15,7 @@ vi.mock('socket.io-client', () => ({
   io: (...args: unknown[]) => mockIo(...(args as [])),
 }))
 
-import { ChatClient } from '../../src/client/ChatClient'
+import { ChatClient } from '../../src/client'
 
 describe('ChatClient socket', () => {
   beforeEach(() => {

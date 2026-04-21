@@ -1,5 +1,5 @@
+import type { Event } from '@rfnry/chat-protocol'
 import { useSyncExternalStore } from 'react'
-import type { Event } from '../protocol/event'
 import { useChatStore } from './useChatClient'
 
 const EMPTY: Event[] = []

@@ -1,5 +1,5 @@
+import type { Identity } from '@rfnry/chat-protocol'
 import { useSyncExternalStore } from 'react'
-import type { Identity } from '../protocol/identity'
 import { useChatStore } from './useChatClient'
 
 const EMPTY: Identity[] = []

@@ -59,6 +59,7 @@
     "react": "^19.0.0"
   },
   "dependencies": {
+    "@rfnry/chat-protocol": "file:../../../types/packages/chat-typescript",
     "@tanstack/react-query": "^5.99.2",
     "socket.io-client": "^4.8.3",
     "zustand": "^5.0.12"

@@ -1,8 +1,5 @@
+import type { Event, Identity, Run, Thread } from '@rfnry/chat-protocol'
 import { createStore } from 'zustand/vanilla'
-import type { Event } from '../protocol/event'
-import type { Identity } from '../protocol/identity'
-import type { Run } from '../protocol/run'
-import type { Thread } from '../protocol/thread'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 

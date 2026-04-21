@@ -1,6 +1,5 @@
+import type { TenantScope, Thread } from '@rfnry/chat-protocol'
 import { type UseMutationResult, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { TenantScope } from '../protocol/tenant'
-import type { Thread } from '../protocol/thread'
 import { useChatClient } from './useChatClient'
 
 export type CreateThreadInput = {

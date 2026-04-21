@@ -1,6 +1,5 @@
+import type { Event, Run } from '@rfnry/chat-protocol'
 import { describe, expect, it } from 'vitest'
-import type { Event } from '../../src/protocol/event'
-import type { Run } from '../../src/protocol/run'
 import { createChatStore } from '../../src/store/chatStore'
 
 function makeMessage(id: string, threadId = 'th_1', createdAt = '2026-04-10T00:00:00Z'): Event {
@@ -49,7 +48,7 @@ describe('chatStore', () => {
     const run: Run = {
       id: 'run_1',
       threadId: 'th_1',
-      assistant: { role: 'assistant', id: 'a1', name: 'H', metadata: {} },
+      actor: { role: 'assistant', id: 'a1', name: 'H', metadata: {} },
       triggeredBy: { role: 'user', id: 'u1', name: 'A', metadata: {} },
       status: 'running',
       startedAt: '2026-04-10T00:00:00Z',
@@ -75,7 +74,7 @@ describe('chatStore', () => {
     store.getState().actions.upsertRun({
       id: 'run_1',
       threadId: 'th_1',
-      assistant: { role: 'assistant', id: 'a1', name: 'H', metadata: {} },
+      actor: { role: 'assistant', id: 'a1', name: 'H', metadata: {} },
       triggeredBy: { role: 'user', id: 'u1', name: 'A', metadata: {} },
       status: 'running',
       startedAt: '2026-04-10T00:00:00Z',

@@ -1,5 +1,5 @@
+import type { Event } from '@rfnry/chat-protocol'
 import { useMemo } from 'react'
-import type { Event } from '../protocol/event'
 import { useThreadActiveRuns } from './useThreadActiveRuns'
 import { useThreadEvents } from './useThreadEvents'
 

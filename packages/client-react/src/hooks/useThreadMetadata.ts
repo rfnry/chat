@@ -1,5 +1,5 @@
+import type { Thread } from '@rfnry/chat-protocol'
 import { useSyncExternalStore } from 'react'
-import type { Thread } from '../protocol/thread'
 import { useChatStore } from './useChatClient'
 
 export function useThreadMetadata(threadId: string | null): Thread | null {

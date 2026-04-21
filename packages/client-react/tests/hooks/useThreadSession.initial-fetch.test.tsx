@@ -1,7 +1,7 @@
 import { render, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { ChatClient } from '../../src/client/ChatClient'
+import type { ChatClient } from '../../src/client'
 import { useThreadSession } from '../../src/hooks/useThreadSession'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'

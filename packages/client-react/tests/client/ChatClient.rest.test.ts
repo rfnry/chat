@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ChatClient } from '../../src/client'
 import {
   ChatAuthError,
-  ChatClient,
   ChatHttpError,
   ThreadConflictError,
   ThreadNotFoundError,
-} from '../../src/client/ChatClient'
+} from '../../src/errors'
 
 const fakeThread = {
   id: 'th_1',
@@ -79,33 +79,6 @@ describe('ChatClient REST', () => {
     expect(body.client_id).toBe('c1')
   })
 
-  it('invoke maps assistantIds to assistant_ids', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse(
-        {
-          runs: [
-            {
-              id: 'run_1',
-              thread_id: 'th_1',
-              assistant: { role: 'assistant', id: 'a1', name: 'H', metadata: {} },
-              triggered_by: { role: 'user', id: 'u1', name: 'A', metadata: {} },
-              status: 'pending',
-              started_at: '2026-04-10T00:00:00Z',
-              metadata: {},
-            },
-          ],
-        },
-        201
-      )
-    )
-    const result = await client.invoke('th_1', { assistantIds: ['a1'] })
-    expect(result.runs).toHaveLength(1)
-    expect(result.runs[0]!.threadId).toBe('th_1')
-
-    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)
-    expect(body.assistant_ids).toEqual(['a1'])
-  })
-
   it('throws ChatHttpError on non-2xx', async () => {
     fetchMock.mockResolvedValue(new Response('not found', { status: 404 }))
     await expect(client.getThread('th_nope')).rejects.toThrow('HTTP 404')
@@ -127,9 +100,9 @@ describe('ChatClient REST', () => {
 
   it('throws ThreadConflictError on 409', async () => {
     fetchMock.mockResolvedValue(new Response('conflict', { status: 409 }))
-    await expect(
-      client.invoke('th_1', { assistantIds: ['a1'], idempotencyKey: 'k1' })
-    ).rejects.toBeInstanceOf(ThreadConflictError)
+    await expect(client.createThread({ tenant: { org: 'A' } })).rejects.toBeInstanceOf(
+      ThreadConflictError
+    )
   })
 
   it('throws the base ChatHttpError on other statuses (e.g. 500)', async () => {

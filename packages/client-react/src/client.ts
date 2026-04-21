@@ -1,0 +1,137 @@
+import type {
+  Event,
+  EventDraft,
+  Identity,
+  Run,
+  Thread,
+  ThreadMember,
+  ThreadPatch,
+} from '@rfnry/chat-protocol'
+import type { Socket } from 'socket.io-client'
+import { type Page, RestTransport } from './transport/rest'
+import { SocketTransport } from './transport/socket'
+
+export type AuthenticatePayload = {
+  headers?: Record<string, string>
+  auth?: Record<string, unknown>
+}
+
+export type ChatClientOptions = {
+  url: string
+  authenticate?: () => Promise<AuthenticatePayload>
+  path?: string
+  socketPath?: string
+  fetchImpl?: typeof fetch
+}
+
+export type { Page } from './transport/rest'
+
+export class ChatClient {
+  readonly url: string
+  readonly path: string
+  readonly socketPath: string
+  private readonly rest: RestTransport
+  private readonly socketTransport: SocketTransport
+
+  constructor(opts: ChatClientOptions) {
+    this.url = opts.url.replace(/\/$/, '')
+    this.path = opts.path ?? '/chat'
+    this.socketPath = opts.socketPath ?? '/chat/ws'
+
+    const authHeaders = opts.authenticate
+      ? async () => (await opts.authenticate!()).headers ?? {}
+      : undefined
+
+    this.rest = new RestTransport({
+      baseUrl: this.url,
+      path: this.path,
+      fetchImpl: opts.fetchImpl,
+      authenticate: authHeaders,
+    })
+    this.socketTransport = new SocketTransport({
+      baseUrl: this.url,
+      socketPath: this.socketPath,
+      authenticate: opts.authenticate,
+    })
+  }
+
+  createThread(input: {
+    tenant?: Record<string, string>
+    metadata?: Record<string, unknown>
+  }): Promise<Thread> {
+    return this.rest.createThread(input)
+  }
+
+  getThread(threadId: string): Promise<Thread> {
+    return this.rest.getThread(threadId)
+  }
+
+  listThreads(
+    opts: { limit?: number; cursor?: { createdAt: string; id: string } } = {}
+  ): Promise<Page<Thread>> {
+    return this.rest.listThreads(opts)
+  }
+
+  updateThread(threadId: string, patch: ThreadPatch): Promise<Thread> {
+    return this.rest.updateThread(threadId, patch)
+  }
+
+  deleteThread(threadId: string): Promise<void> {
+    return this.rest.deleteThread(threadId)
+  }
+
+  sendMessage(threadId: string, draft: EventDraft): Promise<Event> {
+    return this.rest.sendMessage(threadId, draft)
+  }
+
+  listEvents(threadId: string, opts: { limit?: number } = {}): Promise<Page<Event>> {
+    return this.rest.listEvents(threadId, opts)
+  }
+
+  listMembers(threadId: string): Promise<ThreadMember[]> {
+    return this.rest.listMembers(threadId)
+  }
+
+  addMember(threadId: string, identity: Identity, role = 'member'): Promise<ThreadMember> {
+    return this.rest.addMember(threadId, identity, role)
+  }
+
+  removeMember(threadId: string, identityId: string): Promise<void> {
+    return this.rest.removeMember(threadId, identityId)
+  }
+
+  getRun(runId: string): Promise<Run> {
+    return this.rest.getRun(runId)
+  }
+
+  cancelRun(runId: string): Promise<void> {
+    return this.rest.cancelRun(runId)
+  }
+
+  connect(): Promise<void> {
+    return this.socketTransport.connect()
+  }
+
+  disconnect(): Promise<void> {
+    return this.socketTransport.disconnect()
+  }
+
+  on(event: string, handler: (data: unknown) => void): () => void {
+    return this.socketTransport.on(event, handler)
+  }
+
+  joinThread(
+    threadId: string,
+    since?: { createdAt: string; id: string }
+  ): Promise<{ threadId: string; replayed: Event[]; replayTruncated: boolean }> {
+    return this.socketTransport.joinThread(threadId, since)
+  }
+
+  leaveThread(threadId: string): Promise<void> {
+    return this.socketTransport.leaveThread(threadId)
+  }
+
+  get rawSocket(): Socket | null {
+    return this.socketTransport.rawSocket
+  }
+}

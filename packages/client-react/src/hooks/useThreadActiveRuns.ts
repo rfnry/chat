@@ -1,5 +1,5 @@
+import type { Run } from '@rfnry/chat-protocol'
 import { useMemo, useSyncExternalStore } from 'react'
-import type { Run } from '../protocol/run'
 import { useChatStore } from './useChatClient'
 
 const EMPTY: Run[] = []

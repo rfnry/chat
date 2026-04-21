@@ -1,4 +1,4 @@
-import type { AssistantIdentity, Identity } from '../protocol/identity'
+import type { AssistantIdentity, Identity } from '@rfnry/chat-protocol'
 
 const MENTION_RE = /@([\w-]+)/g
 

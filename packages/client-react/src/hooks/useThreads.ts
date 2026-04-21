@@ -1,6 +1,6 @@
+import type { Thread } from '@rfnry/chat-protocol'
 import { type UseQueryResult, useQuery } from '@tanstack/react-query'
-import type { Page } from '../client/ChatClient'
-import type { Thread } from '../protocol/thread'
+import type { Page } from '../client'
 import { useChatClient } from './useChatClient'
 
 export type UseThreadsOptions = {

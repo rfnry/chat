@@ -1,5 +1,5 @@
+import type { Identity } from '@rfnry/chat-protocol'
 import { describe, expect, it } from 'vitest'
-import type { Identity } from '../../src/protocol/identity'
 import { parseMentions } from '../../src/utils/parseMentions'
 
 const alice: Identity = { role: 'user', id: 'u_alice', name: 'Alice', metadata: {} }

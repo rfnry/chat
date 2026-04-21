@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { ChatClient } from '../client/ChatClient'
+import type { ChatClient } from '../client'
 import type { ChatStore } from '../store/chatStore'
 
 export type ChatContextValue = {

@@ -1,7 +1,7 @@
+import { toEvent, toIdentity, toRun, toThread } from '@rfnry/chat-protocol'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { ChatClient, type ChatClientOptions } from '../client/ChatClient'
-import { toEvent, toIdentity, toRun, toThread } from '../protocol/mappers'
+import { ChatClient, type ChatClientOptions } from '../client'
 import { createChatStore } from '../store/chatStore'
 import { ChatContext, type ChatContextValue } from './ChatContext'
 

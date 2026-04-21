@@ -1,6 +1,6 @@
+import type { Thread } from '@rfnry/chat-protocol'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
-import type { Thread } from '../protocol/thread'
 import { useChatClient, useChatStore } from './useChatClient'
 
 /**

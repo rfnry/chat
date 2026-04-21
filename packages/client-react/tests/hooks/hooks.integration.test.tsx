@@ -1,7 +1,7 @@
 import { act, render, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { ChatClient } from '../../src/client/ChatClient'
+import type { ChatClient } from '../../src/client'
 import { useThreadEvents } from '../../src/hooks/useThreadEvents'
 import { useThreadIsWorking } from '../../src/hooks/useThreadIsWorking'
 import { useThreadSession } from '../../src/hooks/useThreadSession'
@@ -158,7 +158,7 @@ describe('hooks integration', () => {
       store.getState().actions.upsertRun({
         id: 'run_1',
         threadId: 'th_1',
-        assistant: { role: 'assistant', id: 'a1', name: 'H', metadata: {} },
+        actor: { role: 'assistant', id: 'a1', name: 'H', metadata: {} },
         triggeredBy: { role: 'user', id: 'u1', name: 'A', metadata: {} },
         status: 'running',
         startedAt: '2026-04-10T00:00:00Z',
@@ -171,7 +171,7 @@ describe('hooks integration', () => {
       store.getState().actions.upsertRun({
         id: 'run_1',
         threadId: 'th_1',
-        assistant: { role: 'assistant', id: 'a1', name: 'H', metadata: {} },
+        actor: { role: 'assistant', id: 'a1', name: 'H', metadata: {} },
         triggeredBy: { role: 'user', id: 'u1', name: 'A', metadata: {} },
         status: 'completed',
         startedAt: '2026-04-10T00:00:00Z',
