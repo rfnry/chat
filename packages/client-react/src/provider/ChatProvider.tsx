@@ -1,4 +1,12 @@
-import { toEvent, toIdentity, toRun, toThread } from '@rfnry/chat-protocol'
+import {
+  type Identity,
+  type Thread,
+  toEvent,
+  toIdentity,
+  toRun,
+  toThread,
+  toThreadInvitedFrame,
+} from '@rfnry/chat-protocol'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { ChatClient, type ChatClientOptions } from '../client'
@@ -10,11 +18,21 @@ export type ChatProviderProps = ChatClientOptions & {
   queryClient?: QueryClient
   fallback?: ReactNode
   errorFallback?: ReactNode
+  onThreadInvited?: (thread: Thread, addedBy: Identity) => void
 }
 
 export function ChatProvider(props: ChatProviderProps) {
-  const { children, queryClient: externalQc, fallback, errorFallback, ...clientOpts } = props
+  const {
+    children,
+    queryClient: externalQc,
+    fallback,
+    errorFallback,
+    onThreadInvited,
+    ...clientOpts
+  } = props
   const optsRef = useRef(clientOpts)
+  const onThreadInvitedRef = useRef(onThreadInvited)
+  onThreadInvitedRef.current = onThreadInvited
   const [value, setValue] = useState<ChatContextValue | null>(null)
   const [failed, setFailed] = useState(false)
   const qcRef = useRef<QueryClient>(externalQc ?? new QueryClient())
@@ -44,6 +62,13 @@ export function ChatProvider(props: ChatProviderProps) {
           const payload = data as { thread_id: string; members: unknown[] }
           const identities = payload.members.map((m) => toIdentity(m as never))
           store.getState().actions.setMembers(payload.thread_id, identities)
+        })
+        client.on('thread:invited', (data) => {
+          const frame = toThreadInvitedFrame(data as never)
+          store.getState().actions.setThreadMeta(frame.thread)
+          void client.joinThread(frame.thread.id).catch(() => {})
+          qcRef.current.invalidateQueries({ queryKey: ['chat', 'threads'] })
+          onThreadInvitedRef.current?.(frame.thread, frame.addedBy)
         })
 
         setValue({ client, store })
