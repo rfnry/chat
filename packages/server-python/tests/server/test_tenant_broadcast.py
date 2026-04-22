@@ -97,9 +97,7 @@ async def test_publish_thread_deleted_fans_with_pre_delete_tenant(
         thread_id = create.json()["id"]
 
         observer = _mk_user("u_observer", {"organization": "acme"})
-        chat_server._socketio = _StubSocketIO(
-            connected=[("sid_observer", "/", observer)]
-        )
+        chat_server._socketio = _StubSocketIO(connected=[("sid_observer", "/", observer)])
 
         resp = await c.delete(f"/chat/threads/{thread_id}")
     assert resp.status_code == 204

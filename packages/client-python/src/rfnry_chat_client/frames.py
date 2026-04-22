@@ -30,21 +30,15 @@ class FrameDispatcher:
         self._members_updated: list[MembersUpdatedHandler] = []
         self._run_updated: list[RunUpdatedHandler] = []
 
-    def register_thread_updated(
-        self, handler: ThreadUpdatedHandler
-    ) -> ThreadUpdatedHandler:
+    def register_thread_updated(self, handler: ThreadUpdatedHandler) -> ThreadUpdatedHandler:
         self._thread_updated.append(handler)
         return handler
 
-    def register_members_updated(
-        self, handler: MembersUpdatedHandler
-    ) -> MembersUpdatedHandler:
+    def register_members_updated(self, handler: MembersUpdatedHandler) -> MembersUpdatedHandler:
         self._members_updated.append(handler)
         return handler
 
-    def register_run_updated(
-        self, handler: RunUpdatedHandler
-    ) -> RunUpdatedHandler:
+    def register_run_updated(self, handler: RunUpdatedHandler) -> RunUpdatedHandler:
         self._run_updated.append(handler)
         return handler
 

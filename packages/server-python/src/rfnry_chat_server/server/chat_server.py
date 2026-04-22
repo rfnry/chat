@@ -144,6 +144,7 @@ class ChatServer:
     async def start(self) -> None:
         if self._watchdog_task is not None and not self._watchdog_task.done():
             return
+        await self.store.ensure_schema()
         self._watchdog_task = asyncio.create_task(self._watchdog_loop())
 
     async def stop(self) -> None:

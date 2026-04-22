@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from importlib.resources import files
 from typing import Any
 
 import asyncpg
@@ -21,10 +22,28 @@ from rfnry_chat_protocol import (
 
 from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
 
+# Fixed int8 advisory-lock key used to serialize concurrent ensure_schema()
+# calls across replicas. Arbitrary value — only needs to agree across
+# processes; collides only with other code picking this exact literal in
+# the same database.
+_SCHEMA_LOCK_KEY = 0x7266636861747363  # "rfchatsc" as big-endian ASCII
+
 
 class PostgresChatStore:
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, *, ensure_schema: bool = True) -> None:
         self._pool = pool
+        self._ensure_schema = ensure_schema
+        self._schema_ready = False
+
+    async def ensure_schema(self) -> None:
+        if self._schema_ready or not self._ensure_schema:
+            return
+        ddl = files("rfnry_chat_server.store.postgres").joinpath("schema.sql").read_text(encoding="utf-8")
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute("SELECT pg_advisory_xact_lock($1)", _SCHEMA_LOCK_KEY)
+                await conn.execute(ddl)
+        self._schema_ready = True
 
     async def create_thread(
         self,

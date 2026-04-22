@@ -55,9 +55,7 @@ class RestTransport:
         if self._authenticate is not None:
             headers.update(await self._authenticate())
         url = f"{self._base_url}{self._path}{pathname}"
-        response = await self._http.request(
-            method, url, headers=headers, json=json_body, params=params
-        )
+        response = await self._http.request(method, url, headers=headers, json=json_body, params=params)
         if response.status_code >= 400:
             raise http_error_for(response.status_code, response.text)
         if response.status_code == 204:
@@ -113,20 +111,14 @@ class RestTransport:
         await self._request("DELETE", f"/threads/{thread_id}/events")
 
     async def send_message(self, *, thread_id: str, draft: dict[str, Any]) -> Event:
-        payload = await self._request(
-            "POST", f"/threads/{thread_id}/messages", json_body=draft
-        )
+        payload = await self._request("POST", f"/threads/{thread_id}/messages", json_body=draft)
         return parse_event(payload)
 
-    async def list_events(
-        self, thread_id: str, *, limit: int | None = None
-    ) -> dict[str, Any]:
+    async def list_events(self, thread_id: str, *, limit: int | None = None) -> dict[str, Any]:
         params: dict[str, Any] = {}
         if limit is not None:
             params["limit"] = limit
-        payload = await self._request(
-            "GET", f"/threads/{thread_id}/events", params=params or None
-        )
+        payload = await self._request("GET", f"/threads/{thread_id}/events", params=params or None)
         return {
             "items": [parse_event(item) for item in payload["items"]],
             "next_cursor": payload.get("next_cursor"),

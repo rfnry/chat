@@ -46,12 +46,8 @@ async def test_bot_open_thread_with_triggers_on_invited_and_delivers_message(
     """
     base, _chat_server = live_server
 
-    alice = ChatClient(
-        base_url=base, identity=ALICE, authenticate=_authenticate_as(ALICE.id)
-    )
-    bot = ChatClient(
-        base_url=base, identity=BOT, authenticate=_authenticate_as(BOT.id)
-    )
+    alice = ChatClient(base_url=base, identity=ALICE, authenticate=_authenticate_as(ALICE.id))
+    bot = ChatClient(base_url=base, identity=BOT, authenticate=_authenticate_as(BOT.id))
 
     invited_received: list[ThreadInvitedFrame] = []
     invited_event = asyncio.Event()
@@ -92,9 +88,7 @@ async def test_bot_open_thread_with_triggers_on_invited_and_delivers_message(
         msg = message_received[0]
         assert msg.thread_id == thread.id
         assert any(
-            getattr(p, "type", None) == "text"
-            and getattr(p, "text", None) == "ping from bot"
-            for p in msg.content
+            getattr(p, "type", None) == "text" and getattr(p, "text", None) == "ping from bot" for p in msg.content
         )
     finally:
         await alice.disconnect()

@@ -37,9 +37,7 @@ async def test_client_joins_thread_and_receives_events(
     live_server: tuple[str, Any],
 ) -> None:
     base, _ = live_server
-    thread_id = await _seed_thread_with_member(
-        base, DEFAULT_ASSISTANT.model_dump(mode="json")
-    )
+    thread_id = await _seed_thread_with_member(base, DEFAULT_ASSISTANT.model_dump(mode="json"))
 
     async def authenticate() -> dict[str, Any]:
         return {"auth": {"identity_id": DEFAULT_ASSISTANT.id}}
@@ -76,9 +74,7 @@ async def test_client_emits_reply_through_handler(
     live_server: tuple[str, Any],
 ) -> None:
     base, _ = live_server
-    thread_id = await _seed_thread_with_member(
-        base, DEFAULT_ASSISTANT.model_dump(mode="json")
-    )
+    thread_id = await _seed_thread_with_member(base, DEFAULT_ASSISTANT.model_dump(mode="json"))
 
     async def authenticate() -> dict[str, Any]:
         return {"auth": {"identity_id": DEFAULT_ASSISTANT.id}}
@@ -111,11 +107,7 @@ async def test_client_emits_reply_through_handler(
                 },
             )
 
-        assert await _wait_until(
-            lambda: any(
-                e.type == "message" and e.author.id == DEFAULT_ASSISTANT.id for e in seen
-            )
-        )
+        assert await _wait_until(lambda: any(e.type == "message" and e.author.id == DEFAULT_ASSISTANT.id for e in seen))
     finally:
         await client.disconnect()
 
@@ -124,9 +116,7 @@ async def test_client_run_wrap_emits_run_started_and_completed(
     live_server: tuple[str, Any],
 ) -> None:
     base, _ = live_server
-    thread_id = await _seed_thread_with_member(
-        base, DEFAULT_ASSISTANT.model_dump(mode="json")
-    )
+    thread_id = await _seed_thread_with_member(base, DEFAULT_ASSISTANT.model_dump(mode="json"))
 
     async def authenticate() -> dict[str, Any]:
         return {"auth": {"identity_id": DEFAULT_ASSISTANT.id}}
@@ -168,9 +158,7 @@ async def test_client_run_wrap_emits_run_started_and_completed(
 
 async def test_client_streams_message(live_server: tuple[str, Any]) -> None:
     base, _ = live_server
-    thread_id = await _seed_thread_with_member(
-        base, DEFAULT_ASSISTANT.model_dump(mode="json")
-    )
+    thread_id = await _seed_thread_with_member(base, DEFAULT_ASSISTANT.model_dump(mode="json"))
 
     async def authenticate() -> dict[str, Any]:
         return {"auth": {"identity_id": DEFAULT_ASSISTANT.id}}
@@ -184,9 +172,7 @@ async def test_client_streams_message(live_server: tuple[str, Any]) -> None:
 
     @client.on_message()
     async def reply(ctx: HandlerContext, send: HandlerSend) -> None:
-        run = await client.begin_run(
-            ctx.event.thread_id, triggered_by_event_id=ctx.event.id
-        )
+        run = await client.begin_run(ctx.event.thread_id, triggered_by_event_id=ctx.event.id)
         try:
             async with send.message_stream(run_id=run.id) as stream:
                 await stream.write("hello ")
@@ -241,9 +227,7 @@ async def test_server_tool_handler_responds_to_client_tool_call(
     live_server: tuple[str, ChatClient],
 ) -> None:
     base, chat_server = live_server
-    thread_id = await _seed_thread_with_member(
-        base, DEFAULT_ASSISTANT.model_dump(mode="json")
-    )
+    thread_id = await _seed_thread_with_member(base, DEFAULT_ASSISTANT.model_dump(mode="json"))
 
     @chat_server.on_tool_call("ping")  # type: ignore[attr-defined]
     async def handle_ping(ctx, send):

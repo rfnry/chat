@@ -58,9 +58,7 @@ class ChatClient:
             import json as _json
 
             raw = identity.model_dump(mode="json")
-            encoded = base64.urlsafe_b64encode(
-                _json.dumps(raw, separators=(",", ":")).encode("utf-8")
-            ).decode("ascii")
+            encoded = base64.urlsafe_b64encode(_json.dumps(raw, separators=(",", ":")).encode("utf-8")).decode("ascii")
             identity_payload = {
                 "auth": {"identity": raw},
                 "headers": {"x-rfnry-identity": encoded},
@@ -145,9 +143,7 @@ class ChatClient:
 
         new_base = base_url if base_url is not None else self._rest.base_url
         new_path = path if path is not None else self._rest.path
-        new_sio_path = (
-            socketio_path if socketio_path is not None else self._socket.socketio_path
-        )
+        new_sio_path = socketio_path if socketio_path is not None else self._socket.socketio_path
 
         async def _auth_headers() -> dict[str, str]:
             if self._authenticate is None:
@@ -196,9 +192,7 @@ class ChatClient:
                     delay = base * (0.5 + random.random())
                     await asyncio.sleep(delay)
         if last_error is not None:
-            raise ConnectionError(
-                f"failed to connect after {connect_retries} attempts"
-            ) from last_error
+            raise ConnectionError(f"failed to connect after {connect_retries} attempts") from last_error
 
         try:
             if on_connect is not None:
@@ -212,9 +206,7 @@ class ChatClient:
                 await self.disconnect()
             _log.info("disconnected")
 
-    async def join_thread(
-        self, thread_id: str, since: dict[str, str] | None = None
-    ) -> dict[str, Any]:
+    async def join_thread(self, thread_id: str, since: dict[str, str] | None = None) -> dict[str, Any]:
         return await self._socket.join_thread(thread_id, since=since)
 
     async def leave_thread(self, thread_id: str) -> dict[str, Any]:
@@ -273,9 +265,7 @@ class ChatClient:
         reply = await self._socket.end_run(run_id, error=payload)
         return await self._rest.get_run(reply["run_id"])
 
-    async def add_member(
-        self, thread_id: str, identity: Identity, role: str = "member"
-    ) -> ThreadMember:
+    async def add_member(self, thread_id: str, identity: Identity, role: str = "member") -> ThreadMember:
         return await self._rest.add_member(thread_id, identity=identity, role=role)
 
     async def remove_member(self, thread_id: str, identity_id: str) -> None:
@@ -322,9 +312,7 @@ class ChatClient:
         await self.join_thread(thread.id)
 
         recipients = [invite.id] if invite is not None else None
-        event = await self.send_message(
-            thread.id, content=message, recipients=recipients
-        )
+        event = await self.send_message(thread.id, content=message, recipients=recipients)
         return thread, event
 
     def on(
@@ -345,14 +333,10 @@ class ChatClient:
 
         return decorator
 
-    def on_message(
-        self, *, all_events: bool = False
-    ) -> Callable[[HandlerCallable], HandlerCallable]:
+    def on_message(self, *, all_events: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
         return self.on("message", all_events=all_events)
 
-    def on_reasoning(
-        self, *, all_events: bool = False
-    ) -> Callable[[HandlerCallable], HandlerCallable]:
+    def on_reasoning(self, *, all_events: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
         return self.on("reasoning", all_events=all_events)
 
     def on_tool_call(
@@ -363,14 +347,10 @@ class ChatClient:
     ) -> Callable[[HandlerCallable], HandlerCallable]:
         return self.on("tool.call", tool=name, all_events=all_events)
 
-    def on_tool_result(
-        self, *, all_events: bool = False
-    ) -> Callable[[HandlerCallable], HandlerCallable]:
+    def on_tool_result(self, *, all_events: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
         return self.on("tool.result", all_events=all_events)
 
-    def on_any_event(
-        self, *, all_events: bool = False
-    ) -> Callable[[HandlerCallable], HandlerCallable]:
+    def on_any_event(self, *, all_events: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
         return self.on("*", all_events=all_events)
 
     def on_invited(self) -> Callable[[InviteHandler], InviteHandler]:

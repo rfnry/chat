@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-import pathlib
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -17,16 +16,6 @@ from rfnry_chat_server.server.chat_server import ChatServer
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 
 DEFAULT_DATABASE_URL = "postgresql://rfnry_chat:rfnry_chat@localhost:55432/rfnry_chat_test"
-
-SCHEMA_SQL = (
-    pathlib.Path(__file__).resolve().parents[3]
-    / "server-python"
-    / "src"
-    / "rfnry_chat_server"
-    / "store"
-    / "postgres"
-    / "schema.sql"
-).read_text()
 
 
 def _database_url() -> str:
@@ -44,8 +33,7 @@ async def pg_pool() -> AsyncIterator[asyncpg.Pool]:
     except (OSError, asyncpg.exceptions.PostgresError) as exc:
         pytest.skip(f"postgres unavailable: {exc}", allow_module_level=True)
     assert pool is not None
-    async with pool.acquire() as conn:
-        await conn.execute(SCHEMA_SQL)
+    await PostgresChatStore(pool=pool).ensure_schema()
     try:
         yield pool
     finally:
@@ -55,9 +43,7 @@ async def pg_pool() -> AsyncIterator[asyncpg.Pool]:
 @pytest.fixture
 async def clean_db(pg_pool: asyncpg.Pool) -> AsyncIterator[asyncpg.Pool]:
     async with pg_pool.acquire() as conn:
-        await conn.execute(
-            "TRUNCATE TABLE thread_members, events, runs, threads RESTART IDENTITY CASCADE"
-        )
+        await conn.execute("TRUNCATE TABLE thread_members, events, runs, threads RESTART IDENTITY CASCADE")
     yield pg_pool
 
 

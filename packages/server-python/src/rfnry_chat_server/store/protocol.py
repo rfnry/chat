@@ -19,6 +19,8 @@ from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
 
 
 class ChatStore(Protocol):
+    async def ensure_schema(self) -> None: ...
+
     async def create_thread(
         self,
         thread: Thread,

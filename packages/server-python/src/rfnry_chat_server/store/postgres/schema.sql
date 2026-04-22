@@ -7,8 +7,6 @@ CREATE TABLE IF NOT EXISTS threads (
   caller_identity_id  TEXT,
   client_id           TEXT
 );
-ALTER TABLE threads ADD COLUMN IF NOT EXISTS caller_identity_id TEXT;
-ALTER TABLE threads ADD COLUMN IF NOT EXISTS client_id TEXT;
 CREATE INDEX IF NOT EXISTS threads_tenant_gin ON threads USING GIN (tenant jsonb_path_ops);
 CREATE INDEX IF NOT EXISTS threads_created_at ON threads (created_at DESC, id);
 CREATE UNIQUE INDEX IF NOT EXISTS threads_caller_client_id
@@ -27,16 +25,6 @@ CREATE TABLE IF NOT EXISTS runs (
   started_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at      TIMESTAMPTZ
 );
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'runs' AND column_name = 'assistant'
-  ) THEN
-    ALTER TABLE runs RENAME COLUMN assistant TO actor;
-  END IF;
-END$$;
-DROP INDEX IF EXISTS runs_active_per_assistant;
 CREATE UNIQUE INDEX IF NOT EXISTS runs_idempotency
   ON runs (thread_id, idempotency_key)
   WHERE idempotency_key IS NOT NULL;
@@ -57,7 +45,6 @@ CREATE TABLE IF NOT EXISTS events (
   recipients   JSONB,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-ALTER TABLE events ADD COLUMN IF NOT EXISTS recipients JSONB;
 CREATE INDEX IF NOT EXISTS events_thread_time ON events (thread_id, created_at, id);
 CREATE INDEX IF NOT EXISTS events_thread_type ON events (thread_id, type);
 CREATE INDEX IF NOT EXISTS events_run ON events (run_id) WHERE run_id IS NOT NULL;

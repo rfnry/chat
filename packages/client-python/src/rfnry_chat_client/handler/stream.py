@@ -59,9 +59,7 @@ class Stream:
             target_type=self._target_type,
             author=self._author,
         )
-        await self._client.socket.send_stream_start(
-            frame.model_dump(mode="json", by_alias=True)
-        )
+        await self._client.socket.send_stream_start(frame.model_dump(mode="json", by_alias=True))
         self._started = True
         return self
 
@@ -76,9 +74,7 @@ class Stream:
             thread_id=self._thread_id,
             text=text,
         )
-        await self._client.socket.send_stream_delta(
-            frame.model_dump(mode="json", by_alias=True)
-        )
+        await self._client.socket.send_stream_delta(frame.model_dump(mode="json", by_alias=True))
 
     async def __aexit__(
         self,
@@ -94,9 +90,7 @@ class Stream:
             thread_id=self._thread_id,
             error=error,
         )
-        await self._client.socket.send_stream_end(
-            end_frame.model_dump(mode="json", by_alias=True)
-        )
+        await self._client.socket.send_stream_end(end_frame.model_dump(mode="json", by_alias=True))
 
         if exc is None:
             content = "".join(self._buffer)

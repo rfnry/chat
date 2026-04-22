@@ -17,9 +17,7 @@ if TYPE_CHECKING:
 
 MAX_HANDLER_CHAIN_DEPTH = 8
 
-_chain_depth: contextvars.ContextVar[int] = contextvars.ContextVar(
-    "rfnry_chat_client_handler_chain_depth", default=0
-)
+_chain_depth: contextvars.ContextVar[int] = contextvars.ContextVar("rfnry_chat_client_handler_chain_depth", default=0)
 
 
 @dataclass(frozen=True)

@@ -14,9 +14,7 @@ from rfnry_chat_client.handler.send import HandlerSend
 from rfnry_chat_client.transport.socket import SocketTransport
 
 
-def _message_event_dict(
-    *, author_id: str = "u_other", recipients: list[str] | None = None
-) -> dict[str, Any]:
+def _message_event_dict(*, author_id: str = "u_other", recipients: list[str] | None = None) -> dict[str, Any]:
     now = datetime.now(UTC).isoformat()
     return {
         "id": "evt_1",
@@ -201,9 +199,7 @@ async def test_send_message_emits_on_socket() -> None:
         socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
     )
     await client.connect()
-    event = await client.send_message(
-        "t_1", content=[TextPart(text="hi")], client_id="c_1"
-    )
+    event = await client.send_message("t_1", content=[TextPart(text="hi")], client_id="c_1")
     assert event.type == "message"
     emitted_event, emitted_data = sio.emitted[0]
     assert emitted_event == "message:send"
@@ -360,23 +356,32 @@ async def test_open_thread_with_calls_add_member_without_preflight() -> None:
         nonlocal get_members_hits, post_members_hits
         if req.method == "POST" and req.url.path == "/chat/threads":
             now = datetime.now(UTC).isoformat()
-            return httpx.Response(201, json={
-                "id": "th_new", "tenant": {}, "metadata": {},
-                "created_at": now, "updated_at": now,
-            })
+            return httpx.Response(
+                201,
+                json={
+                    "id": "th_new",
+                    "tenant": {},
+                    "metadata": {},
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
         if req.method == "GET" and "/members" in req.url.path:
             get_members_hits += 1
             return httpx.Response(200, json=[])
         if req.method == "POST" and req.url.path.endswith("/members"):
             post_members_hits += 1
-            return httpx.Response(201, json={
-                "thread_id": "th_new",
-                "identity_id": "u_alice",
-                "identity": {"role": "user", "id": "u_alice", "name": "Alice", "metadata": {}},
-                "role": "member",
-                "added_at": datetime.now(UTC).isoformat(),
-                "added_by": {"role": "assistant", "id": "a_me", "name": "Me", "metadata": {}},
-            })
+            return httpx.Response(
+                201,
+                json={
+                    "thread_id": "th_new",
+                    "identity_id": "u_alice",
+                    "identity": {"role": "user", "id": "u_alice", "name": "Alice", "metadata": {}},
+                    "role": "member",
+                    "added_at": datetime.now(UTC).isoformat(),
+                    "added_by": {"role": "assistant", "id": "a_me", "name": "Me", "metadata": {}},
+                },
+            )
         return httpx.Response(404)
 
     client = ChatClient(

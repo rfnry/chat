@@ -117,7 +117,6 @@ class HandlerSend:
             tool=ToolResult(id=tool_id, result=result, error=error),
         )
 
-
     def message_stream(
         self,
         *,
@@ -142,9 +141,7 @@ class HandlerSend:
         run_id: str | None,
     ) -> Stream:
         if self._client is None:
-            raise RuntimeError(
-                "streaming requires a ChatClient; HandlerSend was constructed without one"
-            )
+            raise RuntimeError("streaming requires a ChatClient; HandlerSend was constructed without one")
         effective_run_id = run_id or self._run_id
         if effective_run_id is None:
             raise RuntimeError(

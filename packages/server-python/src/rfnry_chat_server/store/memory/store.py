@@ -32,6 +32,9 @@ class InMemoryChatStore:
         # are provided at create-time; drives per-caller idempotent creation.
         self._thread_client_keys: dict[tuple[str, str], str] = {}
 
+    async def ensure_schema(self) -> None:
+        return
+
     # threads
 
     async def create_thread(

@@ -39,9 +39,7 @@ def _build_client() -> tuple[ChatClient, FakeSioClient]:
     sio.ack_replies["stream:start"] = {"ok": True}
     sio.ack_replies["stream:delta"] = {"ok": True}
     sio.ack_replies["stream:end"] = {"ok": True}
-    sio.ack_replies["event:send"] = {
-        "event": _event_payload("message", [{"type": "text", "text": "hello world"}])
-    }
+    sio.ack_replies["event:send"] = {"event": _event_payload("message", [{"type": "text", "text": "hello world"}])}
     client = ChatClient(
         base_url="http://chat.test",
         identity=me,
