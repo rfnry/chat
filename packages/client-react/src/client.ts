@@ -36,6 +36,7 @@ export class ChatClient {
   readonly url: string
   readonly path: string
   readonly socketPath: string
+  readonly identity: Identity | null
   private readonly rest: RestTransport
   private readonly socketTransport: SocketTransport
 
@@ -43,6 +44,7 @@ export class ChatClient {
     this.url = opts.url.replace(/\/$/, '')
     this.path = opts.path ?? '/chat'
     this.socketPath = opts.socketPath ?? '/chat/ws'
+    this.identity = opts.identity ?? null
 
     let authenticate = opts.authenticate
     if (!authenticate && opts.identity) {

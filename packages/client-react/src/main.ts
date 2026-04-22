@@ -45,7 +45,7 @@ export {
   ThreadConflictError,
   ThreadNotFoundError,
 } from './errors'
-export { useChatClient, useChatStore } from './hooks/useChatClient'
+export { useChatClient, useChatStore, useIdentity } from './hooks/useChatClient'
 export { useConnectionStatus } from './hooks/useConnectionStatus'
 export { type CreateThreadInput, useCreateThread } from './hooks/useCreateThread'
 export {
