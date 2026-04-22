@@ -21,9 +21,7 @@ class _SioClient(Protocol):
     async def disconnect(self) -> None: ...
     def on(self, event: str, handler: Any = ...) -> Any: ...
     async def emit(self, event: str, data: Any = ...) -> None: ...
-    async def call(
-        self, event: str, data: Any = ..., *, timeout: float | None = ...
-    ) -> Any: ...
+    async def call(self, event: str, data: Any = ..., *, timeout: float | None = ...) -> Any: ...
 
 
 class SocketTransportError(Exception):
@@ -94,21 +92,13 @@ class SocketTransport:
         _raise_if_error(reply)
         return reply
 
-    async def send_message(
-        self, thread_id: str, draft: dict[str, Any]
-    ) -> dict[str, Any]:
-        reply = await self._sio.call(
-            "message:send", {"thread_id": thread_id, "draft": draft}
-        )
+    async def send_message(self, thread_id: str, draft: dict[str, Any]) -> dict[str, Any]:
+        reply = await self._sio.call("message:send", {"thread_id": thread_id, "draft": draft})
         _raise_if_error(reply)
         return reply
 
-    async def send_event(
-        self, thread_id: str, event: dict[str, Any]
-    ) -> dict[str, Any]:
-        reply = await self._sio.call(
-            "event:send", {"thread_id": thread_id, "event": event}
-        )
+    async def send_event(self, thread_id: str, event: dict[str, Any]) -> dict[str, Any]:
+        reply = await self._sio.call("event:send", {"thread_id": thread_id, "event": event})
         _raise_if_error(reply)
         return reply
 
@@ -151,10 +141,12 @@ class SocketTransport:
         _raise_if_error(reply)
         return reply
 
-    async def send_stream_delta(self, frame: dict[str, Any]) -> dict[str, Any]:
-        reply = await self._sio.call("stream:delta", frame)
-        _raise_if_error(reply)
-        return reply
+    async def send_stream_delta(self, frame: dict[str, Any]) -> None:
+        # Fire-and-forget: token streams must not block on per-frame RTT.
+        # Awaiting an ack for every delta caps throughput at ~1/RTT tokens/sec
+        # (~200 tok/s at 5ms RTT). stream:start and stream:end keep using call
+        # because they need ordering/error signaling.
+        await self._sio.emit("stream:delta", frame)
 
     async def send_stream_end(self, frame: dict[str, Any]) -> dict[str, Any]:
         reply = await self._sio.call("stream:end", frame)

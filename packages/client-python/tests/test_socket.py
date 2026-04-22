@@ -42,9 +42,7 @@ async def test_join_thread_with_since_cursor() -> None:
     sio = _FakeSioClient()
     sio.ack_replies["thread:join"] = {"thread_id": "t_1", "replayed": [], "replay_truncated": False}
     transport = SocketTransport(base_url="http://chat.test", sio_client=sio)
-    await transport.join_thread(
-        "t_1", since={"created_at": "2026-04-21T00:00:00Z", "id": "evt_0"}
-    )
+    await transport.join_thread("t_1", since={"created_at": "2026-04-21T00:00:00Z", "id": "evt_0"})
     _event, data = sio.emitted[0]
     assert data["since"] == {"created_at": "2026-04-21T00:00:00Z", "id": "evt_0"}
 
@@ -105,3 +103,48 @@ async def test_disconnect_closes_socket() -> None:
     transport = SocketTransport(base_url="http://chat.test", sio_client=sio)
     await transport.disconnect()
     assert sio.disconnected is True
+
+
+async def test_send_stream_delta_uses_emit_not_call() -> None:
+    """Regression for R2: stream:delta must be fire-and-forget. Awaiting an
+    ack per token caps streaming throughput at 1/RTT."""
+    sio = _FakeSioClient()
+    transport = SocketTransport(base_url="http://chat.test", sio_client=sio)
+    await transport.send_stream_delta(
+        {
+            "event_id": "evt_1",
+            "thread_id": "t_1",
+            "text": "hello",
+        }
+    )
+    # Must use emit (no ack), NOT call (which awaits an ack)
+    assert sio.emit_calls == [("stream:delta", {"event_id": "evt_1", "thread_id": "t_1", "text": "hello"})]
+    assert sio.call_calls == [], "stream:delta must not block on ack"
+
+
+async def test_send_stream_start_uses_call_with_ack() -> None:
+    """stream:start must keep using call (needs ordering/error signaling)."""
+    sio = _FakeSioClient()
+    sio.ack_replies["stream:start"] = {"ok": True}
+    transport = SocketTransport(base_url="http://chat.test", sio_client=sio)
+    frame = {
+        "event_id": "evt_1",
+        "thread_id": "t_1",
+        "run_id": "run_1",
+        "target_type": "message",
+        "author": {"role": "user", "id": "u_1", "name": "U", "metadata": {}},
+    }
+    result = await transport.send_stream_start(frame)
+    assert result == {"ok": True}
+    assert sio.call_calls == [("stream:start", frame)]
+
+
+async def test_send_stream_end_uses_call_with_ack() -> None:
+    """stream:end must keep using call (needs ordering/error signaling)."""
+    sio = _FakeSioClient()
+    sio.ack_replies["stream:end"] = {"ok": True}
+    transport = SocketTransport(base_url="http://chat.test", sio_client=sio)
+    frame = {"event_id": "evt_1", "thread_id": "t_1"}
+    result = await transport.send_stream_end(frame)
+    assert result == {"ok": True}
+    assert sio.call_calls == [("stream:end", frame)]

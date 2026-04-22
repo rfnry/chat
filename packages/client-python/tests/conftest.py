@@ -14,7 +14,13 @@ class FakeSioClient:
         self.connected_auth: dict[str, Any] | None = None
         self.headers_sent: dict[str, str] | None = None
         self.handlers: dict[str, Any] = {}
+        # ``emitted`` captures ALL sio.emit() calls (fire-and-forget).
+        # ``call_calls`` captures ALL sio.call() calls (with ack).
+        # The legacy ``calls`` list is retained for backwards compat and is
+        # populated by ``call`` (same as ``call_calls``).
         self.emitted: list[tuple[str, Any]] = []
+        self.emit_calls: list[tuple[str, Any]] = []
+        self.call_calls: list[tuple[str, Any]] = []
         self.calls: list[tuple[str, Any]] = []
         self.ack_replies: dict[str, Any] = {}
         self.disconnected = False
@@ -40,17 +46,25 @@ class FakeSioClient:
 
     def on(self, event: str, handler: Any = None) -> Any:
         if handler is None:
+
             def decorator(fn: Any) -> Any:
                 self.handlers[event] = fn
                 return fn
+
             return decorator
         self.handlers[event] = handler
 
     async def emit(self, event: str, data: Any = None) -> None:
+        # Fire-and-forget: append to the general ``emitted`` log AND the
+        # emit-specific list so callers can distinguish the two call modes.
         self.emitted.append((event, data))
+        self.emit_calls.append((event, data))
 
     async def call(self, event: str, data: Any = None, *, timeout: float | None = None) -> Any:
+        # Awaited ack: populate the general ``emitted`` log AND both
+        # backwards-compat ``calls`` and new ``call_calls`` tracking lists.
         self.emitted.append((event, data))
+        self.call_calls.append((event, data))
         self.calls.append((event, data))
         if event in self.ack_replies:
             return self.ack_replies[event]

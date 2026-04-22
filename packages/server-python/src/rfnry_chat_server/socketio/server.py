@@ -448,36 +448,50 @@ class ThreadNamespace(socketio.AsyncNamespace):
             frame = StreamStartFrame.model_validate(data)
         except ValidationError as exc:
             return _error("invalid_request", str(exc))
+        # Cache the authorized thread in the session keyed by event_id so that
+        # on_stream_delta and on_stream_end can skip _access_check entirely —
+        # each delta would otherwise cost 2 DB round-trips (get_thread +
+        # membership) for data unchanged since stream:start.
+        session = await self.get_session(sid)
+        active: dict[str, Any] = session.setdefault("active_streams", {})
+        active[frame.event_id] = access
+        await self.save_session(sid, session)
         await self._server.broadcast_stream_start(frame, thread=access)
         return {"ok": True}
 
     async def on_stream_delta(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
-        identity = await _identity(self, sid)
+        # Validate the frame BEFORE session lookup so malformed frames return
+        # invalid_request, not not_found.
         thread_id = data.get("thread_id")
         if not isinstance(thread_id, str):
             return _error("invalid_request", "thread_id required")
-        access = await self._access_check(sid, identity, thread_id, action="stream.send")
-        if isinstance(access, dict):
-            return access
         try:
             frame = StreamDeltaFrame.model_validate(data)
         except ValidationError as exc:
             return _error("invalid_request", str(exc))
+        session = await self.get_session(sid)
+        access = session.get("active_streams", {}).get(frame.event_id)
+        if access is None:
+            return _error("not_found", "stream not started or already ended")
         await self._server.broadcast_stream_delta(frame, thread=access)
         return {"ok": True}
 
     async def on_stream_end(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
-        identity = await _identity(self, sid)
+        # Validate the frame BEFORE session lookup so malformed frames return
+        # invalid_request, not not_found.
         thread_id = data.get("thread_id")
         if not isinstance(thread_id, str):
             return _error("invalid_request", "thread_id required")
-        access = await self._access_check(sid, identity, thread_id, action="stream.send")
-        if isinstance(access, dict):
-            return access
         try:
             frame = StreamEndFrame.model_validate(data)
         except ValidationError as exc:
             return _error("invalid_request", str(exc))
+        session = await self.get_session(sid)
+        active: dict[str, Any] = session.get("active_streams", {})
+        access = active.pop(frame.event_id, None)
+        if access is None:
+            return _error("not_found", "stream not started or already ended")
+        await self.save_session(sid, session)
         await self._server.broadcast_stream_end(frame, thread=access)
         return {"ok": True}
 
