@@ -38,10 +38,10 @@ class FakeSioClient:
     def on(self, event: str, handler: Any = None) -> Any:
         if handler is None:
             def decorator(fn: Any) -> Any:
-                self.handlers.setdefault(event, []).append(fn)
+                self.handlers[event] = fn
                 return fn
             return decorator
-        self.handlers.setdefault(event, []).append(handler)
+        self.handlers[event] = handler
 
     async def emit(self, event: str, data: Any = None) -> None:
         self.emitted.append((event, data))

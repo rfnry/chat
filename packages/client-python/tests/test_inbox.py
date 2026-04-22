@@ -47,7 +47,7 @@ async def test_on_invited_fires_on_thread_invited_frame() -> None:
         received.append(frame)
 
     await client.connect()
-    raw = sio.handlers["thread:invited"][0]
+    raw = sio.handlers["thread:invited"]
     await raw(_invited_frame_dict())
     assert len(received) == 1
     assert received[0].thread.id == "th_1"
@@ -64,7 +64,7 @@ async def test_default_auto_join_invokes_thread_join() -> None:
         socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
     )
     await client.connect()
-    raw = sio.handlers["thread:invited"][0]
+    raw = sio.handlers["thread:invited"]
     await raw(_invited_frame_dict())
     # FakeSioClient records thread:join calls. Verify auto-join fired.
     joined = [c for c in sio.calls if c[0] == "thread:join"]

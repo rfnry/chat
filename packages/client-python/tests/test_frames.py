@@ -66,7 +66,7 @@ async def test_on_thread_updated_fires_on_frame() -> None:
         received.append(thread)
 
     await client.connect()
-    raw = sio.handlers["thread:updated"][0]
+    raw = sio.handlers["thread:updated"]
     await raw(_thread_payload())
 
     assert len(received) == 1
@@ -85,7 +85,7 @@ async def test_on_members_updated_fires_on_frame() -> None:
         received.append((thread_id, members))
 
     await client.connect()
-    raw = sio.handlers["members:updated"][0]
+    raw = sio.handlers["members:updated"]
     await raw(
         {
             "thread_id": "th_1",
@@ -115,7 +115,7 @@ async def test_on_run_updated_fires_on_frame() -> None:
         received.append(run)
 
     await client.connect()
-    raw = sio.handlers["run:updated"][0]
+    raw = sio.handlers["run:updated"]
     await raw(_run_payload(status="completed"))
 
     assert len(received) == 1

@@ -90,14 +90,6 @@ class ChatClient:
         self._dispatcher = Dispatcher(identity=identity, client=self)
         self._inbox = InboxDispatcher(client=self, auto_join=auto_join_on_invite)
         self._frames = FrameDispatcher()
-        self._attach_socket_handlers()
-
-    def _attach_socket_handlers(self) -> None:
-        self._socket.on_raw_event("event", self._dispatcher.feed)
-        self._socket.on_raw_event("thread:invited", self._inbox.feed)
-        self._socket.on_raw_event("thread:updated", self._frames.feed_thread_updated)
-        self._socket.on_raw_event("members:updated", self._frames.feed_members_updated)
-        self._socket.on_raw_event("run:updated", self._frames.feed_run_updated)
 
     @property
     def identity(self) -> Identity:
@@ -112,6 +104,11 @@ class ChatClient:
         return self._socket
 
     async def connect(self) -> None:
+        self._socket.on_raw_event("event", self._dispatcher.feed)
+        self._socket.on_raw_event("thread:invited", self._inbox.feed)
+        self._socket.on_raw_event("thread:updated", self._frames.feed_thread_updated)
+        self._socket.on_raw_event("members:updated", self._frames.feed_members_updated)
+        self._socket.on_raw_event("run:updated", self._frames.feed_run_updated)
         await self._socket.connect()
 
     async def disconnect(self) -> None:
@@ -168,8 +165,7 @@ class ChatClient:
             socketio_path=new_sio_path,
             authenticate=self._authenticate,
         )
-        self._attach_socket_handlers()
-        await self._socket.connect()
+        await self.connect()
 
     async def run(
         self,
