@@ -1,4 +1,5 @@
 import type {
+  ContentPart,
   Event,
   EventDraft,
   Identity,
@@ -151,6 +152,41 @@ export class ChatClient {
 
   removeMember(threadId: string, identityId: string): Promise<void> {
     return this.rest.removeMember(threadId, identityId)
+  }
+
+  /**
+   * Proactively open (or reuse) a thread, optionally invite a participant,
+   * join, and send a message. Returns the resulting thread and event.
+   *
+   * - If `threadId` is omitted, creates a new thread (this client becomes first member).
+   * - If `invite` is provided, adds them (add_member is idempotent server-side,
+   *   so no preflight is performed).
+   * - Joins the thread room.
+   * - Sends the message; recipients default to `[invite.id]` if invite was specified.
+   */
+  async openThreadWith(opts: {
+    message: ContentPart[]
+    invite?: Identity
+    threadId?: string
+    tenant?: Record<string, string>
+    metadata?: Record<string, unknown>
+    clientId?: string
+  }): Promise<{ thread: Thread; event: Event }> {
+    const thread = opts.threadId
+      ? await this.rest.getThread(opts.threadId)
+      : await this.rest.createThread({ tenant: opts.tenant, metadata: opts.metadata })
+    if (opts.invite) {
+      // add_member is idempotent server-side — no preflight.
+      await this.rest.addMember(thread.id, opts.invite)
+    }
+    await this.joinThread(thread.id)
+    const recipients = opts.invite ? [opts.invite.id] : null
+    const event = await this.rest.sendMessage(thread.id, {
+      clientId: opts.clientId ?? crypto.randomUUID(),
+      content: opts.message,
+      recipients,
+    })
+    return { thread, event }
   }
 
   getRun(runId: string): Promise<Run> {
