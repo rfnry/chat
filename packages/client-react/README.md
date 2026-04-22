@@ -22,11 +22,36 @@ optional callback:
 </ChatProvider>
 ```
 
-The callback receives only `(thread, addedBy)`. The invitee identity is
-implicit (it's the connected user), so it's dropped — unlike the Python
-client's `@on_invited` which hands over the full `ThreadInvitedFrame(thread,
-added_member, added_by)`. If you need `added_member` in React, read it off the
-socket directly via `client.on('thread:invited', ...)`.
+The `onThreadInvited` callback receives only `(thread, addedBy)` for
+ergonomics — the invitee identity is usually implicit (it's the connected
+user). **For the full frame including `addedMember`** — useful for group
+chats or when you need to distinguish who was added from who added them —
+use the `useInviteHandler` hook, which mirrors Python's `@on_invited`:
+
+```tsx
+import { useInviteHandler } from '@rfnry/chat-client-react'
+
+function InviteToaster() {
+  useInviteHandler((frame) => {
+    // frame.thread, frame.addedMember, frame.addedBy
+    toast(`${frame.addedBy.name} added ${frame.addedMember.name}`)
+  })
+  return null
+}
+```
+
+**To opt out of auto-join**, pass `autoJoinOnInvite={false}` to
+`ChatProvider`. The provider will hydrate thread metadata and fire
+`onThreadInvited` / `useInviteHandler` listeners, but will not call
+`client.joinThread(...)`; you're responsible for deciding whether to join
+(e.g. based on a policy check inside `useInviteHandler`). This mirrors
+Python's `auto_join_on_invite=False` opt-out.
+
+```tsx
+<ChatProvider url="…" authenticate={…} autoJoinOnInvite={false}>
+  …
+</ChatProvider>
+```
 
 ## Reconnecting with new options
 

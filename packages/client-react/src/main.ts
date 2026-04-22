@@ -60,6 +60,7 @@ export {
   useToolCallHandler,
   useToolResultHandler,
 } from './hooks/useHandler'
+export { type InviteHandler, useInviteHandler } from './hooks/useInviteHandler'
 export { useSuspenseThread } from './hooks/useSuspenseThread'
 export { type UseThreadActions, useThreadActions } from './hooks/useThreadActions'
 export { useThreadActiveRuns } from './hooks/useThreadActiveRuns'

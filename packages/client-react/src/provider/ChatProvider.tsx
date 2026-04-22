@@ -18,7 +18,23 @@ export type ChatProviderProps = ChatClientOptions & {
   queryClient?: QueryClient
   fallback?: ReactNode
   errorFallback?: ReactNode
+  /**
+   * Convenience callback for the common "someone added me to a thread" case.
+   * Receives only `(thread, addedBy)` — the invitee identity is implicit (it's
+   * the connected user). If you need the full frame including `addedMember`
+   * (e.g. for group-chat invites where you care which user was added), use
+   * the `useInviteHandler` hook instead.
+   */
   onThreadInvited?: (thread: Thread, addedBy: Identity) => void
+  /**
+   * When a `thread:invited` frame arrives, automatically call
+   * `client.joinThread(frame.thread.id)` so live event delivery starts
+   * immediately. Defaults to `true`, mirroring Python's
+   * `auto_join_on_invite=True`. Set to `false` if you want to inspect the
+   * frame first (via `useInviteHandler` or `client.on('thread:invited',
+   * ...)`) and decide whether to join.
+   */
+  autoJoinOnInvite?: boolean
 }
 
 export function ChatProvider(props: ChatProviderProps) {
@@ -28,11 +44,14 @@ export function ChatProvider(props: ChatProviderProps) {
     fallback,
     errorFallback,
     onThreadInvited,
+    autoJoinOnInvite = true,
     ...clientOpts
   } = props
   const optsRef = useRef(clientOpts)
   const onThreadInvitedRef = useRef(onThreadInvited)
   onThreadInvitedRef.current = onThreadInvited
+  const autoJoinRef = useRef(autoJoinOnInvite)
+  autoJoinRef.current = autoJoinOnInvite
   const [value, setValue] = useState<ChatContextValue | null>(null)
   const [failed, setFailed] = useState(false)
   const qcRef = useRef<QueryClient>(externalQc ?? new QueryClient())
@@ -76,7 +95,9 @@ export function ChatProvider(props: ChatProviderProps) {
           client.on('thread:invited', (data) => {
             const frame = toThreadInvitedFrame(data as never)
             store.getState().actions.setThreadMeta(frame.thread)
-            void client.joinThread(frame.thread.id).catch(() => {})
+            if (autoJoinRef.current) {
+              void client.joinThread(frame.thread.id).catch(() => {})
+            }
             qcRef.current.invalidateQueries({ queryKey: ['chat', 'threads'] })
             onThreadInvitedRef.current?.(frame.thread, frame.addedBy)
           }),
