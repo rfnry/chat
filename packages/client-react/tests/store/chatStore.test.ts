@@ -106,4 +106,37 @@ describe('chatStore', () => {
     store.getState().actions.setConnectionStatus('connected')
     expect(store.getState().connectionStatus).toBe('connected')
   })
+
+  it('addEvent in-order arrival produces sorted array', () => {
+    const store = createChatStore()
+    store.getState().actions.addEvent(makeMessage('e1', 'th_1', '2026-04-10T00:00:01Z'))
+    store.getState().actions.addEvent(makeMessage('e2', 'th_1', '2026-04-10T00:00:02Z'))
+    store.getState().actions.addEvent(makeMessage('e3', 'th_1', '2026-04-10T00:00:03Z'))
+    expect(store.getState().events.th_1?.map((e) => e.id)).toEqual(['e1', 'e2', 'e3'])
+  })
+
+  it('addEvent out-of-order arrival still produces sorted result', () => {
+    const store = createChatStore()
+    store.getState().actions.addEvent(makeMessage('e1', 'th_1', '2026-04-10T00:00:01Z'))
+    store.getState().actions.addEvent(makeMessage('e3', 'th_1', '2026-04-10T00:00:03Z'))
+    store.getState().actions.addEvent(makeMessage('e2', 'th_1', '2026-04-10T00:00:02Z'))
+    expect(store.getState().events.th_1?.map((e) => e.id)).toEqual(['e1', 'e2', 'e3'])
+  })
+
+  it('addEvent dedupes: re-adding same id does not create duplicate', () => {
+    const store = createChatStore()
+    store.getState().actions.addEvent(makeMessage('e1', 'th_1', '2026-04-10T00:00:01Z'))
+    store.getState().actions.addEvent(makeMessage('e2', 'th_1', '2026-04-10T00:00:02Z'))
+    store.getState().actions.addEvent(makeMessage('e1', 'th_1', '2026-04-10T00:00:01Z'))
+    expect(store.getState().events.th_1?.map((e) => e.id)).toEqual(['e1', 'e2'])
+  })
+
+  it('addEvent tie-break by id when createdAt is equal', () => {
+    const store = createChatStore()
+    const ts = '2026-04-10T00:00:00Z'
+    store.getState().actions.addEvent(makeMessage('e_b', 'th_1', ts))
+    store.getState().actions.addEvent(makeMessage('e_a', 'th_1', ts))
+    store.getState().actions.addEvent(makeMessage('e_c', 'th_1', ts))
+    expect(store.getState().events.th_1?.map((e) => e.id)).toEqual(['e_a', 'e_b', 'e_c'])
+  })
 })

@@ -30,6 +30,22 @@ function compareEvents(a: Event, b: Event): number {
   return a.id.localeCompare(b.id)
 }
 
+function insertSorted(sorted: Event[], event: Event): Event[] {
+  const n = sorted.length
+  if (n === 0) return [event]
+  // Hot path: events arrive in order — append at the end is the common case.
+  if (compareEvents(sorted[n - 1]!, event) <= 0) return [...sorted, event]
+  // Out-of-order arrival: binary search for the insert point.
+  let lo = 0
+  let hi = n
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if (compareEvents(sorted[mid]!, event) <= 0) lo = mid + 1
+    else hi = mid
+  }
+  return [...sorted.slice(0, lo), event, ...sorted.slice(lo)]
+}
+
 const initialState = (): Omit<ChatStoreState, 'actions'> => ({
   events: {},
   members: {},
@@ -47,7 +63,7 @@ export function createChatStore() {
         set((state) => {
           const existing = state.events[event.threadId] ?? []
           if (existing.some((e) => e.id === event.id)) return state
-          const next = [...existing, event].sort(compareEvents)
+          const next = insertSorted(existing, event)
           let activeRuns = state.activeRuns
           if (
             (event.type === 'run.completed' ||
