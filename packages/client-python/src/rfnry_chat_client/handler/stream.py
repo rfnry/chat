@@ -6,14 +6,12 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal
 
 from rfnry_chat_protocol import (
-    AssistantIdentity,
     Identity,
     MessageEvent,
     ReasoningEvent,
     StreamDeltaFrame,
     StreamEndFrame,
     StreamError,
-    StreamStartFrame,
     StreamTargetType,
     TextPart,
 )
@@ -33,11 +31,6 @@ class Stream:
         target_type: StreamTargetType,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        if not isinstance(author, AssistantIdentity):
-            raise ValueError(
-                "streaming requires an AssistantIdentity; got role="
-                f"{author.role}"
-            )
         self._client = client
         self._thread_id = thread_id
         self._run_id = run_id
@@ -58,16 +51,20 @@ class Stream:
         return self._finalized
 
     async def __aenter__(self) -> Stream:
-        frame = StreamStartFrame(
-            event_id=self._event_id,
-            thread_id=self._thread_id,
-            run_id=self._run_id,
-            target_type=self._target_type,
-            author=self._author,
-        )
-        await self._client.socket.send_stream_start(
-            frame.model_dump(mode="json", by_alias=True)
-        )
+        # Build the wire payload directly. `StreamStartFrame.author` is typed
+        # as `AssistantIdentity` in the shared protocol schema, but
+        # client-side we do not runtime-gate on role — the server is the
+        # authority on who may stream. Every identity variant serializes to
+        # the same shape, so skipping the pydantic model here preserves the
+        # wire contract without reintroducing a role gate.
+        payload: dict[str, Any] = {
+            "event_id": self._event_id,
+            "thread_id": self._thread_id,
+            "run_id": self._run_id,
+            "target_type": self._target_type,
+            "author": self._author.model_dump(mode="json"),
+        }
+        await self._client.socket.send_stream_start(payload)
         self._started = True
         return self
 

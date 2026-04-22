@@ -133,17 +133,46 @@ async def test_reasoning_stream_final_event_is_reasoning() -> None:
     assert final_payload["event"]["content"] == "deciding"
 
 
-def test_stream_requires_assistant_identity() -> None:
-    client, _ = _build_client()
+async def test_stream_allows_non_assistant_identity() -> None:
+    """Any identity can stream — role is server-validated, not client-gated.
+
+    Mirrors React's compile-time-only restriction: the TypeScript type system
+    narrows the author, but there is no runtime block. The server remains the
+    authority on who is permitted to stream in a given thread.
+    """
+    client, sio = _build_client()
     user = UserIdentity(id="u_human", name="Human")
-    with pytest.raises(ValueError, match="AssistantIdentity"):
-        Stream(
-            client=client,
-            thread_id="t_1",
-            run_id="run_1",
-            author=user,
-            target_type="message",
-        )
+
+    now = datetime.now(UTC).isoformat()
+    sio.ack_replies["event:send"] = {
+        "event": {
+            "id": "evt_stream",
+            "thread_id": "t_1",
+            "run_id": "run_1",
+            "author": user.model_dump(mode="json"),
+            "created_at": now,
+            "metadata": {},
+            "client_id": None,
+            "recipients": None,
+            "type": "message",
+            "content": [{"type": "text", "text": "hi"}],
+        }
+    }
+
+    async with Stream(
+        client=client,
+        thread_id="t_1",
+        run_id="run_1",
+        author=user,
+        target_type="message",
+    ) as s:
+        await s.write("hi")
+
+    events = [name for name, _ in sio.emitted]
+    assert events == ["stream:start", "stream:delta", "stream:end", "event:send"]
+    start_frame = next(payload for name, payload in sio.emitted if name == "stream:start")
+    assert start_frame["author"]["role"] == "user"
+    assert start_frame["author"]["id"] == "u_human"
 
 
 async def test_handler_send_message_stream_requires_run() -> None:

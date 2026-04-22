@@ -105,7 +105,7 @@ async def reply(ctx, send):
         await client.end_run(run.id)
 ```
 
-Streaming requires `self.identity` to be an `AssistantIdentity`.
+Streaming is available to any connected identity (users, assistants, system).
 
 ## Proactive flows
 
