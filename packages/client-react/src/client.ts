@@ -32,19 +32,33 @@ export type ChatClientOptions = {
 
 export type { Page } from './transport/rest'
 
+type ResolvedTransports = {
+  rest: RestTransport
+  socketTransport: SocketTransport
+}
+
+type ListenerEntry = {
+  event: string
+  handler: (data: unknown) => void
+}
+
 export class ChatClient {
-  readonly url: string
-  readonly path: string
-  readonly socketPath: string
-  readonly identity: Identity | null
-  private readonly rest: RestTransport
-  private readonly socketTransport: SocketTransport
+  url: string
+  path: string
+  socketPath: string
+  identity: Identity | null
+  private rest: RestTransport
+  private socketTransport: SocketTransport
+  private fetchImpl: typeof fetch | undefined
+  private authenticateFn: (() => Promise<AuthenticatePayload>) | undefined
+  private readonly listeners: ListenerEntry[] = []
 
   constructor(opts: ChatClientOptions) {
     this.url = opts.url.replace(/\/$/, '')
     this.path = opts.path ?? '/chat'
     this.socketPath = opts.socketPath ?? '/chat/ws'
     this.identity = opts.identity ?? null
+    this.fetchImpl = opts.fetchImpl
 
     let authenticate = opts.authenticate
     if (!authenticate && opts.identity) {
@@ -58,6 +72,7 @@ export class ChatClient {
         headers: { 'x-rfnry-identity': encoded },
       })
     }
+    this.authenticateFn = authenticate
 
     const authHeaders = authenticate
       ? async () => (await authenticate!()).headers ?? {}
@@ -74,6 +89,24 @@ export class ChatClient {
       socketPath: this.socketPath,
       authenticate,
     })
+  }
+
+  private _buildTransports(): ResolvedTransports {
+    const authHeaders = this.authenticateFn
+      ? async () => (await this.authenticateFn!()).headers ?? {}
+      : undefined
+    const rest = new RestTransport({
+      baseUrl: this.url,
+      path: this.path,
+      fetchImpl: this.fetchImpl,
+      authenticate: authHeaders,
+    })
+    const socketTransport = new SocketTransport({
+      baseUrl: this.url,
+      socketPath: this.socketPath,
+      authenticate: this.authenticateFn,
+    })
+    return { rest, socketTransport }
   }
 
   createThread(input: {
@@ -190,8 +223,71 @@ export class ChatClient {
     return this.socketTransport.disconnect()
   }
 
+  /**
+   * Tear down the current transports and rebuild them with new options,
+   * preserving any listeners previously registered via `client.on(event, handler)`.
+   *
+   * Any option omitted keeps its current value. After this resolves the
+   * socket is reconnected and all prior listeners have been re-attached to
+   * the new socket — consumers do NOT need to re-register handlers.
+   */
+  async reconnect(
+    opts: {
+      url?: string
+      authenticate?: () => Promise<AuthenticatePayload>
+      identity?: Identity | null
+      path?: string
+      socketPath?: string
+      fetchImpl?: typeof fetch
+    } = {}
+  ): Promise<void> {
+    await this.socketTransport.disconnect()
+
+    if (opts.url !== undefined) this.url = opts.url.replace(/\/$/, '')
+    if (opts.path !== undefined) this.path = opts.path
+    if (opts.socketPath !== undefined) this.socketPath = opts.socketPath
+    if (opts.fetchImpl !== undefined) this.fetchImpl = opts.fetchImpl
+    if (opts.identity !== undefined) this.identity = opts.identity
+    if (opts.authenticate !== undefined) {
+      this.authenticateFn = opts.authenticate
+    } else if (opts.identity !== undefined && opts.identity !== null) {
+      // Mirror the constructor's default-authenticate behaviour when a new
+      // identity is supplied without an explicit authenticate function.
+      const identity = opts.identity
+      const encoded = btoa(JSON.stringify(identity))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+      this.authenticateFn = async () => ({
+        auth: { identity },
+        headers: { 'x-rfnry-identity': encoded },
+      })
+    }
+
+    const { rest, socketTransport } = this._buildTransports()
+    this.rest = rest
+    this.socketTransport = socketTransport
+
+    await this.socketTransport.connect()
+
+    for (const entry of this.listeners) {
+      this.socketTransport.on(entry.event, entry.handler)
+    }
+  }
+
   on(event: string, handler: (data: unknown) => void): () => void {
-    return this.socketTransport.on(event, handler)
+    const entry: ListenerEntry = { event, handler }
+    this.listeners.push(entry)
+    this.socketTransport.on(event, handler)
+    return () => {
+      const idx = this.listeners.indexOf(entry)
+      if (idx !== -1) this.listeners.splice(idx, 1)
+      // Detach from whichever transport is current — on reconnect we swap in
+      // a new socket and the old closure's `off()` would be a no-op on the
+      // now-null old socket.
+      const sock = this.socketTransport.rawSocket
+      if (sock) sock.off(event, handler)
+    }
   }
 
   joinThread(
