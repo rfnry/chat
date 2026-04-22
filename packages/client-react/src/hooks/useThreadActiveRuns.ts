@@ -1,15 +1,18 @@
 import type { Run } from '@rfnry/chat-protocol'
-import { useMemo, useSyncExternalStore } from 'react'
+import { useStore } from 'zustand'
+import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from './useChatClient'
 
 const EMPTY: Run[] = []
 
 export function useThreadActiveRuns(threadId: string | null): Run[] {
   const store = useChatStore()
-  const runs = useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => (threadId ? store.getState().activeRuns[threadId] : undefined),
-    () => undefined
+  return useStore(
+    store,
+    useShallow((state) => {
+      if (!threadId) return EMPTY
+      const runs = state.activeRuns[threadId]
+      return runs ? Object.values(runs) : EMPTY
+    })
   )
-  return useMemo(() => (runs ? Object.values(runs) : EMPTY), [runs])
 }

@@ -75,7 +75,6 @@ export function createChatStore() {
             activeRuns = { ...activeRuns, [event.threadId]: threadRuns }
           }
           return {
-            ...state,
             events: { ...state.events, [event.threadId]: next },
             activeRuns,
           }
@@ -86,7 +85,7 @@ export function createChatStore() {
           for (const e of state.events[threadId] ?? []) map.set(e.id, e)
           for (const e of events) map.set(e.id, e)
           const merged = Array.from(map.values()).sort(compareEvents)
-          return { ...state, events: { ...state.events, [threadId]: merged } }
+          return { events: { ...state.events, [threadId]: merged } }
         }),
       clearThreadEvents: (threadId) =>
         set((state) => {
@@ -94,16 +93,14 @@ export function createChatStore() {
           nextEvents[threadId] = []
           const nextActive = { ...state.activeRuns }
           nextActive[threadId] = {}
-          return { ...state, events: nextEvents, activeRuns: nextActive }
+          return { events: nextEvents, activeRuns: nextActive }
         }),
       setMembers: (threadId, members) =>
         set((state) => ({
-          ...state,
           members: { ...state.members, [threadId]: members },
         })),
       setThreadMeta: (thread) =>
         set((state) => ({
-          ...state,
           threadMeta: { ...state.threadMeta, [thread.id]: thread },
         })),
       upsertRun: (run) =>
@@ -115,7 +112,6 @@ export function createChatStore() {
             delete threadRuns[run.id]
           }
           return {
-            ...state,
             activeRuns: { ...state.activeRuns, [run.threadId]: threadRuns },
           }
         }),
@@ -123,15 +119,15 @@ export function createChatStore() {
         set((state) => {
           const next = new Set(state.joinedThreads)
           next.add(threadId)
-          return { ...state, joinedThreads: next }
+          return { joinedThreads: next }
         }),
       removeJoinedThread: (threadId) =>
         set((state) => {
           const next = new Set(state.joinedThreads)
           next.delete(threadId)
-          return { ...state, joinedThreads: next }
+          return { joinedThreads: next }
         }),
-      setConnectionStatus: (status) => set((state) => ({ ...state, connectionStatus: status })),
+      setConnectionStatus: (status) => set(() => ({ connectionStatus: status })),
       reset: () => set(() => ({ ...initialState() })),
     },
   }))

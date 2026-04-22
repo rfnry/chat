@@ -1,6 +1,6 @@
 import type { Thread } from '@rfnry/chat-protocol'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { useSyncExternalStore } from 'react'
+import { useStore } from 'zustand'
 import { useChatClient, useChatStore } from './useChatClient'
 
 /**
@@ -41,11 +41,7 @@ export function useSuspenseThread(threadId: string): Thread {
     },
   })
 
-  const live = useSyncExternalStore(
-    (cb) => store.subscribe(cb),
-    () => store.getState().threadMeta[threadId],
-    () => store.getState().threadMeta[threadId]
-  )
+  const live = useStore(store, (state) => state.threadMeta[threadId])
 
   return live ?? initial
 }
