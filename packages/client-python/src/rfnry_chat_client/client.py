@@ -245,25 +245,31 @@ class ChatClient:
         *,
         triggered_by_event_id: str | None = None,
         idempotency_key: str | None = None,
-    ) -> Run:
+    ) -> str:
+        """Open a Run and return its id. Use `get_run(id)` to fetch the full
+        Run object if needed."""
         reply = await self._socket.begin_run(
             thread_id,
             triggered_by_event_id=triggered_by_event_id,
             idempotency_key=idempotency_key,
         )
-        return await self._rest.get_run(reply["run_id"])
+        return reply["run_id"]
 
     async def end_run(
         self,
         run_id: str,
         *,
         error: RunError | None = None,
-    ) -> Run:
+    ) -> None:
+        """Close a Run. Use `get_run(id)` afterward if you need the final state."""
         payload: dict[str, Any] | None = None
         if error is not None:
             payload = {"code": error.code, "message": error.message}
-        reply = await self._socket.end_run(run_id, error=payload)
-        return await self._rest.get_run(reply["run_id"])
+        await self._socket.end_run(run_id, error=payload)
+
+    async def get_run(self, run_id: str) -> Run:
+        """Fetch the current state of a Run by id."""
+        return await self._rest.get_run(run_id)
 
     async def add_member(self, thread_id: str, identity: Identity, role: str = "member") -> ThreadMember:
         return await self._rest.add_member(thread_id, identity=identity, role=role)

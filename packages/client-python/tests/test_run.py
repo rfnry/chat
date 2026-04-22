@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 import pytest
 from conftest import FakeSioClient
-from rfnry_chat_protocol import AssistantIdentity
+from rfnry_chat_protocol import AssistantIdentity, Run
 
 from rfnry_chat_client.client import ChatClient
 from rfnry_chat_client.transport.socket import SocketTransport
@@ -109,3 +110,61 @@ async def test_run_disconnects_when_on_connect_raises() -> None:
     with pytest.raises(RuntimeError, match="boom"):
         await client.run(on_connect=on_connect)
     assert sio.disconnected is True
+
+
+async def test_begin_run_returns_run_id_string() -> None:
+    """R12.2: begin_run returns the run_id as a string, not a hydrated Run.
+    Saves the extra REST GET previously needed for hydration."""
+    sio = FakeSioClient()
+    sio.ack_replies["run:begin"] = {"run_id": "run_abc", "status": "running"}
+    client = _build_client(sio)
+
+    result = await client.begin_run("t_1", triggered_by_event_id="evt_1")
+    assert result == "run_abc", f"expected str run_id, got {result!r}"
+    assert isinstance(result, str), f"expected str, got {type(result).__name__}"
+
+
+async def test_end_run_returns_none() -> None:
+    """R12.2: end_run returns None (was: hydrated Run via extra REST GET)."""
+    sio = FakeSioClient()
+    sio.ack_replies["run:end"] = {"run_id": "run_abc", "status": "completed"}
+    client = _build_client(sio)
+
+    result = await client.end_run("run_abc")
+    assert result is None, f"expected None, got {result!r}"
+
+
+async def test_get_run_returns_hydrated_run() -> None:
+    """R12.2: callers that need the full Run object call get_run(id)
+    explicitly. This is the only path that pays the REST GET cost."""
+    now = datetime.now(UTC).isoformat()
+    run_payload = {
+        "id": "run_abc",
+        "thread_id": "t_1",
+        "actor": {"role": "assistant", "id": "a_me", "name": "Me", "metadata": {}},
+        "triggered_by": {"role": "assistant", "id": "a_me", "name": "Me", "metadata": {}},
+        "status": "running",
+        "started_at": now,
+        "completed_at": None,
+        "error": None,
+        "idempotency_key": None,
+        "metadata": {},
+    }
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == "/chat/runs/run_abc"
+        return httpx.Response(200, json=run_payload)
+
+    sio = FakeSioClient()
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=AssistantIdentity(id="a_me", name="Me"),
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+
+    run = await client.get_run("run_abc")
+    assert isinstance(run, Run), f"expected Run, got {type(run).__name__}"
+    assert run.id == "run_abc"
+    assert run.status == "running"

@@ -172,13 +172,13 @@ async def test_client_streams_message(live_server: tuple[str, Any]) -> None:
 
     @client.on_message()
     async def reply(ctx: HandlerContext, send: HandlerSend) -> None:
-        run = await client.begin_run(ctx.event.thread_id, triggered_by_event_id=ctx.event.id)
+        run_id = await client.begin_run(ctx.event.thread_id, triggered_by_event_id=ctx.event.id)
         try:
-            async with send.message_stream(run_id=run.id) as stream:
+            async with send.message_stream(run_id=run_id) as stream:
                 await stream.write("hello ")
                 await stream.write("world")
         finally:
-            await client.end_run(run.id)
+            await client.end_run(run_id)
 
     stream_frames: list[tuple[str, dict[str, Any]]] = []
 
