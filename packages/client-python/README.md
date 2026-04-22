@@ -112,10 +112,10 @@ Streaming is available to any connected identity (users, assistants, system).
 Two helpers for agents that initiate conversations (webhook-triggered pings, cron-driven alerts, etc.):
 
 ```python
-# Open (or reuse) a thread, optionally invite a user, join, send a message — in one call.
+# Open (or reuse) a thread, optionally invite a participant, join, send a message — in one call.
 thread, event = await client.open_thread_with(
     message=[TextPart(text="Disk usage on api-03 crossed 90%.")],
-    user=UserIdentity(id="u_alice", name="Alice"),   # optional
+    invite=UserIdentity(id="u_alice", name="Alice"), # optional
     thread_id=existing_thread_id_or_None,            # optional; creates if None
     tenant={"org": "acme"},                          # optional
 )

@@ -270,17 +270,18 @@ class ChatClient:
         self,
         *,
         message: list[ContentPart],
-        user: Identity | None = None,
+        invite: Identity | None = None,
         thread_id: str | None = None,
         tenant: dict[str, str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> tuple[Thread, Event]:
-        """Proactively open (or reuse) a thread, optionally invite a user, and send a message.
+        """Proactively open (or reuse) a thread, optionally invite a participant, and send a message.
 
         - If ``thread_id`` is None, creates a new thread (this client becomes first member).
-        - If ``user`` is provided and not already a member, adds them.
+        - If ``invite`` is provided, adds them (add_member is idempotent server-side,
+          so no preflight is performed).
         - Joins the thread room (idempotent).
-        - Sends the message, recipients defaulting to ``[user.id]`` if user was specified.
+        - Sends the message, recipients defaulting to ``[invite.id]`` if invite was specified.
 
         Returns ``(thread, sent_event)``.
         """
@@ -289,14 +290,14 @@ class ChatClient:
         else:
             thread = await self._rest.get_thread(thread_id)
 
-        if user is not None:
+        if invite is not None:
             # add_member is idempotent server-side (ON CONFLICT DO NOTHING);
             # no pre-flight needed.
-            await self.add_member(thread.id, user)
+            await self.add_member(thread.id, invite)
 
         await self.join_thread(thread.id)
 
-        recipients = [user.id] if user is not None else None
+        recipients = [invite.id] if invite is not None else None
         event = await self.send_message(
             thread.id, content=message, recipients=recipients
         )

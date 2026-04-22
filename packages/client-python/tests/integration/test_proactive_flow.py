@@ -38,7 +38,7 @@ def _authenticate_as(identity_id: str) -> Any:
 async def test_bot_open_thread_with_triggers_on_invited_and_delivers_message(
     live_server: tuple[str, Any],
 ) -> None:
-    """Bot calls open_thread_with(user=alice, message=...).
+    """Bot calls open_thread_with(invite=alice, message=...).
 
     Asserts:
       - Alice's on_invited handler fires exactly once with the right frame.
@@ -75,7 +75,7 @@ async def test_bot_open_thread_with_triggers_on_invited_and_delivers_message(
     try:
         thread, _sent_event = await bot.open_thread_with(
             message=[TextPart(text="ping from bot")],
-            user=ALICE,
+            invite=ALICE,
         )
 
         # Wait for the inbox frame.

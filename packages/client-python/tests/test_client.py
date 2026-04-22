@@ -298,7 +298,7 @@ async def test_open_thread_with_creates_thread_adds_user_joins_and_sends() -> No
 
     thread, event = await client.open_thread_with(
         message=[TextPart(text="ping")],
-        user=UserIdentity(id="u_alice", name="Alice"),
+        invite=UserIdentity(id="u_alice", name="Alice"),
     )
 
     assert thread.id == "th_new"
@@ -351,7 +351,7 @@ async def test_open_thread_with_calls_add_member_without_preflight() -> None:
 
     await client.open_thread_with(
         message=[TextPart(text="ping")],
-        user=UserIdentity(id="u_alice", name="Alice"),
+        invite=UserIdentity(id="u_alice", name="Alice"),
     )
 
     assert get_members_hits == 0, "should not preflight with GET /members — add_member is idempotent"

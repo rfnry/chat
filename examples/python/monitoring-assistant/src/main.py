@@ -57,7 +57,7 @@ async def ping_user(body: PingUserRequest) -> dict[str, str]:
 
     thread, event = await client.open_thread_with(
         message=[TextPart(text=body.message)],
-        user=user,
+        invite=user,
         thread_id=body.thread_id,
     )
     logger.info("pinged user=%s thread=%s event=%s", body.user_id, thread.id, event.id)
