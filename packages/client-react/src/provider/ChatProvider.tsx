@@ -37,10 +37,10 @@ export type ChatProviderProps = ChatClientOptions & {
   autoJoinOnInvite?: boolean
 }
 
-function identitiesEqual(a?: Identity | null, b?: Identity | null): boolean {
+export function identitiesEqual(a?: Identity | null, b?: Identity | null): boolean {
   if (a === b) return true
-  if (!a || !b) return false
-  return JSON.stringify(a) === JSON.stringify(b)
+  if (a == null || b == null) return a == null && b == null
+  return a.id === b.id && a.role === b.role && a.name === b.name
 }
 
 export function ChatProvider(props: ChatProviderProps) {
