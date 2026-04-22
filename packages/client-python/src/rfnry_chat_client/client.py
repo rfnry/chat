@@ -191,6 +191,8 @@ class ChatClient:
                         connect_backoff_seconds * (2 ** (attempt - 1)),
                         max_backoff_seconds,
                     )
+                    # Floored jitter in [0.5 * base, 1.5 * base) — exponential growth with
+                    # a 1x-wide spread that breaks lockstep across a fleet of clients.
                     delay = base * (0.5 + random.random())
                     await asyncio.sleep(delay)
         if last_error is not None:

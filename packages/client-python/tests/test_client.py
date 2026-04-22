@@ -333,13 +333,17 @@ async def test_run_uses_exponential_backoff_with_jitter(monkeypatch: pytest.Monk
         socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
     )
 
+    BACKOFF = 0.1
     with pytest.raises(ConnectionError):
-        await client.run(connect_retries=6, connect_backoff_seconds=0.1, max_backoff_seconds=2.0)
+        await client.run(connect_retries=6, connect_backoff_seconds=BACKOFF, max_backoff_seconds=2.0)
 
     # 6 retries → 5 sleeps (no sleep after the last failed attempt before raising)
     assert len(sleeps) == 5, f"expected 5 sleeps for 6 retries, got {len(sleeps)}"
-    # The trend should be growing — last sleep larger than first
-    assert sleeps[-1] > sleeps[0], f"backoff did not grow: {sleeps}"
+    # At least one sleep must exceed attempt-1's max jitter (0.1 * 1.5 = 0.15),
+    # which proves the exponential growth actually kicked in for some attempt > 1.
+    assert max(sleeps) > BACKOFF * 1.5, (
+        f"all sleeps within attempt-1 jitter range; exponential growth did not occur: {sleeps}"
+    )
     # +50% jitter ceiling on max_backoff_seconds=2.0 → max possible 3.0
     assert max(sleeps) <= 3.0, f"jitter exceeded ceiling: {sleeps}"
     # -50% jitter floor on the smallest base 0.1 → min possible 0.05
