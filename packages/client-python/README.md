@@ -99,17 +99,20 @@ async def reply(ctx, send):
     if False:  # keep handler a generator; no actual yield needed
         yield  # pragma: no cover
 
-# Manual: coroutine handler opens its own run.
+# Manual: coroutine handler opens its own run. begin_run returns the
+# run_id directly; call client.get_run(run_id) if you need the full Run.
 @client.on_message()
 async def reply(ctx, send):
-    run = await client.begin_run(ctx.event.thread_id, triggered_by_event_id=ctx.event.id)
+    run_id = await client.begin_run(ctx.event.thread_id, triggered_by_event_id=ctx.event.id)
     try:
-        async with send.message_stream(run_id=run.id) as stream:
+        async with send.message_stream(run_id=run_id) as stream:
             async for token in my_llm.stream(ctx.event):
                 await stream.write(token)
     finally:
-        await client.end_run(run.id)
+        await client.end_run(run_id)
 ```
+
+`begin_run` returns the `run_id` as a string (saving an HTTP round-trip). If you need the hydrated `Run` object — e.g. for status reporting — call `await client.get_run(run_id)` explicitly.
 
 Streaming is available to any connected identity (users, assistants, system).
 
