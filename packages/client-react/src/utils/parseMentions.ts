@@ -15,7 +15,7 @@ export type ParseMentionsResult = {
 }
 
 /**
- * Extract `@name` mentions from text, resolve them to assistant ids, and
+ * Extract `@name` mentions from text, resolve them to **assistant** ids, and
  * return both the deduped recipient ids (for the wire) and the positional
  * spans (for local render highlighting).
  *
@@ -25,9 +25,11 @@ export type ParseMentionsResult = {
  *   does not emit a span, since it does not resolve to a single identity.
  * - Unknown mentions are silently ignored.
  * - Recipients are deduped, preserving first-seen order.
- * - Non-assistant identities are always ignored.
+ * - Non-assistant identities are always ignored — this helper intentionally
+ *   narrows to the "summon an agent" UX. If you need general member mentions
+ *   (user-to-user, etc.), write a separate helper; do not use this one.
  */
-export function parseMentions(text: string, members: Identity[]): ParseMentionsResult {
+export function parseAssistantMentions(text: string, members: Identity[]): ParseMentionsResult {
   const assistants = members.filter((m): m is AssistantIdentity => m.role === 'assistant')
   const byLowercaseName = new Map<string, AssistantIdentity>()
   for (const a of assistants) {
