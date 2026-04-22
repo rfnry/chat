@@ -32,6 +32,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS runs_active_per_actor
   ON runs (thread_id, (actor->>'id'))
   WHERE status IN ('pending', 'running');
 CREATE INDEX IF NOT EXISTS runs_thread ON runs (thread_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS runs_active_started
+  ON runs (started_at)
+  WHERE status IN ('pending', 'running');
 
 CREATE TABLE IF NOT EXISTS events (
   id           TEXT PRIMARY KEY,

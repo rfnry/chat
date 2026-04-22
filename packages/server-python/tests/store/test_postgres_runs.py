@@ -99,6 +99,23 @@ async def test_idempotency_key_partial_unique(store: PostgresChatStore) -> None:
         await store.create_run(_new_run(id="run_2", idempotency_key="key_a"))
 
 
+async def test_runs_active_started_index_exists(clean_db: asyncpg.Pool) -> None:
+    """Regression for R13: the watchdog sweep query (status IN
+    ('pending','running') AND started_at < threshold) must be backed by a
+    partial index. Without it, the sweep is a sequential scan over the
+    full runs table and gets unusably slow under load."""
+    s = PostgresChatStore(pool=clean_db)
+    await s.ensure_schema()
+    async with clean_db.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT indexname FROM pg_indexes
+            WHERE tablename = 'runs' AND indexname = 'runs_active_started'
+            """
+        )
+    assert len(rows) == 1, "runs_active_started partial index must exist"
+
+
 async def test_create_run_returns_persisted_state_via_returning(
     store: PostgresChatStore,
 ) -> None:
