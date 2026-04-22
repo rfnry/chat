@@ -162,20 +162,23 @@ class ChatServer:
 
     async def _sweep_stale_runs(self) -> None:
         threshold = datetime.now(UTC) - timedelta(seconds=self.run_timeout_seconds)
-        stale = await self.store.find_runs_started_before(
-            threshold=threshold,
-        )
-        for run in stale:
+        stale = await self.store.find_runs_started_before(threshold=threshold)
+        if not stale:
+            return
+
+        async def _timeout_one(run_id: str) -> None:
             try:
                 await self.end_run(
-                    run_id=run.id,
+                    run_id=run_id,
                     error=RunError(
                         code="timeout",
                         message=f"run exceeded {self.run_timeout_seconds}s without end signal",
                     ),
                 )
             except Exception:
-                _log.exception("watchdog failed to timeout run %s", run.id)
+                _log.exception("watchdog failed to timeout run %s", run_id)
+
+        await asyncio.gather(*(_timeout_one(run.id) for run in stale))
 
     def on(
         self,

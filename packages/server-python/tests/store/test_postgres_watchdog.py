@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from datetime import UTC, datetime, timedelta
 
 import asyncpg
 import pytest
 from rfnry_chat_protocol import AssistantIdentity, Run, Thread, UserIdentity
 
+from rfnry_chat_server.server.chat_server import ChatServer
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 
 
@@ -65,6 +68,47 @@ async def test_honors_limit(store: PostgresChatStore) -> None:
         limit=3,
     )
     assert len(stale) == 3
+
+
+async def test_watchdog_sweep_processes_stale_runs_concurrently(clean_db: asyncpg.Pool) -> None:
+    """R14: watchdog must process stale runs concurrently. With 10 stale
+    runs and a 50ms-per-update delay, the sweep should finish in ~50ms,
+    not ~500ms."""
+    store = PostgresChatStore(pool=clean_db)
+    await store.ensure_schema()
+
+    original = store.update_run_status
+
+    async def slow_update(*args: object, **kwargs: object) -> object:
+        await asyncio.sleep(0.05)
+        return await original(*args, **kwargs)  # type: ignore[arg-type]
+
+    store.update_run_status = slow_update  # type: ignore[method-assign]
+
+    server = ChatServer(store=store, authenticate=lambda _hs: None, run_timeout_seconds=0)
+
+    now = datetime.now(UTC)
+    thread = Thread(id="th_conc", tenant={}, metadata={}, created_at=now, updated_at=now)
+    await store.create_thread(thread)
+
+    past = datetime.now(UTC) - timedelta(seconds=30)
+    for i in range(10):
+        actor = AssistantIdentity(id=f"a_x_{i}", name=f"X{i}")
+        run = Run(
+            id=f"run_conc_{i}",
+            thread_id=thread.id,
+            actor=actor,
+            triggered_by=actor,
+            status="running",
+            started_at=past,
+        )
+        await store.create_run(run)
+
+    start = time.monotonic()
+    await server._sweep_stale_runs()
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 0.20, f"sweep took {elapsed:.3f}s — looks serial (would be ~0.5s)"
 
 
 async def test_find_runs_started_before_uses_partial_index(clean_db: asyncpg.Pool) -> None:
