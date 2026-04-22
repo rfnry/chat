@@ -452,6 +452,12 @@ class ThreadNamespace(socketio.AsyncNamespace):
         # on_stream_delta and on_stream_end can skip _access_check entirely —
         # each delta would otherwise cost 2 DB round-trips (get_thread +
         # membership) for data unchanged since stream:start.
+        #
+        # python-socketio's get_session returns the live in-process dict (not a
+        # copy); mutating `active` here is immediately visible to concurrent
+        # frames on the same sid. save_session is the explicit write barrier
+        # but is not the only thing preserving the mutation. If anyone "cleans
+        # up" by deep-copying, concurrent streams will silently lose updates.
         session = await self.get_session(sid)
         active: dict[str, Any] = session.setdefault("active_streams", {})
         active[frame.event_id] = access
