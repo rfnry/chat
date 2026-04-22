@@ -1,5 +1,4 @@
 import type {
-  AssistantIdentity,
   Event,
   EventDraft,
   Identity,
@@ -182,7 +181,7 @@ export class ChatClient {
   streamMessage(opts: {
     threadId: string
     runId: string
-    author: AssistantIdentity
+    author: Identity
     metadata?: Record<string, unknown>
     onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
   }): Stream {
@@ -200,7 +199,7 @@ export class ChatClient {
   streamReasoning(opts: {
     threadId: string
     runId: string
-    author: AssistantIdentity
+    author: Identity
     metadata?: Record<string, unknown>
     onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
   }): Stream {

@@ -1,11 +1,11 @@
-import type { AssistantIdentity, MessageEvent, ReasoningEvent } from '@rfnry/chat-protocol'
+import type { Identity, MessageEvent, ReasoningEvent } from '@rfnry/chat-protocol'
 import type { SocketTransport } from './transport/socket'
 
 export type StreamOptions = {
   socket: SocketTransport
   threadId: string
   runId: string
-  author: AssistantIdentity
+  author: Identity
   targetType: 'message' | 'reasoning'
   metadata?: Record<string, unknown>
   onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
@@ -16,7 +16,7 @@ export class Stream {
   private readonly socket: SocketTransport
   private readonly threadId: string
   private readonly runId: string
-  private readonly author: AssistantIdentity
+  private readonly author: Identity
   private readonly targetType: 'message' | 'reasoning'
   private readonly metadata: Record<string, unknown>
   private readonly onFinalEvent?: StreamOptions['onFinalEvent']
@@ -113,7 +113,7 @@ function randomHex(bytes: number): string {
   return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-function authorWire(identity: AssistantIdentity): Record<string, unknown> {
+function authorWire(identity: Identity): Record<string, unknown> {
   return {
     role: identity.role,
     id: identity.id,

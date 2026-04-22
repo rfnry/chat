@@ -1,5 +1,4 @@
 import type {
-  AssistantIdentity,
   Event,
   EventDraft,
   Identity,
@@ -24,13 +23,13 @@ export type UseThreadActions = {
   cancelRun: (runId: string) => Promise<void>
   streamMessage: (opts: {
     runId: string
-    author: AssistantIdentity
+    author: Identity
     metadata?: Record<string, unknown>
     onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
   }) => Stream
   streamReasoning: (opts: {
     runId: string
-    author: AssistantIdentity
+    author: Identity
     metadata?: Record<string, unknown>
     onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
   }) => Stream
