@@ -6,6 +6,7 @@ from rfnry_chat_client.errors import (
     ThreadConflictError,
     ThreadNotFoundError,
 )
+from rfnry_chat_client.frames import FrameDispatcher
 from rfnry_chat_client.handler.context import HandlerContext
 from rfnry_chat_client.handler.send import HandlerSend
 from rfnry_chat_client.handler.stream import Stream
@@ -23,6 +24,7 @@ __all__ = [
     "ChatHttpError",
     "ClientFactory",
     "Dispatcher",
+    "FrameDispatcher",
     "HandlerCallable",
     "HandlerContext",
     "HandlerSend",

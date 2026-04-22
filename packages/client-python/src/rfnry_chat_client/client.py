@@ -19,6 +19,12 @@ from rfnry_chat_protocol import (
 )
 
 from rfnry_chat_client.dispatch import Dispatcher
+from rfnry_chat_client.frames import (
+    FrameDispatcher,
+    MembersUpdatedHandler,
+    RunUpdatedHandler,
+    ThreadUpdatedHandler,
+)
 from rfnry_chat_client.handler.types import HandlerCallable
 from rfnry_chat_client.inbox import InboxDispatcher, InviteHandler
 from rfnry_chat_client.transport.rest import RestTransport
@@ -82,6 +88,7 @@ class ChatClient:
         )
         self._dispatcher = Dispatcher(identity=identity, client=self)
         self._inbox = InboxDispatcher(client=self, auto_join=auto_join_on_invite)
+        self._frames = FrameDispatcher()
 
     @property
     def identity(self) -> Identity:
@@ -98,6 +105,9 @@ class ChatClient:
     async def connect(self) -> None:
         self._socket.on_raw_event("event", self._dispatcher.feed)
         self._socket.on_raw_event("thread:invited", self._inbox.feed)
+        self._socket.on_raw_event("thread:updated", self._frames.feed_thread_updated)
+        self._socket.on_raw_event("members:updated", self._frames.feed_members_updated)
+        self._socket.on_raw_event("run:updated", self._frames.feed_run_updated)
         await self._socket.connect()
 
     async def disconnect(self) -> None:
@@ -341,6 +351,30 @@ class ChatClient:
     def on_invited(self) -> Callable[[InviteHandler], InviteHandler]:
         def decorator(handler: InviteHandler) -> InviteHandler:
             return self._inbox.register(handler)
+
+        return decorator
+
+    def on_thread_updated(
+        self,
+    ) -> Callable[[ThreadUpdatedHandler], ThreadUpdatedHandler]:
+        def decorator(handler: ThreadUpdatedHandler) -> ThreadUpdatedHandler:
+            return self._frames.register_thread_updated(handler)
+
+        return decorator
+
+    def on_members_updated(
+        self,
+    ) -> Callable[[MembersUpdatedHandler], MembersUpdatedHandler]:
+        def decorator(handler: MembersUpdatedHandler) -> MembersUpdatedHandler:
+            return self._frames.register_members_updated(handler)
+
+        return decorator
+
+    def on_run_updated(
+        self,
+    ) -> Callable[[RunUpdatedHandler], RunUpdatedHandler]:
+        def decorator(handler: RunUpdatedHandler) -> RunUpdatedHandler:
+            return self._frames.register_run_updated(handler)
 
         return decorator
 
