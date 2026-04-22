@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+import pytest
 from conftest import FakeSioClient
 from rfnry_chat_protocol import AssistantIdentity, TextPart, UserIdentity
 
@@ -310,6 +311,39 @@ async def test_open_thread_with_creates_thread_adds_user_joins_and_sends() -> No
     assert len(sent) == 1
     assert sent[0][1]["draft"]["content"][0]["text"] == "ping"
     assert sent[0][1]["draft"]["recipients"] == ["u_alice"]
+
+
+async def test_run_uses_exponential_backoff_with_jitter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """run() retries must back off exponentially with jitter — not a fixed
+    interval. Regression for R6a (thundering-herd risk when many agents
+    reconnect simultaneously after a server restart)."""
+    sleeps: list[float] = []
+
+    async def fake_sleep(delay: float) -> None:
+        sleeps.append(delay)
+
+    monkeypatch.setattr("rfnry_chat_client.client.asyncio.sleep", fake_sleep)
+
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient(connect_raises=ConnectionError("nope"))
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+    )
+
+    with pytest.raises(ConnectionError):
+        await client.run(connect_retries=6, connect_backoff_seconds=0.1, max_backoff_seconds=2.0)
+
+    # 6 retries → 5 sleeps (no sleep after the last failed attempt before raising)
+    assert len(sleeps) == 5, f"expected 5 sleeps for 6 retries, got {len(sleeps)}"
+    # The trend should be growing — last sleep larger than first
+    assert sleeps[-1] > sleeps[0], f"backoff did not grow: {sleeps}"
+    # +50% jitter ceiling on max_backoff_seconds=2.0 → max possible 3.0
+    assert max(sleeps) <= 3.0, f"jitter exceeded ceiling: {sleeps}"
+    # -50% jitter floor on the smallest base 0.1 → min possible 0.05
+    assert min(sleeps) >= 0.05, f"jitter dropped too low: {sleeps}"
 
 
 async def test_open_thread_with_calls_add_member_without_preflight() -> None:

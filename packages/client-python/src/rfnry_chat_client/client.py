@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import random
 import secrets
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -172,6 +173,7 @@ class ChatClient:
         *,
         connect_retries: int = 50,
         connect_backoff_seconds: float = 0.2,
+        max_backoff_seconds: float = 30.0,
         on_connect: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         last_error: BaseException | None = None
@@ -184,7 +186,13 @@ class ChatClient:
             except Exception as exc:
                 last_error = exc
                 _log.debug("connect retry=%d: %s", attempt, exc)
-                await asyncio.sleep(connect_backoff_seconds)
+                if attempt < connect_retries:
+                    base = min(
+                        connect_backoff_seconds * (2 ** (attempt - 1)),
+                        max_backoff_seconds,
+                    )
+                    delay = base * (0.5 + random.random())
+                    await asyncio.sleep(delay)
         if last_error is not None:
             raise ConnectionError(
                 f"failed to connect after {connect_retries} attempts"

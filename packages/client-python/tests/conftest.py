@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 
 class FakeSioClient:
-    def __init__(self) -> None:
+    def __init__(self, *, connect_raises: Exception | None = None) -> None:
         self.connected_url: str | None = None
         self.connected_auth: dict[str, Any] | None = None
         self.headers_sent: dict[str, str] | None = None
@@ -18,6 +18,7 @@ class FakeSioClient:
         self.calls: list[tuple[str, Any]] = []
         self.ack_replies: dict[str, Any] = {}
         self.disconnected = False
+        self._connect_raises = connect_raises
 
     async def connect(
         self,
@@ -28,6 +29,8 @@ class FakeSioClient:
         transports: list[str] | None = None,
         socketio_path: str | None = None,
     ) -> None:
+        if self._connect_raises is not None:
+            raise self._connect_raises
         self.connected_url = url
         self.connected_auth = auth
         self.headers_sent = headers
