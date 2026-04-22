@@ -41,6 +41,19 @@ async def main() -> None:
     await uvicorn.Server(uvicorn.Config(asgi, host="0.0.0.0", port=8000)).serve()
 ```
 
+## Production deployment
+
+When streaming is the dominant workload — most events are `stream:delta` frames carrying a few tens of bytes of LLM tokens — disable WebSocket per-message compression at the ASGI server. Uvicorn enables `permessage-deflate` by default, which adds CPU overhead per frame with near-zero size benefit on payloads below the deflate window. Larger payloads (history replay over REST) compress fine at the HTTP layer.
+
+```python
+await uvicorn.Server(uvicorn.Config(
+    asgi,
+    host="0.0.0.0",
+    port=8000,
+    ws_per_message_deflate=False,
+)).serve()
+```
+
 ## Server-side handlers
 
 The server exposes a generic dispatcher so you can react to any event type directly from the server process. Handlers take `(ctx, send)` and may either observe (no yield) or emit events (yield from `send`). Emitted events are authored by the server's `SystemIdentity`.
