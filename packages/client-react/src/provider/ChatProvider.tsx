@@ -37,6 +37,12 @@ export type ChatProviderProps = ChatClientOptions & {
   autoJoinOnInvite?: boolean
 }
 
+function identitiesEqual(a?: Identity | null, b?: Identity | null): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
 export function ChatProvider(props: ChatProviderProps) {
   const {
     children,
@@ -55,10 +61,13 @@ export function ChatProvider(props: ChatProviderProps) {
   const [value, setValue] = useState<ChatContextValue | null>(null)
   const [failed, setFailed] = useState(false)
   const qcRef = useRef<QueryClient>(externalQc ?? new QueryClient())
+  const clientRef = useRef<ChatClient | null>(null)
+  const lastOptsRef = useRef({ url: clientOpts.url, identity: clientOpts.identity ?? null })
 
   useEffect(() => {
     const client = new ChatClient(optsRef.current)
     const store = createChatStore()
+    clientRef.current = client
     const disposers: Array<() => void> = []
 
     let cancelled = false
@@ -102,6 +111,30 @@ export function ChatProvider(props: ChatProviderProps) {
             onThreadInvitedRef.current?.(frame.thread, frame.addedBy)
           })
         )
+        disposers.push(
+          client.on('thread:cleared', (data) => {
+            const payload = data as { thread_id: string }
+            if (typeof payload?.thread_id === 'string') {
+              store.getState().actions.clearThreadEvents(payload.thread_id)
+            }
+          })
+        )
+        disposers.push(
+          client.on('thread:created', (data) => {
+            const thread = toThread(data as never)
+            store.getState().actions.setThreadMeta(thread)
+            qcRef.current.invalidateQueries({ queryKey: ['chat', 'threads'] })
+          })
+        )
+        disposers.push(
+          client.on('thread:deleted', (data) => {
+            const payload = data as { thread_id: string }
+            if (typeof payload?.thread_id === 'string') {
+              store.getState().actions.clearThreadEvents(payload.thread_id)
+              qcRef.current.invalidateQueries({ queryKey: ['chat', 'threads'] })
+            }
+          })
+        )
 
         setValue({ client, store })
       } catch {
@@ -117,8 +150,42 @@ export function ChatProvider(props: ChatProviderProps) {
       for (const dispose of disposers) dispose()
       void client.disconnect()
       store.getState().actions.reset()
+      clientRef.current = null
     }
   }, [])
+
+  // Reactive reconnect: when url or identity change after initial mount, swap
+  // identity on the existing client via `client.reconnect()` instead of letting
+  // the consumer force a full remount via `key`. This keeps a single socket
+  // per tab for its lifetime, even across role/workspace switches — old
+  // sockets never stack up on the server. Listeners are re-registered
+  // automatically by the client inside reconnect().
+  useEffect(() => {
+    const last = lastOptsRef.current
+    const nextIdentity = clientOpts.identity ?? null
+    if (clientOpts.url === last.url && identitiesEqual(nextIdentity, last.identity)) {
+      return
+    }
+    lastOptsRef.current = { url: clientOpts.url, identity: nextIdentity }
+
+    const client = clientRef.current
+    const currentValue = value
+    if (!client || !currentValue) return
+
+    const store = currentValue.store
+    store.getState().actions.reset()
+    qcRef.current.invalidateQueries({ queryKey: ['chat'] })
+
+    void (async () => {
+      store.getState().actions.setConnectionStatus('connecting')
+      try {
+        await client.reconnect({ url: clientOpts.url, identity: nextIdentity })
+        store.getState().actions.setConnectionStatus('connected')
+      } catch {
+        store.getState().actions.setConnectionStatus('disconnected')
+      }
+    })()
+  }, [clientOpts.url, clientOpts.identity, value])
 
   let body: ReactNode
   if (value) {

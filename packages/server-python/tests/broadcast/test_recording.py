@@ -116,5 +116,3 @@ async def test_recording_broadcaster_records_thread_invited() -> None:
 
     assert b.thread_invited == [frame]
     assert b.thread_invited_with_namespace == [(frame, "/A")]
-
-

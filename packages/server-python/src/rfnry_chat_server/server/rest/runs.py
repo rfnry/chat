@@ -22,8 +22,6 @@ def build_router() -> APIRouter:
         thread = await server.store.get_thread(run.thread_id)
         if thread is None or not matches(thread.tenant, identity_tenant(identity)):
             raise HTTPException(status_code=404, detail="run not found")
-        if not await server.store.is_member(run.thread_id, identity.id):
-            raise HTTPException(status_code=403, detail="not a member of this thread")
         if not await server.check_authorize(identity, run.thread_id, "thread.read"):
             raise HTTPException(status_code=403, detail="not authorized: thread.read")
         return run
@@ -41,8 +39,6 @@ def build_router() -> APIRouter:
         thread = await server.store.get_thread(run.thread_id)
         if thread is None or not matches(thread.tenant, identity_tenant(identity)):
             raise HTTPException(status_code=404, detail="run not found")
-        if not await server.store.is_member(run.thread_id, identity.id):
-            raise HTTPException(status_code=403, detail="not a member of this thread")
         if not await server.check_authorize(identity, run.thread_id, "run.cancel"):
             raise HTTPException(status_code=403, detail="not authorized: run.cancel")
         await server.cancel_run(run_id=run_id)

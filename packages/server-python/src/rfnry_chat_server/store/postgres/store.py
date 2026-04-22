@@ -26,12 +26,19 @@ class PostgresChatStore:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def create_thread(self, thread: Thread) -> Thread:
+    async def create_thread(
+        self,
+        thread: Thread,
+        *,
+        caller_identity_id: str | None = None,
+        client_id: str | None = None,
+    ) -> Thread:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO threads (id, tenant, metadata, created_at, updated_at)
-                VALUES ($1, $2::jsonb, $3::jsonb, $4, $5)
+                INSERT INTO threads (id, tenant, metadata, created_at, updated_at,
+                                     caller_identity_id, client_id)
+                VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7)
                 RETURNING id, tenant, metadata, created_at, updated_at
                 """,
                 thread.id,
@@ -39,6 +46,8 @@ class PostgresChatStore:
                 json.dumps(thread.metadata),
                 thread.created_at,
                 thread.updated_at,
+                caller_identity_id,
+                client_id,
             )
         assert row is not None
         return _row_to_thread(row)
@@ -48,6 +57,19 @@ class PostgresChatStore:
             row = await conn.fetchrow(
                 "SELECT id, tenant, metadata, created_at, updated_at FROM threads WHERE id = $1",
                 thread_id,
+            )
+        return _row_to_thread(row) if row else None
+
+    async def find_thread_by_client_id(self, caller_identity_id: str, client_id: str) -> Thread | None:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, tenant, metadata, created_at, updated_at
+                FROM threads
+                WHERE caller_identity_id = $1 AND client_id = $2
+                """,
+                caller_identity_id,
+                client_id,
             )
         return _row_to_thread(row) if row else None
 
@@ -150,6 +172,10 @@ class PostgresChatStore:
                 event_id,
             )
         return _row_to_event(row) if row else None
+
+    async def clear_events(self, thread_id: str) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute("DELETE FROM events WHERE thread_id = $1", thread_id)
 
     async def list_events(
         self,

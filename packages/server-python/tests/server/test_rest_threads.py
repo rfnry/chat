@@ -148,6 +148,57 @@ async def test_rest_rejects_identity_missing_namespace_key(
         assert "namespace" in r.text.lower()
 
 
+async def test_post_threads_same_client_id_is_idempotent(client: AsyncClient) -> None:
+    first = await client.post(
+        "/chat/threads",
+        json={"tenant": {"org": "A"}, "client_id": "ck-stable"},
+    )
+    assert first.status_code == 201
+    first_id = first.json()["id"]
+
+    second = await client.post(
+        "/chat/threads",
+        json={"tenant": {"org": "A"}, "client_id": "ck-stable"},
+    )
+    assert second.status_code == 200
+    assert second.json()["id"] == first_id
+
+
+async def test_post_threads_client_id_scoped_per_caller(clean_db: asyncpg.Pool) -> None:
+    alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
+    bob = UserIdentity(id="u_bob", name="Bob", metadata={"tenant": {"org": "A"}})
+    store = PostgresChatStore(pool=clean_db)
+
+    alice_app = _build_app(store, alice)
+    bob_app = _build_app(store, bob)
+
+    async with AsyncClient(transport=ASGITransport(app=alice_app), base_url="http://test") as alice_client:
+        a_resp = await alice_client.post(
+            "/chat/threads",
+            json={"tenant": {"org": "A"}, "client_id": "ck-shared"},
+        )
+    assert a_resp.status_code == 201
+    alice_thread_id = a_resp.json()["id"]
+
+    async with AsyncClient(transport=ASGITransport(app=bob_app), base_url="http://test") as bob_client:
+        b_resp = await bob_client.post(
+            "/chat/threads",
+            json={"tenant": {"org": "A"}, "client_id": "ck-shared"},
+        )
+    assert b_resp.status_code == 201
+    assert b_resp.json()["id"] != alice_thread_id
+
+
+async def test_post_threads_without_client_id_creates_fresh_each_time(
+    client: AsyncClient,
+) -> None:
+    r1 = await client.post("/chat/threads", json={"tenant": {"org": "A"}})
+    r2 = await client.post("/chat/threads", json={"tenant": {"org": "A"}})
+    assert r1.status_code == 201
+    assert r2.status_code == 201
+    assert r1.json()["id"] != r2.json()["id"]
+
+
 async def test_delete_thread(client: AsyncClient) -> None:
     create = await client.post("/chat/threads", json={"tenant": {"org": "A"}})
     thread_id = create.json()["id"]
@@ -161,3 +212,51 @@ async def test_delete_thread(client: AsyncClient) -> None:
 
     get_resp = await client.get(f"/chat/threads/{thread_id}")
     assert get_resp.status_code == 404
+
+
+async def test_clear_thread_events_wipes_history_keeps_thread(client: AsyncClient) -> None:
+    create = await client.post("/chat/threads", json={"tenant": {"org": "A"}})
+    thread_id = create.json()["id"]
+    await client.post(
+        f"/chat/threads/{thread_id}/messages",
+        json={"client_id": "m1", "content": [{"type": "text", "text": "hi"}]},
+    )
+    await client.post(
+        f"/chat/threads/{thread_id}/messages",
+        json={"client_id": "m2", "content": [{"type": "text", "text": "again"}]},
+    )
+    events = await client.get(f"/chat/threads/{thread_id}/events")
+    assert len(events.json()["items"]) == 2
+
+    resp = await client.delete(f"/chat/threads/{thread_id}/events")
+    assert resp.status_code == 204
+
+    # Thread still exists
+    get_resp = await client.get(f"/chat/threads/{thread_id}")
+    assert get_resp.status_code == 200
+    # History is gone
+    events = await client.get(f"/chat/threads/{thread_id}/events")
+    assert events.json()["items"] == []
+
+
+async def test_clear_thread_events_404_on_unknown_thread(client: AsyncClient) -> None:
+    resp = await client.delete("/chat/threads/th_nope/events")
+    assert resp.status_code == 404
+
+
+async def test_clear_thread_events_tenant_mismatch_404(clean_db: asyncpg.Pool) -> None:
+    alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
+    bob = UserIdentity(id="u_bob", name="Bob", metadata={"tenant": {"org": "B"}})
+
+    alice_store = PostgresChatStore(pool=clean_db)
+    alice_app = _build_app(alice_store, alice)
+    async with AsyncClient(transport=ASGITransport(app=alice_app), base_url="http://test") as alice_client:
+        create = await alice_client.post("/chat/threads", json={"tenant": {"org": "A"}})
+        thread_id = create.json()["id"]
+
+    # Bob's identity tenant doesn't match the thread
+    bob_store = PostgresChatStore(pool=clean_db)
+    bob_app = _build_app(bob_store, bob)
+    async with AsyncClient(transport=ASGITransport(app=bob_app), base_url="http://test") as bob_client:
+        resp = await bob_client.delete(f"/chat/threads/{thread_id}/events")
+        assert resp.status_code == 404

@@ -38,9 +38,7 @@ async def setup(
 
     server = ChatServer(store=store, authenticate=auth, broadcaster=rec)
     now = datetime.now(UTC)
-    await store.create_thread(
-        Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now)
-    )
+    await store.create_thread(Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now))
     return server, rec, "th_1"
 
 
@@ -149,9 +147,7 @@ async def test_chain_depth_cap_stops_runaway(
     await server.publish_event(_user_reasoning(thread_id, "start"))
     await _drain_background_tasks()
 
-    reasoning_by_system = [
-        e for e in rec.events if e.type == "reasoning" and e.author.role == "system"
-    ]
+    reasoning_by_system = [e for e in rec.events if e.type == "reasoning" and e.author.role == "system"]
     assert 0 < len(reasoning_by_system) <= 8
 
 
@@ -169,9 +165,7 @@ async def test_system_authored_events_do_not_retrigger(
     await server.publish_event(_user_message(thread_id, "hi"))
     await _drain_background_tasks()
     assert call_count["value"] == 1
-    system_messages = [
-        e for e in rec.events if e.type == "message" and e.author.role == "system"
-    ]
+    system_messages = [e for e in rec.events if e.type == "message" and e.author.role == "system"]
     assert len(system_messages) == 1
 
 
@@ -190,9 +184,7 @@ async def test_system_identity_override(clean_db: asyncpg.Pool) -> None:
         system_identity=custom_system,
     )
     now = datetime.now(UTC)
-    await store.create_thread(
-        Thread(id="th_sys", tenant={}, metadata={}, created_at=now, updated_at=now)
-    )
+    await store.create_thread(Thread(id="th_sys", tenant={}, metadata={}, created_at=now, updated_at=now))
 
     @server.on("message")
     async def handler(_ctx: HandlerContext, send: HandlerSend):

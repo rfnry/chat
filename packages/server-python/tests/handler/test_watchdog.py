@@ -32,9 +32,7 @@ async def setup(
         watchdog_interval_seconds=0.1,
     )
     now = datetime.now(UTC)
-    await store.create_thread(
-        Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now)
-    )
+    await store.create_thread(Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now))
     return server, rec, "th_1"
 
 

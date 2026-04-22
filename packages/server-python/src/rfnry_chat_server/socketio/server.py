@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import secrets
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -29,16 +30,18 @@ if TYPE_CHECKING:
 
 DEFAULT_REPLAY_CAP = 500
 
-_SERVER_LIFECYCLE_TYPES = frozenset({
-    "thread.created",
-    "thread.member_added",
-    "thread.member_removed",
-    "thread.tenant_changed",
-    "run.started",
-    "run.completed",
-    "run.failed",
-    "run.cancelled",
-})
+_SERVER_LIFECYCLE_TYPES = frozenset(
+    {
+        "thread.created",
+        "thread.member_added",
+        "thread.member_removed",
+        "thread.tenant_changed",
+        "run.started",
+        "run.completed",
+        "run.failed",
+        "run.cancelled",
+    }
+)
 
 
 def thread_room(thread_id: str) -> str:
@@ -81,6 +84,11 @@ class ThreadNamespace(socketio.AsyncNamespace):
         # Maps sid -> concrete namespace path; populated in trigger_event when
         # the namespace was registered with the "*" wildcard.
         self._sid_namespaces: dict[str, str] = {}
+        # Maps sid -> Identity for every authenticated socket. Populated in
+        # on_connect, popped in on_disconnect. Used by ChatServer.publish_*
+        # methods to fan tenant-scoped frames (thread:created etc.) to the
+        # right subset of connected clients without polling.
+        self._sid_identities: dict[str, Identity] = {}
 
     # ------------------------------------------------------------------
     # Dispatch
@@ -202,12 +210,29 @@ class ThreadNamespace(socketio.AsyncNamespace):
             else:
                 await self.save_session(sid, {"identity": identity})
                 await self.enter_room(sid, f"inbox:{identity.id}")
+            self._sid_identities[sid] = identity
         except socketio.exceptions.ConnectionRefusedError:
             self._sid_namespaces.pop(sid, None)
+            self._sid_identities.pop(sid, None)
             raise
 
     async def on_disconnect(self, sid: str) -> None:
+        self._sid_identities.pop(sid, None)
         return None
+
+    def connected_identities(self) -> list[tuple[str, str, Identity]]:
+        """Snapshot of (sid, concrete_namespace, identity) for every currently
+        authenticated socket. Copied so callers can iterate without mutation
+        races while the socket.io event loop keeps processing connects."""
+        out: list[tuple[str, str, Identity]] = []
+        for sid, identity in self._sid_identities.items():
+            ns = self._sid_namespaces.get(sid) or self.namespace
+            if ns == "*":
+                # Shouldn't happen — wildcard-registered sids always land a
+                # concrete namespace via trigger_event. Skip defensively.
+                continue
+            out.append((sid, ns, identity))
+        return out
 
     async def _check_namespace_match(self, sid: str, thread_tenant: dict[str, str]) -> bool:
         """Return True if the thread's tenant agrees with the session's
@@ -233,8 +258,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
             return _error("not_found", "thread not found")
         if not await self._check_namespace_match(sid, thread.tenant):
             return _error("not_found", "thread not found")
-        if not await self._server.store.is_member(thread_id, identity.id):
-            return _error("forbidden", "not a member of this thread")
         if not await self._server.check_authorize(identity, thread_id, "thread.read"):
             return _error("forbidden", "not authorized: thread.read")
 
@@ -284,8 +307,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
             return _error("not_found", "thread not found")
         if not await self._check_namespace_match(sid, thread.tenant):
             return _error("not_found", "thread not found")
-        if not await self._server.store.is_member(thread_id, identity.id):
-            return _error("forbidden", "not a member of this thread")
         if not await self._server.check_authorize(identity, thread_id, "message.send"):
             return _error("forbidden", "not authorized: message.send")
 
@@ -328,8 +349,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
             return _error("not_found", "run not found")
         if not await self._check_namespace_match(sid, thread.tenant):
             return _error("not_found", "run not found")
-        if not await self._server.store.is_member(run.thread_id, identity.id):
-            return _error("forbidden", "not a member of this thread")
         if not await self._server.check_authorize(identity, run.thread_id, "run.cancel"):
             return _error("forbidden", "not authorized: run.cancel")
         await self._server.cancel_run(run_id=run_id)
@@ -475,8 +494,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
             return _error("not_found", "thread not found")
         if not await self._check_namespace_match(sid, thread.tenant):
             return _error("not_found", "thread not found")
-        if not await self._server.store.is_member(thread_id, identity.id):
-            return _error("forbidden", "not a member of this thread")
         if not await self._server.check_authorize(identity, thread_id, action):
             return _error("forbidden", f"not authorized: {action}")
         return thread
@@ -507,8 +524,24 @@ class ChatSocketIO:
     def sio(self) -> socketio.AsyncServer:
         return self._sio
 
+    def connected_identities(self) -> list[tuple[str, str, Identity]]:
+        return self._namespace.connected_identities()
+
     def asgi_app(self, other_asgi_app: Any = None) -> Any:
-        return socketio.ASGIApp(self._sio, other_asgi_app, socketio_path=self._socketio_path)
+        inner = socketio.ASGIApp(self._sio, other_asgi_app, socketio_path=self._socketio_path)
+        return _suppress_ws_shutdown_cancel(inner)
+
+
+def _suppress_ws_shutdown_cancel(inner: Any) -> Any:
+    async def app(scope: dict[str, Any], receive: Any, send: Any) -> Any:
+        try:
+            return await inner(scope, receive, send)
+        except asyncio.CancelledError:
+            if scope.get("type") == "websocket":
+                return None
+            raise
+
+    return app
 
 
 def _build_handshake(environ: dict[str, Any], auth: Any) -> HandshakeData:

@@ -79,6 +79,47 @@ class SocketIOBroadcaster:
             namespace=namespace or "/",
         )
 
+    async def broadcast_thread_cleared(
+        self,
+        thread_id: str,
+        *,
+        namespace: str | None = None,
+    ) -> None:
+        await self._sio.emit(
+            "thread:cleared",
+            {"thread_id": thread_id},
+            room=_thread_room(thread_id),
+            namespace=namespace or "/",
+        )
+
+    async def broadcast_thread_created_to_sids(
+        self,
+        thread: Thread,
+        targets: list[tuple[str, str]],
+    ) -> None:
+        payload = thread.model_dump(mode="json", by_alias=True)
+        for sid, ns in targets:
+            await self._sio.emit(
+                "thread:created",
+                payload,
+                to=sid,
+                namespace=ns or "/",
+            )
+
+    async def broadcast_thread_deleted_to_sids(
+        self,
+        thread_id: str,
+        targets: list[tuple[str, str]],
+    ) -> None:
+        payload = {"thread_id": thread_id}
+        for sid, ns in targets:
+            await self._sio.emit(
+                "thread:deleted",
+                payload,
+                to=sid,
+                namespace=ns or "/",
+            )
+
     async def broadcast_stream_start(
         self,
         frame: StreamStartFrame,

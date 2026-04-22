@@ -65,8 +65,13 @@ export class RestTransport {
   async createThread(input: {
     tenant?: Record<string, string>
     metadata?: Record<string, unknown>
+    clientId?: string
   }): Promise<Thread> {
-    const wire = await this.req<Record<string, unknown>>('POST', '/threads', input)
+    const body: Record<string, unknown> = {}
+    if (input.tenant !== undefined) body.tenant = input.tenant
+    if (input.metadata !== undefined) body.metadata = input.metadata
+    if (input.clientId !== undefined) body.client_id = input.clientId
+    const wire = await this.req<Record<string, unknown>>('POST', '/threads', body)
     return toThread(wire as never)
   }
 
@@ -107,6 +112,10 @@ export class RestTransport {
 
   async deleteThread(threadId: string): Promise<void> {
     await this.req<void>('DELETE', `/threads/${threadId}`)
+  }
+
+  async clearThreadEvents(threadId: string): Promise<void> {
+    await this.req<void>('DELETE', `/threads/${threadId}/events`)
   }
 
   async sendMessage(threadId: string, draft: EventDraft): Promise<Event> {

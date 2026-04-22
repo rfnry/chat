@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
-from rfnry_chat_protocol import Identity, TenantScope, Thread, ThreadPatch, ThreadTenantChangedEvent, matches
+from rfnry_chat_protocol import (
+    Identity,
+    Thread,
+    ThreadDraft,
+    ThreadPatch,
+    ThreadTenantChangedEvent,
+    matches,
+)
 
 from rfnry_chat_server.server.rest.deps import get_server, identity_tenant, resolve_identity
 from rfnry_chat_server.store.types import Page, ThreadCursor
-
-
-class CreateThreadBody(BaseModel):
-    tenant: TenantScope = Field(default_factory=dict)
-    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 def build_router() -> APIRouter:
@@ -22,8 +22,9 @@ def build_router() -> APIRouter:
 
     @router.post("", status_code=status.HTTP_201_CREATED, response_model=Thread)
     async def create_thread(
-        body: CreateThreadBody,
+        body: ThreadDraft,
         request: Request,
+        response: Response,
         identity: Identity = Depends(resolve_identity),
     ) -> Thread:
         server = get_server(request)
@@ -34,6 +35,11 @@ def build_router() -> APIRouter:
                     status_code=400,
                     detail=f"namespace_keys required but missing: {missing}",
                 )
+        if body.client_id is not None:
+            existing = await server.store.find_thread_by_client_id(identity.id, body.client_id)
+            if existing is not None:
+                response.status_code = status.HTTP_200_OK
+                return existing
         now = datetime.now(UTC)
         thread = Thread(
             id=f"th_{secrets.token_hex(8)}",
@@ -42,10 +48,15 @@ def build_router() -> APIRouter:
             created_at=now,
             updated_at=now,
         )
-        created = await server.store.create_thread(thread)
+        created = await server.store.create_thread(
+            thread,
+            caller_identity_id=identity.id,
+            client_id=body.client_id,
+        )
         await server.store.add_member(created.id, identity, added_by=identity)
         members = await server.store.list_members(created.id)
         await server.publish_members_updated(created.id, [m.identity for m in members], thread=created)
+        await server.publish_thread_created(created)
         return created
 
     @router.get("", response_model=Page[Thread])
@@ -94,8 +105,6 @@ def build_router() -> APIRouter:
         existing = await server.store.get_thread(thread_id)
         if existing is None or not matches(existing.tenant, identity_tenant(identity)):
             raise HTTPException(status_code=404, detail="thread not found")
-        if not await server.store.is_member(thread_id, identity.id):
-            raise HTTPException(status_code=403, detail="not a member of this thread")
         if not await server.check_authorize(identity, thread_id, "thread.update"):
             raise HTTPException(status_code=403, detail="not authorized: thread.update")
 
@@ -128,11 +137,26 @@ def build_router() -> APIRouter:
         existing = await server.store.get_thread(thread_id)
         if existing is None or not matches(existing.tenant, identity_tenant(identity)):
             raise HTTPException(status_code=404, detail="thread not found")
-        if not await server.store.is_member(thread_id, identity.id):
-            raise HTTPException(status_code=403, detail="not a member of this thread")
         if not await server.check_authorize(identity, thread_id, "thread.delete"):
             raise HTTPException(status_code=403, detail="not authorized: thread.delete")
         await server.store.delete_thread(thread_id)
+        await server.publish_thread_deleted(thread_id, existing.tenant)
+        return Response(status_code=204)
+
+    @router.delete("/{thread_id}/events", status_code=status.HTTP_204_NO_CONTENT)
+    async def clear_thread_events(
+        thread_id: str,
+        request: Request,
+        identity: Identity = Depends(resolve_identity),
+    ) -> Response:
+        server = get_server(request)
+        existing = await server.store.get_thread(thread_id)
+        if existing is None or not matches(existing.tenant, identity_tenant(identity)):
+            raise HTTPException(status_code=404, detail="thread not found")
+        if not await server.check_authorize(identity, thread_id, "thread.clear"):
+            raise HTTPException(status_code=403, detail="not authorized: thread.clear")
+        await server.store.clear_events(thread_id)
+        await server.publish_thread_cleared(thread_id, thread=existing)
         return Response(status_code=204)
 
     return router

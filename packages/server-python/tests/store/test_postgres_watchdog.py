@@ -13,9 +13,7 @@ from rfnry_chat_server.store.postgres.store import PostgresChatStore
 async def store(clean_db: asyncpg.Pool) -> PostgresChatStore:
     s = PostgresChatStore(pool=clean_db)
     now = datetime.now(UTC)
-    await s.create_thread(
-        Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now)
-    )
+    await s.create_thread(Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now))
     return s
 
 

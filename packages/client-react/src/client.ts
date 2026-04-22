@@ -110,6 +110,7 @@ export class ChatClient {
   createThread(input: {
     tenant?: Record<string, string>
     metadata?: Record<string, unknown>
+    clientId?: string
   }): Promise<Thread> {
     return this.rest.createThread(input)
   }
@@ -130,6 +131,10 @@ export class ChatClient {
 
   deleteThread(threadId: string): Promise<void> {
     return this.rest.deleteThread(threadId)
+  }
+
+  clearThreadEvents(threadId: string): Promise<void> {
+    return this.rest.clearThreadEvents(threadId)
   }
 
   sendMessage(threadId: string, draft: EventDraft): Promise<Event> {
@@ -172,7 +177,11 @@ export class ChatClient {
   }): Promise<{ thread: Thread; event: Event }> {
     const thread = opts.threadId
       ? await this.rest.getThread(opts.threadId)
-      : await this.rest.createThread({ tenant: opts.tenant, metadata: opts.metadata })
+      : await this.rest.createThread({
+          tenant: opts.tenant,
+          metadata: opts.metadata,
+          clientId: opts.clientId ?? crypto.randomUUID(),
+        })
     if (opts.invite) {
       // add_member is idempotent server-side — no preflight.
       await this.rest.addMember(thread.id, opts.invite)

@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 
 MAX_HANDLER_CHAIN_DEPTH = 8
 
-_chain_depth: contextvars.ContextVar[int] = contextvars.ContextVar(
-    "rfnry_chat_server_handler_chain_depth", default=0
-)
+_chain_depth: contextvars.ContextVar[int] = contextvars.ContextVar("rfnry_chat_server_handler_chain_depth", default=0)
 
 
 class HandlerDispatcher:
@@ -48,26 +46,20 @@ class HandlerDispatcher:
         finally:
             _chain_depth.reset(token)
 
-    async def _run_one(
-        self, entry: HandlerRegistration, event: Event, thread: Thread
-    ) -> None:
+    async def _run_one(self, entry: HandlerRegistration, event: Event, thread: Thread) -> None:
         if inspect.isasyncgenfunction(entry.handler):
             await self._run_emitter(entry.handler, event, thread)
             return
         await self._run_observer(entry.handler, event, thread)
 
-    async def _run_emitter(
-        self, handler: HandlerCallable, event: Event, thread: Thread
-    ) -> None:
+    async def _run_emitter(self, handler: HandlerCallable, event: Event, thread: Thread) -> None:
         run = await self._server.begin_run(
             thread=thread,
             actor=self._system,
             triggered_by=event.author,
             idempotency_key=None,
         )
-        ctx = HandlerContext(
-            event=event, thread=thread, store=self._server.store, server=self._server
-        )
+        ctx = HandlerContext(event=event, thread=thread, store=self._server.store, server=self._server)
         send = HandlerSend(thread_id=thread.id, author=self._system, run_id=run.id)
         try:
             async for emitted in handler(ctx, send):  # type: ignore[union-attr]
@@ -80,12 +72,8 @@ class HandlerDispatcher:
             raise
         await self._server.end_run(run_id=run.id, error=None)
 
-    async def _run_observer(
-        self, handler: HandlerCallable, event: Event, thread: Thread
-    ) -> None:
-        ctx = HandlerContext(
-            event=event, thread=thread, store=self._server.store, server=self._server
-        )
+    async def _run_observer(self, handler: HandlerCallable, event: Event, thread: Thread) -> None:
+        ctx = HandlerContext(event=event, thread=thread, store=self._server.store, server=self._server)
         send = HandlerSend(thread_id=thread.id, author=self._system, run_id=None)
         result: Any = handler(ctx, send)  # type: ignore[call-overload]
         if inspect.isawaitable(result):

@@ -69,10 +69,13 @@ class RestTransport:
         *,
         tenant: dict[str, str] | None = None,
         metadata: dict[str, Any] | None = None,
+        client_id: str | None = None,
     ) -> Thread:
         body: dict[str, Any] = {"metadata": metadata or {}}
         if tenant is not None:
             body["tenant"] = tenant
+        if client_id is not None:
+            body["client_id"] = client_id
         payload = await self._request("POST", "/threads", json_body=body)
         return Thread.model_validate(payload)
 
@@ -105,6 +108,9 @@ class RestTransport:
 
     async def delete_thread(self, thread_id: str) -> None:
         await self._request("DELETE", f"/threads/{thread_id}")
+
+    async def clear_thread_events(self, thread_id: str) -> None:
+        await self._request("DELETE", f"/threads/{thread_id}/events")
 
     async def send_message(self, *, thread_id: str, draft: dict[str, Any]) -> Event:
         payload = await self._request(

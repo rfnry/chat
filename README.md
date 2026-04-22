@@ -37,16 +37,6 @@ external services and connect via a `ChatClient` the same way browsers do.
   URLs at runtime; `ChatClientPool` holds one connected client per chat
   server for agents serving many hosts from one process.
 
-### Examples
-
-- [`examples/python/stock-tool`](./examples/python/stock-tool) — server-side
-  tool handlers only.
-- [`examples/python/customer-support`](./examples/python/customer-support) —
-  external AI agent (Anthropic) reacting to user messages.
-- [`examples/python/monitoring-assistant`](./examples/python/monitoring-assistant) —
-  standalone webhook-driven agent (no chat server; pairs with
-  [`examples/react/monitoring-assistant`](./examples/react/monitoring-assistant)
-  as the receiver).
 
 ### License
 

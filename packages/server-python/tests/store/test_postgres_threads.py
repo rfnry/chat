@@ -57,3 +57,34 @@ async def test_delete_thread(store: PostgresChatStore) -> None:
     await store.create_thread(_new_thread())
     await store.delete_thread("th_1")
     assert await store.get_thread("th_1") is None
+
+
+async def test_find_thread_by_client_id_returns_match(store: PostgresChatStore) -> None:
+    await store.create_thread(_new_thread(id="th_1"), caller_identity_id="u_alice", client_id="ck-1")
+    found = await store.find_thread_by_client_id("u_alice", "ck-1")
+    assert found is not None
+    assert found.id == "th_1"
+
+
+async def test_find_thread_by_client_id_scoped_per_caller(store: PostgresChatStore) -> None:
+    await store.create_thread(_new_thread(id="th_1"), caller_identity_id="u_alice", client_id="ck-shared")
+    await store.create_thread(_new_thread(id="th_2"), caller_identity_id="u_bob", client_id="ck-shared")
+    alice_found = await store.find_thread_by_client_id("u_alice", "ck-shared")
+    bob_found = await store.find_thread_by_client_id("u_bob", "ck-shared")
+    assert alice_found is not None and alice_found.id == "th_1"
+    assert bob_found is not None and bob_found.id == "th_2"
+
+
+async def test_find_thread_by_client_id_returns_none_when_absent(
+    store: PostgresChatStore,
+) -> None:
+    await store.create_thread(_new_thread(id="th_1"))
+    assert await store.find_thread_by_client_id("u_alice", "ck-nope") is None
+
+
+async def test_create_thread_without_client_id_is_not_indexed(
+    store: PostgresChatStore,
+) -> None:
+    # Legacy path: no client_id passed in, find should not match anything.
+    await store.create_thread(_new_thread(id="th_1"), caller_identity_id="u_alice")
+    assert await store.find_thread_by_client_id("u_alice", "anything") is None

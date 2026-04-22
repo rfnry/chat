@@ -28,14 +28,31 @@ class InMemoryChatStore:
         self._events_by_thread: dict[str, list[str]] = {}
         self._runs: dict[str, Run] = {}
         self._members: dict[str, dict[str, ThreadMember]] = {}
+        # (caller_identity_id, client_id) -> thread_id — only set when both
+        # are provided at create-time; drives per-caller idempotent creation.
+        self._thread_client_keys: dict[tuple[str, str], str] = {}
 
     # threads
 
-    async def create_thread(self, thread: Thread) -> Thread:
+    async def create_thread(
+        self,
+        thread: Thread,
+        *,
+        caller_identity_id: str | None = None,
+        client_id: str | None = None,
+    ) -> Thread:
         self._threads[thread.id] = thread
         self._events_by_thread.setdefault(thread.id, [])
         self._members.setdefault(thread.id, {})
+        if caller_identity_id is not None and client_id is not None:
+            self._thread_client_keys[(caller_identity_id, client_id)] = thread.id
         return thread
+
+    async def find_thread_by_client_id(self, caller_identity_id: str, client_id: str) -> Thread | None:
+        thread_id = self._thread_client_keys.get((caller_identity_id, client_id))
+        if thread_id is None:
+            return None
+        return self._threads.get(thread_id)
 
     async def get_thread(self, thread_id: str) -> Thread | None:
         return self._threads.get(thread_id)
@@ -77,6 +94,9 @@ class InMemoryChatStore:
         self._members.pop(thread_id, None)
         for run_id in [r.id for r in self._runs.values() if r.thread_id == thread_id]:
             self._runs.pop(run_id, None)
+        for key, tid in list(self._thread_client_keys.items()):
+            if tid == thread_id:
+                self._thread_client_keys.pop(key, None)
 
     # events
 
@@ -87,6 +107,11 @@ class InMemoryChatStore:
 
     async def get_event(self, event_id: str) -> Event | None:
         return self._events.get(event_id)
+
+    async def clear_events(self, thread_id: str) -> None:
+        for eid in self._events_by_thread.pop(thread_id, []):
+            self._events.pop(eid, None)
+        self._events_by_thread[thread_id] = []
 
     async def list_events(
         self,
@@ -145,11 +170,7 @@ class InMemoryChatStore:
 
     async def find_active_run(self, thread_id: str, actor_id: str) -> Run | None:
         for run in self._runs.values():
-            if (
-                run.thread_id == thread_id
-                and run.actor.id == actor_id
-                and run.status in ("pending", "running")
-            ):
+            if run.thread_id == thread_id and run.actor.id == actor_id and run.status in ("pending", "running"):
                 return run
         return None
 
@@ -160,10 +181,7 @@ class InMemoryChatStore:
         threshold: datetime,
         limit: int = 100,
     ) -> list[Run]:
-        stale = [
-            run for run in self._runs.values()
-            if run.status in statuses and run.started_at < threshold
-        ]
+        stale = [run for run in self._runs.values() if run.status in statuses and run.started_at < threshold]
         stale.sort(key=lambda r: r.started_at)
         return stale[:limit]
 

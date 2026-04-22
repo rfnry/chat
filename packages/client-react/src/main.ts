@@ -37,7 +37,7 @@ export type {
   UserIdentity,
 } from '@rfnry/chat-protocol'
 export { matches } from '@rfnry/chat-protocol'
-export { QueryClient } from '@tanstack/react-query'
+export { QueryClient, useQueryClient } from '@tanstack/react-query'
 export { type AuthenticatePayload, ChatClient, type ChatClientOptions, type Page } from './client'
 export {
   ChatAuthError,

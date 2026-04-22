@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import secrets
 from collections.abc import Awaitable, Callable
@@ -193,8 +194,12 @@ class ChatClient:
             if on_connect is not None:
                 await on_connect()
             await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            if (task := asyncio.current_task()) is not None:
+                task.uncancel()
         finally:
-            await self.disconnect()
+            with contextlib.suppress(BaseException):
+                await self.disconnect()
             _log.info("disconnected")
 
     async def join_thread(
@@ -274,10 +279,13 @@ class ChatClient:
         thread_id: str | None = None,
         tenant: dict[str, str] | None = None,
         metadata: dict[str, Any] | None = None,
+        client_id: str | None = None,
     ) -> tuple[Thread, Event]:
         """Proactively open (or reuse) a thread, optionally invite a participant, and send a message.
 
         - If ``thread_id`` is None, creates a new thread (this client becomes first member).
+          Thread creation is idempotent per ``client_id``; one is auto-generated if not supplied
+          so retries of the whole call return the same thread rather than stacking duplicates.
         - If ``invite`` is provided, adds them (add_member is idempotent server-side,
           so no preflight is performed).
         - Joins the thread room (idempotent).
@@ -286,7 +294,13 @@ class ChatClient:
         Returns ``(thread, sent_event)``.
         """
         if thread_id is None:
-            thread = await self._rest.create_thread(tenant=tenant, metadata=metadata)
+            import uuid
+
+            thread = await self._rest.create_thread(
+                tenant=tenant,
+                metadata=metadata,
+                client_id=client_id or str(uuid.uuid4()),
+            )
         else:
             thread = await self._rest.get_thread(thread_id)
 

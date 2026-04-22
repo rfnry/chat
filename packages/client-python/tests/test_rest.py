@@ -45,6 +45,30 @@ async def test_create_thread_posts_and_parses() -> None:
     assert thread.tenant == {"org": "x"}
 
 
+async def test_create_thread_passes_client_id_when_provided() -> None:
+    captured: list[dict[str, Any]] = []
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(request.content))
+        return httpx.Response(201, json=_thread_payload())
+
+    rest = _make_transport(httpx.MockTransport(handle))
+    await rest.create_thread(tenant={"org": "x"}, client_id="ck-stable")
+    assert captured[0]["client_id"] == "ck-stable"
+
+
+async def test_create_thread_omits_client_id_when_absent() -> None:
+    captured: list[dict[str, Any]] = []
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(request.content))
+        return httpx.Response(201, json=_thread_payload())
+
+    rest = _make_transport(httpx.MockTransport(handle))
+    await rest.create_thread(tenant={"org": "x"})
+    assert "client_id" not in captured[0]
+
+
 async def test_get_thread_404_raises_not_found() -> None:
     async def handle(request: httpx.Request) -> httpx.Response:
         return httpx.Response(404, text="not found")

@@ -21,7 +21,7 @@ keywords = [
 dependencies = [
     "pydantic>=2.13.2",
     "asyncpg>=0.31.0",
-    "python-socketio[asgi]>=5.16.1",
+    "python-socketio>=5.16.1",
     "rfnry-chat-protocol",
 ]
 

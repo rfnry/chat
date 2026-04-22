@@ -65,8 +65,6 @@ async def _gate(request: Request, thread_id: str, identity: Identity, action: st
     thread = await server.store.get_thread(thread_id)
     if thread is None or not matches(thread.tenant, identity_tenant(identity)):
         raise HTTPException(status_code=404, detail="thread not found")
-    if not await server.store.is_member(thread_id, identity.id):
-        raise HTTPException(status_code=403, detail="not a member of this thread")
     if not await server.check_authorize(identity, thread_id, action):
         raise HTTPException(status_code=403, detail=f"not authorized: {action}")
     return thread

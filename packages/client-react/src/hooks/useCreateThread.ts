@@ -5,6 +5,7 @@ import { useChatClient } from './useChatClient'
 export type CreateThreadInput = {
   tenant?: TenantScope
   metadata?: Record<string, unknown>
+  clientId?: string
 }
 
 export function useCreateThread(): UseMutationResult<Thread, Error, CreateThreadInput> {

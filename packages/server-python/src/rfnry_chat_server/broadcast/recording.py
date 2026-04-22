@@ -24,6 +24,10 @@ class RecordingBroadcaster:
         self.runs_updated_with_namespace: list[tuple[Run, str | None]] = []
         self.thread_invited: list[ThreadInvitedFrame] = []
         self.thread_invited_with_namespace: list[tuple[ThreadInvitedFrame, str | None]] = []
+        self.thread_cleared: list[str] = []
+        self.thread_cleared_with_namespace: list[tuple[str, str | None]] = []
+        self.thread_created_fanouts: list[tuple[Thread, list[tuple[str, str]]]] = []
+        self.thread_deleted_fanouts: list[tuple[str, list[tuple[str, str]]]] = []
         self.stream_starts: list[StreamStartFrame] = []
         self.stream_deltas: list[StreamDeltaFrame] = []
         self.stream_ends: list[StreamEndFrame] = []
@@ -58,6 +62,29 @@ class RecordingBroadcaster:
     ) -> None:
         self.thread_invited.append(frame)
         self.thread_invited_with_namespace.append((frame, namespace))
+
+    async def broadcast_thread_cleared(
+        self,
+        thread_id: str,
+        *,
+        namespace: str | None = None,
+    ) -> None:
+        self.thread_cleared.append(thread_id)
+        self.thread_cleared_with_namespace.append((thread_id, namespace))
+
+    async def broadcast_thread_created_to_sids(
+        self,
+        thread: Thread,
+        targets: list[tuple[str, str]],
+    ) -> None:
+        self.thread_created_fanouts.append((thread, list(targets)))
+
+    async def broadcast_thread_deleted_to_sids(
+        self,
+        thread_id: str,
+        targets: list[tuple[str, str]],
+    ) -> None:
+        self.thread_deleted_fanouts.append((thread_id, list(targets)))
 
     async def broadcast_stream_start(
         self,

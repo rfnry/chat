@@ -1,12 +1,19 @@
 CREATE TABLE IF NOT EXISTS threads (
-  id           TEXT PRIMARY KEY,
-  tenant       JSONB NOT NULL DEFAULT '{}',
-  metadata     JSONB NOT NULL DEFAULT '{}',
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                  TEXT PRIMARY KEY,
+  tenant              JSONB NOT NULL DEFAULT '{}',
+  metadata            JSONB NOT NULL DEFAULT '{}',
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  caller_identity_id  TEXT,
+  client_id           TEXT
 );
+ALTER TABLE threads ADD COLUMN IF NOT EXISTS caller_identity_id TEXT;
+ALTER TABLE threads ADD COLUMN IF NOT EXISTS client_id TEXT;
 CREATE INDEX IF NOT EXISTS threads_tenant_gin ON threads USING GIN (tenant jsonb_path_ops);
 CREATE INDEX IF NOT EXISTS threads_created_at ON threads (created_at DESC, id);
+CREATE UNIQUE INDEX IF NOT EXISTS threads_caller_client_id
+  ON threads (caller_identity_id, client_id)
+  WHERE client_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS runs (
   id                TEXT PRIMARY KEY,

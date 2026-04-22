@@ -18,9 +18,11 @@ from rfnry_chat_protocol import (
     StreamEndFrame,
     StreamStartFrame,
     SystemIdentity,
+    TenantScope,
     Thread,
     ThreadInvitedFrame,
     ThreadMember,
+    matches,
     parse_identity,
 )
 
@@ -64,6 +66,14 @@ def _validate_namespace_keys(namespace_keys: list[str] | None) -> list[str] | No
 
 
 IDENTITY_HEADER = "x-rfnry-identity"
+
+
+def _identity_tenant_of(identity: Identity) -> dict[str, str]:
+    """Extract the tenant dict from an identity, dropping non-string values."""
+    raw = identity.metadata.get("tenant", {})
+    if not isinstance(raw, dict):
+        return {}
+    return {k: v for k, v in raw.items() if isinstance(v, str)}
 
 
 async def _identity_from_handshake(handshake: HandshakeData) -> Identity | None:
@@ -137,13 +147,16 @@ class ChatServer:
         self._watchdog_task = asyncio.create_task(self._watchdog_loop())
 
     async def stop(self) -> None:
+        if self._socketio is not None:
+            with contextlib.suppress(BaseException):
+                await self._socketio.sio.shutdown()
+
         task = self._watchdog_task
-        if task is None:
-            return
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-        self._watchdog_task = None
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            self._watchdog_task = None
 
     async def _watchdog_loop(self) -> None:
         while True:
@@ -202,7 +215,12 @@ class ChatServer:
         target_id: str | None = None,
     ) -> bool:
         if self.authorize is None:
-            return True
+            # Default policy: membership is the gate. Historically this check was
+            # hardcoded in every REST/socket handler next to matches(); moving it
+            # here makes access policy a single replaceable function. Consumers
+            # that want "tenant alone is enough" (e.g. workspace-is-the-room)
+            # pass their own `authorize=` callback.
+            return await self.store.is_member(thread_id, identity.id)
         return await self.authorize(identity, thread_id, action, target_id=target_id)
 
     async def publish_event(self, event: Event, *, thread: Thread | None = None) -> Event:
@@ -241,6 +259,53 @@ class ChatServer:
             if self.namespace_keys is not None:
                 namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
             await self.broadcaster.broadcast_thread_updated(thread, namespace=namespace)
+
+    async def publish_thread_cleared(
+        self,
+        thread_id: str,
+        *,
+        thread: Thread | None = None,
+    ) -> None:
+        if self.broadcaster is None:
+            return
+        namespace: str | None = None
+        if self.namespace_keys is not None:
+            if thread is None:
+                thread = await self.store.get_thread(thread_id)
+            if thread is not None:
+                namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
+        await self.broadcaster.broadcast_thread_cleared(thread_id, namespace=namespace)
+
+    async def publish_thread_created(self, thread: Thread) -> None:
+        """Fan `thread:created` to every connected socket whose identity
+        tenant matches the new thread. Enables live sidebar updates across
+        tabs/users without polling."""
+        if self.broadcaster is None or self._socketio is None:
+            return
+        targets = self._collect_tenant_targets(thread.tenant)
+        if targets:
+            await self.broadcaster.broadcast_thread_created_to_sids(thread, targets)
+
+    async def publish_thread_deleted(self, thread_id: str, tenant: TenantScope) -> None:
+        """Fan `thread:deleted` to every connected socket whose identity
+        tenant matched the (now-gone) thread. Tenant is passed explicitly
+        because the row is already gone by the time we broadcast."""
+        if self.broadcaster is None or self._socketio is None:
+            return
+        targets = self._collect_tenant_targets(tenant)
+        if targets:
+            await self.broadcaster.broadcast_thread_deleted_to_sids(thread_id, targets)
+
+    def _collect_tenant_targets(self, thread_tenant: TenantScope) -> list[tuple[str, str]]:
+        """Snapshot connected identities → (sid, namespace) tuples where the
+        identity tenant matches `thread_tenant`."""
+        if self._socketio is None:
+            return []
+        out: list[tuple[str, str]] = []
+        for sid, ns, identity in self._socketio.connected_identities():
+            if matches(thread_tenant, _identity_tenant_of(identity)):
+                out.append((sid, ns))
+        return out
 
     async def publish_members_updated(
         self,
@@ -325,9 +390,7 @@ class ChatServer:
         thread = await self.store.get_thread(updated.thread_id)
         if thread is not None:
             await self.publish_run_updated(updated, thread=thread)
-            await self.publish_event(
-                _run_cancelled_event(updated, thread, updated.actor), thread=thread
-            )
+            await self.publish_event(_run_cancelled_event(updated, thread, updated.actor), thread=thread)
         return updated
 
     async def end_run(self, *, run_id: str, error: RunError | None) -> Run:
@@ -336,17 +399,13 @@ class ChatServer:
             thread = await self.store.get_thread(updated.thread_id)
             if thread is not None:
                 await self.publish_run_updated(updated, thread=thread)
-                await self.publish_event(
-                    _run_completed_event(updated, thread, updated.actor), thread=thread
-                )
+                await self.publish_event(_run_completed_event(updated, thread, updated.actor), thread=thread)
             return updated
         updated = await self.store.update_run_status(run_id, "failed", error=error)
         thread = await self.store.get_thread(updated.thread_id)
         if thread is not None:
             await self.publish_run_updated(updated, thread=thread)
-            await self.publish_event(
-                _run_failed_event(updated, thread, updated.actor, error), thread=thread
-            )
+            await self.publish_event(_run_failed_event(updated, thread, updated.actor, error), thread=thread)
         return updated
 
     async def broadcast_stream_start(self, frame: StreamStartFrame, *, thread: Thread) -> None:

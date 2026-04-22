@@ -13,6 +13,7 @@ export type ChatStoreState = {
   actions: {
     addEvent(event: Event): void
     setEventsBulk(threadId: string, events: Event[]): void
+    clearThreadEvents(threadId: string): void
     setMembers(threadId: string, members: Identity[]): void
     setThreadMeta(thread: Thread): void
     upsertRun(run: Run): void
@@ -71,6 +72,14 @@ export function createChatStore() {
           for (const e of events) map.set(e.id, e)
           const merged = Array.from(map.values()).sort(compareEvents)
           return { ...state, events: { ...state.events, [threadId]: merged } }
+        }),
+      clearThreadEvents: (threadId) =>
+        set((state) => {
+          const nextEvents = { ...state.events }
+          nextEvents[threadId] = []
+          const nextActive = { ...state.activeRuns }
+          nextActive[threadId] = {}
+          return { ...state, events: nextEvents, activeRuns: nextActive }
         }),
       setMembers: (threadId, members) =>
         set((state) => ({

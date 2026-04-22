@@ -31,6 +31,22 @@ class Broadcaster(Protocol):
         *,
         namespace: str | None = None,
     ) -> None: ...
+    async def broadcast_thread_cleared(
+        self,
+        thread_id: str,
+        *,
+        namespace: str | None = None,
+    ) -> None: ...
+    async def broadcast_thread_created_to_sids(
+        self,
+        thread: Thread,
+        targets: list[tuple[str, str]],
+    ) -> None: ...
+    async def broadcast_thread_deleted_to_sids(
+        self,
+        thread_id: str,
+        targets: list[tuple[str, str]],
+    ) -> None: ...
     async def broadcast_stream_start(
         self,
         frame: StreamStartFrame,
