@@ -73,6 +73,12 @@ Registration:
 - `@client.on_any_event()` — wildcard across every event type.
 - `@client.on_invited()` — fires when this identity is added to a thread. Receives a `ThreadInvitedFrame(thread, added_member, added_by)`. By default, the client auto-joins the thread room before the handler runs, so the handler may assume live event delivery. Pass `auto_join_on_invite=False` to `ChatClient(...)` to opt out.
 
+Server broadcast frames (transient, not persisted events) are also surfaced via decorators — symmetric with how the React provider consumes them:
+
+- `@client.on_thread_updated()` — handler takes `(thread: Thread)`. Fires on thread metadata / tenant changes.
+- `@client.on_members_updated()` — handler takes `(thread_id: str, members: list[Identity])`. Fires after any add/remove of thread members, with the full current snapshot.
+- `@client.on_run_updated()` — handler takes `(run: Run)`. Fires on run lifecycle transitions (started, completed, failed, cancelled).
+
 Default filters (skipped for `all_events=True`):
 - Self-authored events are not dispatched (no self-triggering).
 - Events with a recipient list that does not include you are skipped.

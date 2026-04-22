@@ -53,6 +53,46 @@ Python's `auto_join_on_invite=False` opt-out.
 </ChatProvider>
 ```
 
+## Default dispatch filters
+
+Handler hooks (`useMessageHandler`, `useToolCallHandler`, `useHandler`, etc.) apply two filters before firing, matching the Python client's behavior:
+
+- Events authored by this client's own identity are skipped (no self-triggering).
+- Events with a non-null `recipients` list that doesn't include this identity's id are skipped.
+
+Both filters are inert when the client has no `identity` configured. To bypass the filters on a single handler (audit loggers, moderation tooling), pass `{ allEvents: true }`:
+
+```tsx
+useMessageHandler(threadId, (event) => {...}, { allEvents: true })
+```
+
+## Who am I?
+
+`useIdentity()` returns the identity this client is connected as (or `null` if none was configured):
+
+```tsx
+import { useIdentity } from '@rfnry/chat-client-react'
+
+const identity = useIdentity()
+if (identity?.role === 'user') { ... }
+```
+
+## Proactive helper
+
+`ChatClient.openThreadWith({ message, invite?, threadId?, tenant?, metadata? })` composes create-or-fetch-thread → optional add-member → join → send-message into one call. Returns `{ thread, event }`. Mirrors Python's `client.open_thread_with(...)`.
+
+```ts
+const client = useChatClient()
+const { thread } = await client.openThreadWith({
+  message: [{ type: 'text', text: 'ping' }],
+  invite: bob,
+})
+```
+
+## Error types
+
+Socket-level failures throw `SocketTransportError(code, message)`; HTTP-level failures throw `ChatHttpError(status, message)` (or its narrower subclasses `ThreadNotFoundError`, `ThreadConflictError`, `ChatAuthError`). Don't catch `ChatHttpError` expecting a socket error — they're deliberately distinct.
+
 ## Reconnecting with new options
 
 `ChatClient.reconnect({ url?, authenticate?, identity?, path?, socketPath?, fetchImpl? })`
