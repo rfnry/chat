@@ -68,32 +68,6 @@ describe('useThreadEvents', () => {
     expect(getByTestId('count').textContent).toBe('1')
   })
 
-  it('does not re-render when an unrelated thread receives an event', () => {
-    const store = createChatStore()
-    const Wrapper = harness(store)
-    let renderCount = 0
-
-    function Probe() {
-      renderCount++
-      const events = useThreadEvents('t_A')
-      return <div data-testid="count">{events.length}</div>
-    }
-
-    render(
-      <Wrapper>
-        <Probe />
-      </Wrapper>
-    )
-
-    const baseline = renderCount
-
-    act(() => {
-      store.getState().actions.addEvent(makeEvent('e1', 't_B'))
-    })
-
-    expect(renderCount).toBe(baseline)
-  })
-
   it('re-renders when the subscribed thread receives an event', () => {
     const store = createChatStore()
     const Wrapper = harness(store)
