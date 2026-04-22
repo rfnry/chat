@@ -1,4 +1,4 @@
-import { act, render, waitFor } from '@testing-library/react'
+import { act, render, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ChatClient } from '../../src/client'
@@ -134,5 +134,29 @@ describe('useThreadActions isPending', () => {
       expect(getByTestId('pending').textContent).toBe('false')
     })
     expect(caught.err?.message).toBe('boom')
+  })
+
+  it('keeps action callback identity stable across isPending toggles (R18)', async () => {
+    const client = {
+      sendMessage: vi.fn(() => Promise.resolve({ id: 'evt_1' })),
+    } as unknown as ChatClient
+    const Wrapper = harness(client)
+
+    const { result, rerender } = renderHook(() => useThreadActions('t_A'), {
+      wrapper: Wrapper,
+    })
+
+    const sendBefore = result.current.send
+
+    await act(async () => {
+      await result.current.send({ clientId: 'c1', content: [{ type: 'text', text: 'x' }] })
+    })
+
+    rerender()
+    const sendAfter = result.current.send
+
+    // R18: send callback identity is preserved across the isPending cycle.
+    // Components doing useEffect(..., [actions.send]) should NOT re-fire.
+    expect(sendAfter).toBe(sendBefore)
   })
 })

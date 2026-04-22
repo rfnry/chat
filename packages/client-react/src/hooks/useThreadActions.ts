@@ -56,44 +56,69 @@ export function useThreadActions(threadId: string | null): UseThreadActions {
     []
   )
 
-  return useMemo(
+  // Callbacks are stable across isPending toggles. Components that memo
+  // on individual action references (e.g. useEffect(..., [actions.send]))
+  // don't re-fire when transitions tick the pending state.
+  const callbacks = useMemo(
     () => ({
-      isPending,
       send: (draft: EventDraft) => {
         if (!threadId) throw new Error('threadId is required')
         return withTransition(() => client.sendMessage(threadId, draft))
       },
-      emit: (event) => {
+      emit: (event: Record<string, unknown> & { type: string }) => {
         if (!threadId) throw new Error('threadId is required')
         return withTransition(() => client.emitEvent({ ...event, threadId }))
       },
-      beginRun: (opts = {}) => {
+      beginRun: (opts: { triggeredByEventId?: string; idempotencyKey?: string } = {}) => {
         if (!threadId) throw new Error('threadId is required')
         return withTransition(() => client.beginRun(threadId, opts))
       },
-      endRun: (runId, opts = {}) => withTransition(() => client.endRun(runId, opts)),
-      cancelRun: (runId) => withTransition(() => client.cancelRun(runId)),
-      streamMessage: ({ runId, author, metadata, onFinalEvent }) => {
+      endRun: (runId: string, opts: { error?: RunError } = {}) =>
+        withTransition(() => client.endRun(runId, opts)),
+      cancelRun: (runId: string) => withTransition(() => client.cancelRun(runId)),
+      streamMessage: ({
+        runId,
+        author,
+        metadata,
+        onFinalEvent,
+      }: {
+        runId: string
+        author: Identity
+        metadata?: Record<string, unknown>
+        onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
+      }) => {
         if (!threadId) throw new Error('threadId is required')
         return client.streamMessage({ threadId, runId, author, metadata, onFinalEvent })
       },
-      streamReasoning: ({ runId, author, metadata, onFinalEvent }) => {
+      streamReasoning: ({
+        runId,
+        author,
+        metadata,
+        onFinalEvent,
+      }: {
+        runId: string
+        author: Identity
+        metadata?: Record<string, unknown>
+        onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
+      }) => {
         if (!threadId) throw new Error('threadId is required')
         return client.streamReasoning({ threadId, runId, author, metadata, onFinalEvent })
       },
-      addMember: (identity, role = 'member') => {
+      addMember: (identity: Identity, role: string = 'member') => {
         if (!threadId) throw new Error('threadId is required')
         return withTransition(() => client.addMember(threadId, identity, role))
       },
-      removeMember: (identityId) => {
+      removeMember: (identityId: string) => {
         if (!threadId) throw new Error('threadId is required')
         return withTransition(() => client.removeMember(threadId, identityId))
       },
-      updateThread: (patch) => {
+      updateThread: (patch: ThreadPatch) => {
         if (!threadId) throw new Error('threadId is required')
         return withTransition(() => client.updateThread(threadId, patch))
       },
     }),
-    [client, threadId, isPending, withTransition]
+    [client, threadId, withTransition] // NOTE: no isPending here
   )
+
+  return { ...callbacks, isPending }
 }
