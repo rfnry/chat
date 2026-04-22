@@ -102,11 +102,13 @@ export function ChatProvider(props: ChatProviderProps) {
           client.on('event', (data) => {
             const event = toEvent(data as never)
             store.getState().actions.addEvent(event)
-            for (const listener of eventListeners) {
+            // Snapshot before iteration so a listener that subscribes another
+            // listener during dispatch doesn't get the same event re-delivered.
+            for (const listener of [...eventListeners]) {
               try {
                 listener(event)
               } catch (err) {
-                console.error('handler error', err)
+                console.error('[rfnry] handler error for event type "%s":', event.type, err)
               }
             }
           })
