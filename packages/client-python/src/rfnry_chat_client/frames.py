@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
@@ -44,22 +45,23 @@ class FrameDispatcher:
 
     async def feed_thread_updated(self, raw: dict[str, Any]) -> None:
         thread = Thread.model_validate(raw)
-        for handler in self._thread_updated:
-            await _maybe_await(handler(thread))
+        results = [handler(thread) for handler in self._thread_updated]
+        awaitables = [r for r in results if inspect.isawaitable(r)]
+        if awaitables:
+            await asyncio.gather(*awaitables)
 
     async def feed_members_updated(self, raw: dict[str, Any]) -> None:
         thread_id = str(raw.get("thread_id") or "")
         members_raw = raw.get("members") or []
         members = [parse_identity(m) for m in members_raw if isinstance(m, dict)]
-        for handler in self._members_updated:
-            await _maybe_await(handler(thread_id, members))
+        results = [handler(thread_id, members) for handler in self._members_updated]
+        awaitables = [r for r in results if inspect.isawaitable(r)]
+        if awaitables:
+            await asyncio.gather(*awaitables)
 
     async def feed_run_updated(self, raw: dict[str, Any]) -> None:
         run = Run.model_validate(raw)
-        for handler in self._run_updated:
-            await _maybe_await(handler(run))
-
-
-async def _maybe_await(result: Any) -> None:
-    if inspect.isawaitable(result):
-        await result
+        results = [handler(run) for handler in self._run_updated]
+        awaitables = [r for r in results if inspect.isawaitable(r)]
+        if awaitables:
+            await asyncio.gather(*awaitables)

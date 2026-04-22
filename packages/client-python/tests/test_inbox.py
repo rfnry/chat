@@ -70,3 +70,39 @@ async def test_default_auto_join_invokes_thread_join() -> None:
     joined = [c for c in sio.calls if c[0] == "thread:join"]
     assert len(joined) == 1
     assert joined[0][1]["thread_id"] == "th_1"
+
+
+async def test_inbox_feed_fans_user_handlers_concurrently() -> None:
+    """R16: invite handlers must run concurrently after the auto-join
+    completes. Auto-join stays serialized because handlers may assume
+    they're already joined to the room."""
+    import asyncio
+
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(_noop_handler)),
+        socket_transport=SocketTransport(base_url="http://chat.test", sio_client=sio),
+        auto_join_on_invite=False,
+    )
+
+    order: list[str] = []
+    started = asyncio.Event()
+
+    @client.on_invited()
+    async def slow(frame: ThreadInvitedFrame) -> None:
+        started.set()
+        await asyncio.sleep(0.05)
+        order.append("slow_done")
+
+    @client.on_invited()
+    async def fast(frame: ThreadInvitedFrame) -> None:
+        await started.wait()
+        order.append("fast_done")
+
+    await client.connect()
+    raw = sio.handlers["thread:invited"]
+    await raw(_invited_frame_dict())
+    assert order == ["fast_done", "slow_done"]

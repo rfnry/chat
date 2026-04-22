@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
@@ -46,7 +47,7 @@ class InboxDispatcher:
                 await self._client.join_thread(frame.thread.id)
             except (SocketTransportError, ChatHttpError) as exc:
                 _log.debug("auto-join failed for thread %s: %s", frame.thread.id, exc)
-        for handler in self._handlers:
-            result: Any = handler(frame)
-            if inspect.isawaitable(result):
-                await result
+        results = [handler(frame) for handler in self._handlers]
+        awaitables = [r for r in results if inspect.isawaitable(r)]
+        if awaitables:
+            await asyncio.gather(*awaitables)

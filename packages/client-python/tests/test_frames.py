@@ -122,3 +122,79 @@ async def test_on_run_updated_fires_on_frame() -> None:
     assert received[0].id == "run_1"
     assert received[0].thread_id == "th_1"
     assert received[0].status == "completed"
+
+
+async def test_feed_thread_updated_fans_handlers_concurrently() -> None:
+    """R16: thread:updated handlers must run concurrently — one slow
+    handler must not block the next from starting."""
+    import asyncio
+
+    from rfnry_chat_client.frames import FrameDispatcher
+
+    fd = FrameDispatcher()
+    order: list[str] = []
+    started = asyncio.Event()
+
+    @fd.register_thread_updated
+    async def slow(thread: Thread) -> None:
+        started.set()
+        await asyncio.sleep(0.05)
+        order.append("slow_done")
+
+    @fd.register_thread_updated
+    async def fast(thread: Thread) -> None:
+        await started.wait()
+        order.append("fast_done")
+
+    await fd.feed_thread_updated(_thread_payload())
+    assert order == ["fast_done", "slow_done"]
+
+
+async def test_feed_members_updated_fans_handlers_concurrently() -> None:
+    """R16: members:updated handlers must run concurrently."""
+    import asyncio
+
+    from rfnry_chat_client.frames import FrameDispatcher
+
+    fd = FrameDispatcher()
+    order: list[str] = []
+    started = asyncio.Event()
+
+    @fd.register_members_updated
+    async def slow(thread_id: str, members: list[Identity]) -> None:
+        started.set()
+        await asyncio.sleep(0.05)
+        order.append("slow_done")
+
+    @fd.register_members_updated
+    async def fast(thread_id: str, members: list[Identity]) -> None:
+        await started.wait()
+        order.append("fast_done")
+
+    await fd.feed_members_updated({"thread_id": "th_1", "members": []})
+    assert order == ["fast_done", "slow_done"]
+
+
+async def test_feed_run_updated_fans_handlers_concurrently() -> None:
+    """R16: run:updated handlers must run concurrently."""
+    import asyncio
+
+    from rfnry_chat_client.frames import FrameDispatcher
+
+    fd = FrameDispatcher()
+    order: list[str] = []
+    started = asyncio.Event()
+
+    @fd.register_run_updated
+    async def slow(run: Run) -> None:
+        started.set()
+        await asyncio.sleep(0.05)
+        order.append("slow_done")
+
+    @fd.register_run_updated
+    async def fast(run: Run) -> None:
+        await started.wait()
+        order.append("fast_done")
+
+    await fd.feed_run_updated(_run_payload())
+    assert order == ["fast_done", "slow_done"]
