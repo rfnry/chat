@@ -72,24 +72,24 @@ export function ChatProvider(props: ChatProviderProps) {
         disposers.push(
           client.on('event', (data) => {
             store.getState().actions.addEvent(toEvent(data as never))
-          }),
+          })
         )
         disposers.push(
           client.on('run:updated', (data) => {
             store.getState().actions.upsertRun(toRun(data as never))
-          }),
+          })
         )
         disposers.push(
           client.on('thread:updated', (data) => {
             store.getState().actions.setThreadMeta(toThread(data as never))
-          }),
+          })
         )
         disposers.push(
           client.on('members:updated', (data) => {
             const payload = data as { thread_id: string; members: unknown[] }
             const identities = payload.members.map((m) => toIdentity(m as never))
             store.getState().actions.setMembers(payload.thread_id, identities)
-          }),
+          })
         )
         disposers.push(
           client.on('thread:invited', (data) => {
@@ -100,7 +100,7 @@ export function ChatProvider(props: ChatProviderProps) {
             }
             qcRef.current.invalidateQueries({ queryKey: ['chat', 'threads'] })
             onThreadInvitedRef.current?.(frame.thread, frame.addedBy)
-          }),
+          })
         )
 
         setValue({ client, store })

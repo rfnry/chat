@@ -74,9 +74,7 @@ export class ChatClient {
     }
     this.authenticateFn = authenticate
 
-    const authHeaders = authenticate
-      ? async () => (await authenticate!()).headers ?? {}
-      : undefined
+    const authHeaders = authenticate ? async () => (await authenticate!()).headers ?? {} : undefined
 
     this.rest = new RestTransport({
       baseUrl: this.url,
