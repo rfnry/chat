@@ -149,4 +149,4 @@ async def test_list_events_limit_zero_or_negative_clamps_to_one(client: AsyncCli
         resp = await client.get(f"/chat/threads/{thread_id}/events?limit={bad_limit}")
         assert resp.status_code == 200, f"limit={bad_limit} returned {resp.status_code}"
         body = resp.json()
-        assert len(body["items"]) <= 1, f"limit={bad_limit} returned {len(body['items'])} items"
+        assert len(body["items"]) == 1, f"limit={bad_limit} returned {len(body['items'])} items, expected 1"
