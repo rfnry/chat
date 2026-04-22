@@ -274,11 +274,9 @@ class ChatServer:
         connect time."""
         if self.broadcaster is None:
             return
-        namespace: str | None = None
-        if self.namespace_keys is not None:
-            namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
         tenant_path = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
         room = f"tenant:{tenant_path}"
+        namespace = tenant_path if self.namespace_keys is not None else None
         await self.broadcaster.broadcast_thread_created(
             thread,
             room=room,
@@ -290,11 +288,9 @@ class ChatServer:
         because the row is gone by the time we broadcast."""
         if self.broadcaster is None:
             return
-        namespace: str | None = None
-        if self.namespace_keys is not None:
-            namespace = derive_namespace_path(tenant, namespace_keys=self.namespace_keys)
         tenant_path = derive_namespace_path(tenant, namespace_keys=self.namespace_keys)
         room = f"tenant:{tenant_path}"
+        namespace = tenant_path if self.namespace_keys is not None else None
         await self.broadcaster.broadcast_thread_deleted(
             thread_id,
             tenant,
