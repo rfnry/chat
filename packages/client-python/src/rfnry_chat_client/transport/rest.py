@@ -70,11 +70,10 @@ class RestTransport:
         tenant: dict[str, str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> Thread:
-        payload = await self._request(
-            "POST",
-            "/threads",
-            json_body={"tenant": tenant, "metadata": metadata or {}},
-        )
+        body: dict[str, Any] = {"metadata": metadata or {}}
+        if tenant is not None:
+            body["tenant"] = tenant
+        payload = await self._request("POST", "/threads", json_body=body)
         return Thread.model_validate(payload)
 
     async def get_thread(self, thread_id: str) -> Thread:

@@ -76,7 +76,6 @@ async def test_bot_open_thread_with_triggers_on_invited_and_delivers_message(
         thread, _sent_event = await bot.open_thread_with(
             message=[TextPart(text="ping from bot")],
             user=ALICE,
-            tenant={},
         )
 
         # Wait for the inbox frame.

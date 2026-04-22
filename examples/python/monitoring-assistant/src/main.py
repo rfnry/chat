@@ -59,9 +59,6 @@ async def ping_user(body: PingUserRequest) -> dict[str, str]:
         message=[TextPart(text=body.message)],
         user=user,
         thread_id=body.thread_id,
-        # tenant={} instead of None — works around create_thread
-        # serializing `{"tenant": null}` which the server rejects.
-        tenant={},
     )
     logger.info("pinged user=%s thread=%s event=%s", body.user_id, thread.id, event.id)
     return {"thread_id": thread.id, "event_id": event.id}
