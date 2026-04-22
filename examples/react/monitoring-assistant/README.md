@@ -17,6 +17,17 @@ the `thread:invited` frame — no refresh, no poll.
   thread meta, auto-joins the thread room, invalidates the threads query, and
   fires the `onThreadInvited` callback. The thread appears in this UI instantly.
 
+## Auth note
+
+The chat server this demo targets must accept **two** auth shapes:
+
+- **React user** — HTTP `Authorization: Bearer <user_id>` header (this example hard-codes `u_alice`).
+- **Python agent** — Socket.IO `auth.token` field (this example sends `monitor-secret`).
+
+If you point at the `customer-support` example's server, it already accepts
+both; for a custom chat server, your `authenticate` callback needs to handle
+both code paths.
+
 ## Run
 
 1. Start a chat server (e.g. the `customer-support` example's server on port 8000).
