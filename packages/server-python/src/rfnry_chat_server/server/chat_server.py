@@ -277,9 +277,11 @@ class ChatServer:
         namespace: str | None = None
         if self.namespace_keys is not None:
             namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
+        tenant_path = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
+        room = f"tenant:{tenant_path}"
         await self.broadcaster.broadcast_thread_created(
             thread,
-            namespace_keys=self.namespace_keys,
+            room=room,
             namespace=namespace,
         )
 
@@ -291,10 +293,12 @@ class ChatServer:
         namespace: str | None = None
         if self.namespace_keys is not None:
             namespace = derive_namespace_path(tenant, namespace_keys=self.namespace_keys)
+        tenant_path = derive_namespace_path(tenant, namespace_keys=self.namespace_keys)
+        room = f"tenant:{tenant_path}"
         await self.broadcaster.broadcast_thread_deleted(
             thread_id,
             tenant,
-            namespace_keys=self.namespace_keys,
+            room=room,
             namespace=namespace,
         )
 

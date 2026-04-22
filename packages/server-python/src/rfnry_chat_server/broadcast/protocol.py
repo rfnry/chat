@@ -41,7 +41,7 @@ class Broadcaster(Protocol):
         self,
         thread: Thread,
         *,
-        namespace_keys: list[str] | None,
+        room: str,
         namespace: str | None = None,
     ) -> None: ...
     async def broadcast_thread_deleted(
@@ -49,7 +49,7 @@ class Broadcaster(Protocol):
         thread_id: str,
         tenant: dict[str, str],
         *,
-        namespace_keys: list[str] | None,
+        room: str,
         namespace: str | None = None,
     ) -> None: ...
     async def broadcast_stream_start(

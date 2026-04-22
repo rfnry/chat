@@ -105,13 +105,13 @@ class SocketIOBroadcaster:
         self,
         thread: Thread,
         *,
-        namespace_keys: list[str] | None,
+        room: str,
         namespace: str | None = None,
     ) -> None:
         await self._sio.emit(
             "thread:created",
             thread.model_dump(mode="json", by_alias=True),
-            room=_tenant_room(thread.tenant, namespace_keys=namespace_keys),
+            room=room,
             namespace=namespace or "/",
         )
 
@@ -120,13 +120,13 @@ class SocketIOBroadcaster:
         thread_id: str,
         tenant: dict[str, str],
         *,
-        namespace_keys: list[str] | None,
+        room: str,
         namespace: str | None = None,
     ) -> None:
         await self._sio.emit(
             "thread:deleted",
             {"thread_id": thread_id},
-            room=_tenant_room(tenant, namespace_keys=namespace_keys),
+            room=room,
             namespace=namespace or "/",
         )
 
