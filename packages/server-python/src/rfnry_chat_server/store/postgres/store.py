@@ -323,7 +323,6 @@ class PostgresChatStore:
     async def find_runs_started_before(
         self,
         *,
-        statuses: tuple[RunStatus, ...],
         threshold: datetime,
         limit: int = 100,
     ) -> list[Run]:
@@ -333,11 +332,10 @@ class PostgresChatStore:
                 SELECT id, thread_id, actor, triggered_by, status, error,
                        idempotency_key, metadata, started_at, completed_at
                 FROM runs
-                WHERE status = ANY($1::text[]) AND started_at < $2
+                WHERE status IN ('pending', 'running') AND started_at < $1
                 ORDER BY started_at
-                LIMIT $3
+                LIMIT $2
                 """,
-                list(statuses),
                 threshold,
                 limit,
             )

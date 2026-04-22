@@ -40,7 +40,6 @@ async def test_finds_runs_older_than_threshold(store: PostgresChatStore) -> None
 
     threshold = datetime.now(UTC) - timedelta(minutes=5)
     stale = await store.find_runs_started_before(
-        statuses=("pending", "running"),
         threshold=threshold,
     )
     assert [r.id for r in stale] == ["run_old"]
@@ -51,7 +50,6 @@ async def test_excludes_completed_runs(store: PostgresChatStore) -> None:
     await _seed(store, "run_done", old, "completed")
     threshold = datetime.now(UTC) - timedelta(minutes=5)
     stale = await store.find_runs_started_before(
-        statuses=("pending", "running"),
         threshold=threshold,
     )
     assert stale == []
@@ -63,8 +61,26 @@ async def test_honors_limit(store: PostgresChatStore) -> None:
         await _seed(store, f"run_{i}", old - timedelta(seconds=i), "running")
     threshold = datetime.now(UTC) - timedelta(minutes=5)
     stale = await store.find_runs_started_before(
-        statuses=("pending", "running"),
         threshold=threshold,
         limit=3,
     )
     assert len(stale) == 3
+
+
+async def test_find_runs_started_before_uses_partial_index(clean_db: asyncpg.Pool) -> None:
+    """Regression for R13: the sweep query's WHERE clause must match the
+    runs_active_started partial index predicate literally so the planner
+    picks the index.  ANY($1::text[]) prevents plan-time evaluation and
+    silently falls back to a sequential scan; the literal IN list matches
+    the index predicate exactly."""
+    async with clean_db.acquire() as conn:
+        rows = await conn.fetch(
+            "EXPLAIN SELECT * FROM runs "
+            "WHERE status IN ('pending', 'running') AND started_at < $1 "
+            "ORDER BY started_at LIMIT 100",
+            datetime.now(UTC),
+        )
+    plan_text = "\n".join(r["QUERY PLAN"] for r in rows)
+    assert "runs_active_started" in plan_text, (
+        f"watchdog sweep must use runs_active_started partial index; got:\n{plan_text}"
+    )

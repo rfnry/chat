@@ -180,11 +180,11 @@ class InMemoryChatStore:
     async def find_runs_started_before(
         self,
         *,
-        statuses: tuple[RunStatus, ...],
         threshold: datetime,
         limit: int = 100,
     ) -> list[Run]:
-        stale = [run for run in self._runs.values() if run.status in statuses and run.started_at < threshold]
+        active = {"pending", "running"}
+        stale = [run for run in self._runs.values() if run.status in active and run.started_at < threshold]
         stale.sort(key=lambda r: r.started_at)
         return stale[:limit]
 

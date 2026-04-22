@@ -64,7 +64,6 @@ class ChatStore(Protocol):
     async def find_runs_started_before(
         self,
         *,
-        statuses: tuple[RunStatus, ...],
         threshold: datetime,
         limit: int = 100,
     ) -> list[Run]: ...

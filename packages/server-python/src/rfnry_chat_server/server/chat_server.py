@@ -163,7 +163,6 @@ class ChatServer:
     async def _sweep_stale_runs(self) -> None:
         threshold = datetime.now(UTC) - timedelta(seconds=self.run_timeout_seconds)
         stale = await self.store.find_runs_started_before(
-            statuses=("pending", "running"),
             threshold=threshold,
         )
         for run in stale:
