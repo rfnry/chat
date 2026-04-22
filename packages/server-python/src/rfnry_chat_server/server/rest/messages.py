@@ -66,6 +66,6 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="thread not found")
         if not await server.check_authorize(identity, thread_id, "thread.read"):
             raise HTTPException(status_code=403, detail="not authorized: thread.read")
-        return await server.store.list_events(thread_id, limit=min(limit, MAX_EVENTS_LIMIT))
+        return await server.store.list_events(thread_id, limit=max(1, min(limit, MAX_EVENTS_LIMIT)))
 
     return router

@@ -102,20 +102,9 @@ async def test_send_message_requires_membership(clean_db: asyncpg.Pool) -> None:
     assert resp.status_code == 403
 
 
-async def test_list_events_limit_capped_at_200(clean_db: asyncpg.Pool) -> None:
+async def test_list_events_limit_capped_at_200(client: AsyncClient, clean_db: asyncpg.Pool) -> None:
     store = PostgresChatStore(pool=clean_db)
-    alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
-
-    async def auth(_h: HandshakeData) -> Identity:
-        return alice
-
-    chat_server = ChatServer(store=store, authenticate=auth)
-    app = FastAPI()
-    app.state.chat_server = chat_server
-    app.include_router(chat_server.router, prefix="/chat")
-    http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-
-    create = await http.post("/chat/threads", json={"tenant": {"org": "A"}})
+    create = await client.post("/chat/threads", json={"tenant": {"org": "A"}})
     thread_id = create.json()["id"]
 
     # Seed 201 events directly via the store to avoid 201 HTTP round-trips
@@ -124,14 +113,40 @@ async def test_list_events_limit_capped_at_200(clean_db: asyncpg.Pool) -> None:
         event = MessageEvent(
             id=f"evt_{secrets.token_hex(8)}",
             thread_id=thread_id,
-            author=alice,
+            author=UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}}),
             created_at=now + timedelta(seconds=i),
             content=[TextPart(text=f"m{i}")],
             client_id=f"cid_{i}",
         )
         await store.append_event(event)
 
-    resp = await http.get(f"/chat/threads/{thread_id}/events?limit=10000")
+    resp = await client.get(f"/chat/threads/{thread_id}/events?limit=10000")
     assert resp.status_code == 200
     body = resp.json()
     assert len(body["items"]) == 200
+    # Capped page must carry a continuation cursor so paginating callers don't
+    # mistake it for end-of-data.
+    assert body["next_cursor"] is not None
+
+
+async def test_list_events_limit_zero_or_negative_clamps_to_one(client: AsyncClient, clean_db: asyncpg.Pool) -> None:
+    store = PostgresChatStore(pool=clean_db)
+    create = await client.post("/chat/threads", json={"tenant": {"org": "A"}})
+    thread_id = create.json()["id"]
+
+    now = datetime.now(UTC)
+    event = MessageEvent(
+        id=f"evt_{secrets.token_hex(8)}",
+        thread_id=thread_id,
+        author=UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}}),
+        created_at=now,
+        content=[TextPart(text="hello")],
+        client_id="cid_0",
+    )
+    await store.append_event(event)
+
+    for bad_limit in ("-1", "0"):
+        resp = await client.get(f"/chat/threads/{thread_id}/events?limit={bad_limit}")
+        assert resp.status_code == 200, f"limit={bad_limit} returned {resp.status_code}"
+        body = resp.json()
+        assert len(body["items"]) <= 1, f"limit={bad_limit} returned {len(body['items'])} items"
