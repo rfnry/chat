@@ -1,7 +1,7 @@
 import type { Event } from '@rfnry/chat-protocol'
 import { toEvent } from '@rfnry/chat-protocol'
 import { io, type Socket } from 'socket.io-client'
-import { ChatHttpError } from '../errors'
+import { SocketTransportError } from '../errors'
 
 export type SocketAuthPayload = {
   headers?: Record<string, string>
@@ -69,7 +69,7 @@ export class SocketTransport {
       error?: { code: string; message: string }
     }
     if (response.error) {
-      throw new ChatHttpError(0, `${response.error.code}: ${response.error.message}`)
+      throw new SocketTransportError(response.error.code, response.error.message)
     }
     return {
       threadId: response.thread_id ?? threadId,
@@ -90,7 +90,7 @@ export class SocketTransport {
       event,
     })) as { event?: unknown; error?: { code: string; message: string } }
     if (reply.error) {
-      throw new ChatHttpError(0, `${reply.error.code}: ${reply.error.message}`)
+      throw new SocketTransportError(reply.error.code, reply.error.message)
     }
     return toEvent(reply.event as never)
   }
@@ -109,7 +109,7 @@ export class SocketTransport {
       error?: { code: string; message: string }
     }
     if (reply.error) {
-      throw new ChatHttpError(0, `${reply.error.code}: ${reply.error.message}`)
+      throw new SocketTransportError(reply.error.code, reply.error.message)
     }
     return { runId: reply.run_id!, status: reply.status! }
   }
@@ -127,7 +127,7 @@ export class SocketTransport {
       error?: { code: string; message: string }
     }
     if (reply.error) {
-      throw new ChatHttpError(0, `${reply.error.code}: ${reply.error.message}`)
+      throw new SocketTransportError(reply.error.code, reply.error.message)
     }
     return { runId: reply.run_id!, status: reply.status! }
   }
@@ -176,7 +176,7 @@ export class SocketTransport {
       error?: { code: string; message: string }
     }
     if (reply.error) {
-      throw new ChatHttpError(0, `${reply.error.code}: ${reply.error.message}`)
+      throw new SocketTransportError(reply.error.code, reply.error.message)
     }
   }
 

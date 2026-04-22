@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { SocketTransportError } from '../../src/errors'
 
 const mockSocket = {
   on: vi.fn(),
@@ -89,6 +90,33 @@ describe('ChatClient socket', () => {
     const client = new ChatClient({ url: 'http://localhost:8000' })
     await client.connect()
     await expect(client.joinThread('th_1')).rejects.toThrow('forbidden')
+  })
+
+  it('throws SocketTransportError (NOT ChatHttpError) on socket-level ack errors', async () => {
+    mockSocket.once.mockImplementation((event: string, cb: () => void) => {
+      if (event === 'connect') queueMicrotask(() => cb())
+    })
+    mockSocket.emitWithAck.mockResolvedValue({
+      error: { code: 'forbidden', message: 'not a member' },
+    })
+
+    const client = new ChatClient({ url: 'http://localhost:8000' })
+    await client.connect()
+
+    let caught: unknown = null
+    try {
+      await client.joinThread('th_1')
+    } catch (err) {
+      caught = err
+    }
+
+    expect(caught).toBeInstanceOf(SocketTransportError)
+    const err = caught as SocketTransportError
+    expect(err.name).toBe('SocketTransportError')
+    expect(err.code).toBe('forbidden')
+    expect(err.message).toBe('forbidden: not a member')
+    // Regression guard: socket errors must NOT masquerade as HTTP 0.
+    expect((err as unknown as { status?: number }).status).toBeUndefined()
   })
 
   it('on returns unsubscribe function', async () => {

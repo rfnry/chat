@@ -35,3 +35,20 @@ export function httpErrorFor(status: number, body: string): ChatHttpError {
   if (status === 409) return new ThreadConflictError(body)
   return new ChatHttpError(status, body)
 }
+
+/**
+ * Error raised when a Socket.IO ack comes back with an `error` payload.
+ *
+ * Distinct from `ChatHttpError` — the REST transport raises that one with a
+ * real HTTP status. Socket-layer failures have a `code` string and no HTTP
+ * status; wrapping them as `ChatHttpError(0, ...)` masked the distinction, so
+ * callers couldn't tell whether a failure came from REST or the socket.
+ */
+export class SocketTransportError extends Error {
+  readonly code: string
+  constructor(code: string, message: string) {
+    super(`${code}: ${message}`)
+    this.name = 'SocketTransportError'
+    this.code = code
+  }
+}

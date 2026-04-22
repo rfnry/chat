@@ -42,6 +42,7 @@ export { type AuthenticatePayload, ChatClient, type ChatClientOptions, type Page
 export {
   ChatAuthError,
   ChatHttpError,
+  SocketTransportError,
   ThreadConflictError,
   ThreadNotFoundError,
 } from './errors'
