@@ -67,7 +67,7 @@ async def test_on_message_decorator_fires_on_matching_event() -> None:
         received.append(ctx.event)
 
     await client.connect()
-    raw_handler = sio.handlers["event"]
+    raw_handler = sio.handlers["event"][0]
     await raw_handler(_message_event_dict(author_id="u_other", recipients=["a_me"]))
     assert len(received) == 1
 
@@ -88,7 +88,7 @@ async def test_on_message_decorator_respects_recipient_filter() -> None:
         received.append(ctx.event)
 
     await client.connect()
-    raw_handler = sio.handlers["event"]
+    raw_handler = sio.handlers["event"][0]
     await raw_handler(_message_event_dict(author_id="u_other", recipients=["a_other"]))
     assert received == []
 
@@ -109,7 +109,7 @@ async def test_on_tool_call_with_name_filter() -> None:
         hits.append(ctx.event)
 
     await client.connect()
-    raw_handler = sio.handlers["event"]
+    raw_handler = sio.handlers["event"][0]
     await raw_handler(_tool_call_event_dict(tool_name="get_stock"))
     await raw_handler(_tool_call_event_dict(tool_name="get_weather"))
     assert len(hits) == 1
@@ -131,7 +131,7 @@ async def test_on_tool_call_without_name_matches_any_tool() -> None:
         hits.append(ctx.event)
 
     await client.connect()
-    raw_handler = sio.handlers["event"]
+    raw_handler = sio.handlers["event"][0]
     await raw_handler(_tool_call_event_dict(tool_name="get_stock"))
     await raw_handler(_tool_call_event_dict(tool_name="get_weather"))
     assert len(hits) == 2
@@ -168,7 +168,7 @@ async def test_emitter_handler_routes_through_event_send() -> None:
         yield send.message(content=[TextPart(text="pong")])
 
     await client.connect()
-    raw_handler = sio.handlers["event"]
+    raw_handler = sio.handlers["event"][0]
     await raw_handler(_message_event_dict(author_id="u_other", recipients=["a_me"]))
 
     emitted_names = [ev for ev, _ in sio.emitted]
@@ -250,7 +250,7 @@ async def test_reconnect_switches_url_and_preserves_handlers() -> None:
         http_client=httpx.AsyncClient(transport=httpx.MockTransport(_noop_handler)),
     )
     # The handler registered BEFORE reconnect must still fire after.
-    raw_handler = sio2.handlers["event"]
+    raw_handler = sio2.handlers["event"][0]
     await raw_handler(_message_event_dict(author_id="u_other", recipients=["a_me"]))
     assert len(received) == 1
     assert sio1.disconnected is True
@@ -356,3 +356,27 @@ async def test_open_thread_with_calls_add_member_without_preflight() -> None:
 
     assert get_members_hits == 0, "should not preflight with GET /members — add_member is idempotent"
     assert post_members_hits == 1
+
+
+async def test_connect_called_twice_does_not_duplicate_listeners() -> None:
+    """Calling connect() twice on a ChatClient must not register raw event
+    listeners twice. Regression for R5: python-socketio .on() accumulates
+    listeners; a second connect() previously caused every event to dispatch
+    to both copies of every handler."""
+    me = AssistantIdentity(id="a_me", name="Me")
+    sio = FakeSioClient()
+    transport = SocketTransport(base_url="http://chat.test", sio_client=sio)
+    client = ChatClient(
+        base_url="http://chat.test",
+        identity=me,
+        http_client=httpx.AsyncClient(),
+        socket_transport=transport,
+    )
+    await client.connect()
+    listeners_after_first = {ev: len(handlers) for ev, handlers in sio.handlers.items()}
+    await client.connect()
+    listeners_after_second = {ev: len(handlers) for ev, handlers in sio.handlers.items()}
+    for event, count_before in listeners_after_first.items():
+        assert listeners_after_second[event] == count_before, (
+            f"event {event!r}: {listeners_after_second[event]} handlers after second connect, expected {count_before}"
+        )

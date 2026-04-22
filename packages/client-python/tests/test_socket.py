@@ -86,7 +86,7 @@ async def test_on_raw_event_registers_handler() -> None:
         received.append(payload)
 
     transport.on_raw_event("event", handler)
-    fn = sio.handlers["event"]
+    fn = sio.handlers["event"][0]
     await fn({"id": "evt_1", "type": "message"})
     assert received == [{"id": "evt_1", "type": "message"}]
 
