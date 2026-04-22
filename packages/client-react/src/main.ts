@@ -50,6 +50,7 @@ export { useConnectionStatus } from './hooks/useConnectionStatus'
 export { type CreateThreadInput, useCreateThread } from './hooks/useCreateThread'
 export {
   type EventHandler,
+  type SugarHandlerOptions,
   type UseHandlerOptions,
   useAnyEventHandler,
   useHandler,

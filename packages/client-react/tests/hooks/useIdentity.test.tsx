@@ -65,7 +65,7 @@ describe('ChatClient.identity + useIdentity()', () => {
 
   it('useIdentity returns null when client was built without an identity', () => {
     const client = new ChatClient({ url: 'http://localhost:8000' })
-    let seen: Identity | null | undefined = undefined
+    let seen: Identity | null | undefined
     function Probe() {
       seen = useIdentity()
       return null
