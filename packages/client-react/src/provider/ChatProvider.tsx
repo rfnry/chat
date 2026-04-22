@@ -40,6 +40,7 @@ export function ChatProvider(props: ChatProviderProps) {
   useEffect(() => {
     const client = new ChatClient(optsRef.current)
     const store = createChatStore()
+    const disposers: Array<() => void> = []
 
     let cancelled = false
     const setup = async () => {
@@ -49,27 +50,37 @@ export function ChatProvider(props: ChatProviderProps) {
         if (cancelled) return
         store.getState().actions.setConnectionStatus('connected')
 
-        client.on('event', (data) => {
-          store.getState().actions.addEvent(toEvent(data as never))
-        })
-        client.on('run:updated', (data) => {
-          store.getState().actions.upsertRun(toRun(data as never))
-        })
-        client.on('thread:updated', (data) => {
-          store.getState().actions.setThreadMeta(toThread(data as never))
-        })
-        client.on('members:updated', (data) => {
-          const payload = data as { thread_id: string; members: unknown[] }
-          const identities = payload.members.map((m) => toIdentity(m as never))
-          store.getState().actions.setMembers(payload.thread_id, identities)
-        })
-        client.on('thread:invited', (data) => {
-          const frame = toThreadInvitedFrame(data as never)
-          store.getState().actions.setThreadMeta(frame.thread)
-          void client.joinThread(frame.thread.id).catch(() => {})
-          qcRef.current.invalidateQueries({ queryKey: ['chat', 'threads'] })
-          onThreadInvitedRef.current?.(frame.thread, frame.addedBy)
-        })
+        disposers.push(
+          client.on('event', (data) => {
+            store.getState().actions.addEvent(toEvent(data as never))
+          }),
+        )
+        disposers.push(
+          client.on('run:updated', (data) => {
+            store.getState().actions.upsertRun(toRun(data as never))
+          }),
+        )
+        disposers.push(
+          client.on('thread:updated', (data) => {
+            store.getState().actions.setThreadMeta(toThread(data as never))
+          }),
+        )
+        disposers.push(
+          client.on('members:updated', (data) => {
+            const payload = data as { thread_id: string; members: unknown[] }
+            const identities = payload.members.map((m) => toIdentity(m as never))
+            store.getState().actions.setMembers(payload.thread_id, identities)
+          }),
+        )
+        disposers.push(
+          client.on('thread:invited', (data) => {
+            const frame = toThreadInvitedFrame(data as never)
+            store.getState().actions.setThreadMeta(frame.thread)
+            void client.joinThread(frame.thread.id).catch(() => {})
+            qcRef.current.invalidateQueries({ queryKey: ['chat', 'threads'] })
+            onThreadInvitedRef.current?.(frame.thread, frame.addedBy)
+          }),
+        )
 
         setValue({ client, store })
       } catch {
@@ -82,6 +93,7 @@ export function ChatProvider(props: ChatProviderProps) {
 
     return () => {
       cancelled = true
+      for (const dispose of disposers) dispose()
       void client.disconnect()
       store.getState().actions.reset()
     }
