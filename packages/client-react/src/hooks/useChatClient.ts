@@ -1,6 +1,6 @@
 import type { Identity } from '@rfnry/chat-protocol'
 import { useContext } from 'react'
-import { ChatContext } from '../provider/ChatContext'
+import { ChatContext, type EventRegistry } from '../provider/ChatContext'
 
 export function useChatClient() {
   const ctx = useContext(ChatContext)
@@ -12,6 +12,12 @@ export function useChatStore() {
   const ctx = useContext(ChatContext)
   if (!ctx) throw new Error('useChatStore must be used inside <ChatProvider>')
   return ctx.store
+}
+
+export function useChatEvents(): EventRegistry {
+  const ctx = useContext(ChatContext)
+  if (!ctx) throw new Error('useChatEvents must be used within ChatProvider')
+  return ctx.events
 }
 
 export function useIdentity(): Identity | null {

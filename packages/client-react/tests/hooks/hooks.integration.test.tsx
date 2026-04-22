@@ -8,9 +8,13 @@ import { useThreadSession } from '../../src/hooks/useThreadSession'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+const noopEvents = { subscribe: () => () => {} }
+
 function harness(client: ChatClient, store: ReturnType<typeof createChatStore>) {
   return ({ children }: { children: ReactNode }) => (
-    <ChatContext.Provider value={{ client, store }}>{children}</ChatContext.Provider>
+    <ChatContext.Provider value={{ client, store, events: noopEvents }}>
+      {children}
+    </ChatContext.Provider>
   )
 }
 

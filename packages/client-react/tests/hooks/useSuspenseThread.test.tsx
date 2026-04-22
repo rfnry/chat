@@ -15,10 +15,12 @@ const thread1 = {
   updatedAt: '2026-04-10T00:00:00Z',
 }
 
+const noopEvents = { subscribe: () => () => {} }
+
 function wrapper(client: ChatClient, qc: QueryClient, store = createChatStore()) {
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>
-      <ChatContext.Provider value={{ client, store }}>
+      <ChatContext.Provider value={{ client, store, events: noopEvents }}>
         <Suspense fallback={<div data-testid="loading">loading</div>}>{children}</Suspense>
       </ChatContext.Provider>
     </QueryClientProvider>

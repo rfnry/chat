@@ -11,7 +11,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { ChatClient, type ChatClientOptions } from '../client'
 import { createChatStore } from '../store/chatStore'
-import { ChatContext, type ChatContextValue } from './ChatContext'
+import {
+  ChatContext,
+  type ChatContextValue,
+  type EventListener,
+  type EventRegistry,
+} from './ChatContext'
 
 export type ChatProviderProps = ChatClientOptions & {
   children: ReactNode
@@ -78,9 +83,32 @@ export function ChatProvider(props: ChatProviderProps) {
         if (cancelled) return
         store.getState().actions.setConnectionStatus('connected')
 
+        // Per-thread event subscribers. The provider parses each incoming
+        // `event` frame ONCE and dispatches the typed Event to all listeners.
+        // Mounted handler hooks subscribe here instead of calling client.on('event')
+        // independently — at N mounted hooks, this drops parse calls from N+1
+        // to 1 per incoming event.
+        const eventListeners = new Set<EventListener>()
+        const eventRegistry: EventRegistry = {
+          subscribe(listener) {
+            eventListeners.add(listener)
+            return () => {
+              eventListeners.delete(listener)
+            }
+          },
+        }
+
         disposers.push(
           client.on('event', (data) => {
-            store.getState().actions.addEvent(toEvent(data as never))
+            const event = toEvent(data as never)
+            store.getState().actions.addEvent(event)
+            for (const listener of eventListeners) {
+              try {
+                listener(event)
+              } catch (err) {
+                console.error('handler error', err)
+              }
+            }
           })
         )
         disposers.push(
@@ -136,7 +164,7 @@ export function ChatProvider(props: ChatProviderProps) {
           })
         )
 
-        setValue({ client, store })
+        setValue({ client, store, events: eventRegistry })
       } catch {
         if (cancelled) return
         store.getState().actions.setConnectionStatus('disconnected')

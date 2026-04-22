@@ -14,7 +14,9 @@ describe('useThreadMembers', () => {
   it('returns empty array when no members loaded', () => {
     const store = createChatStore()
     const { getByTestId } = render(
-      <ChatContext.Provider value={{ client: {} as ChatClient, store }}>
+      <ChatContext.Provider
+        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+      >
         <Probe />
       </ChatContext.Provider>
     )
@@ -24,7 +26,9 @@ describe('useThreadMembers', () => {
   it('reflects setMembers updates', () => {
     const store = createChatStore()
     const { getByTestId } = render(
-      <ChatContext.Provider value={{ client: {} as ChatClient, store }}>
+      <ChatContext.Provider
+        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+      >
         <Probe />
       </ChatContext.Provider>
     )
@@ -54,12 +58,16 @@ describe('useThreadMembers', () => {
       return null
     }
     const { rerender } = render(
-      <ChatContext.Provider value={{ client: {} as ChatClient, store }}>
+      <ChatContext.Provider
+        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+      >
         <Probe2 />
       </ChatContext.Provider>
     )
     rerender(
-      <ChatContext.Provider value={{ client: {} as ChatClient, store }}>
+      <ChatContext.Provider
+        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+      >
         <Probe2 />
       </ChatContext.Provider>
     )

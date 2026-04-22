@@ -1,7 +1,7 @@
 import type { Event } from '@rfnry/chat-protocol'
-import { toEvent } from '@rfnry/chat-protocol'
 import { useEffect, useRef } from 'react'
-import { useChatClient } from './useChatClient'
+import type { EventListener } from '../provider/ChatContext'
+import { useChatClient, useChatEvents } from './useChatClient'
 
 export type EventHandler = (event: Event) => void | Promise<void>
 
@@ -33,14 +33,14 @@ export function useHandler(
   options: UseHandlerOptions = {}
 ): void {
   const client = useChatClient()
+  const events = useChatEvents()
   const handlerRef = useRef(handler)
   handlerRef.current = handler
 
   const allEvents = options.allEvents ?? false
 
   useEffect(() => {
-    const off = client.on('event', (raw: unknown) => {
-      const event = toEvent(raw as never)
+    const listener: EventListener = (event) => {
       if (eventType !== '*' && event.type !== eventType) return
       if (options.toolName !== undefined) {
         if (event.type !== 'tool.call') return
@@ -51,9 +51,9 @@ export function useHandler(
         if (selfId && !passesDefaultFilters(event, selfId)) return
       }
       void handlerRef.current(event)
-    })
-    return off
-  }, [client, eventType, options.toolName, allEvents])
+    }
+    return events.subscribe(listener)
+  }, [events, client, eventType, options.toolName, allEvents])
 }
 
 export function useMessageHandler(handler: EventHandler, options: SugarHandlerOptions = {}): void {

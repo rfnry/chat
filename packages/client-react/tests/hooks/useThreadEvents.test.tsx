@@ -20,9 +20,11 @@ function makeEvent(id: string, threadId: string, createdAt = '2026-01-01T00:00:0
   }
 }
 
+const noopEvents = { subscribe: () => () => {} }
+
 function harness(store: ReturnType<typeof createChatStore>) {
   return ({ children }: { children: ReactNode }) => (
-    <ChatContext.Provider value={{ client: {} as ChatClient, store }}>
+    <ChatContext.Provider value={{ client: {} as ChatClient, store, events: noopEvents }}>
       {children}
     </ChatContext.Provider>
   )

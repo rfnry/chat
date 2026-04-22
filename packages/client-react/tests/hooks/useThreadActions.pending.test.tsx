@@ -6,9 +6,11 @@ import { useThreadActions } from '../../src/hooks/useThreadActions'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+const noopEvents = { subscribe: () => () => {} }
+
 function harness(client: ChatClient) {
   return ({ children }: { children: ReactNode }) => (
-    <ChatContext.Provider value={{ client, store: createChatStore() }}>
+    <ChatContext.Provider value={{ client, store: createChatStore(), events: noopEvents }}>
       {children}
     </ChatContext.Provider>
   )

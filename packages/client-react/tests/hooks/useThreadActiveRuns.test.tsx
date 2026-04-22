@@ -19,9 +19,11 @@ function makeRun(id: string, threadId: string, status: Run['status'] = 'running'
   }
 }
 
+const noopEvents = { subscribe: () => () => {} }
+
 function harness(store: ReturnType<typeof createChatStore>) {
   return ({ children }: { children: ReactNode }) => (
-    <ChatContext.Provider value={{ client: {} as ChatClient, store }}>
+    <ChatContext.Provider value={{ client: {} as ChatClient, store, events: noopEvents }}>
       {children}
     </ChatContext.Provider>
   )

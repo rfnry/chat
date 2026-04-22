@@ -7,9 +7,13 @@ import { useInviteHandler } from '../../src/hooks/useInviteHandler'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+const noopEvents = { subscribe: () => () => {} }
+
 function harness(client: Partial<ChatClient>) {
   return ({ children }: { children: ReactNode }) => (
-    <ChatContext.Provider value={{ client: client as ChatClient, store: createChatStore() }}>
+    <ChatContext.Provider
+      value={{ client: client as ChatClient, store: createChatStore(), events: noopEvents }}
+    >
       {children}
     </ChatContext.Provider>
   )

@@ -22,7 +22,9 @@ describe('useThreadMetadata', () => {
   it('returns null when no thread is in the store', () => {
     const store = createChatStore()
     const { getByTestId } = render(
-      <ChatContext.Provider value={{ client: {} as ChatClient, store }}>
+      <ChatContext.Provider
+        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+      >
         <Probe />
       </ChatContext.Provider>
     )
@@ -32,7 +34,9 @@ describe('useThreadMetadata', () => {
   it('reflects store updates', () => {
     const store = createChatStore()
     const { getByTestId } = render(
-      <ChatContext.Provider value={{ client: {} as ChatClient, store }}>
+      <ChatContext.Provider
+        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+      >
         <Probe />
       </ChatContext.Provider>
     )
