@@ -97,3 +97,20 @@ async def test_idempotency_key_partial_unique(store: PostgresChatStore) -> None:
     await store.create_run(_new_run(id="run_1", idempotency_key="key_a"))
     with pytest.raises(asyncpg.exceptions.UniqueViolationError):
         await store.create_run(_new_run(id="run_2", idempotency_key="key_a"))
+
+
+async def test_create_run_returns_persisted_state_via_returning(
+    store: PostgresChatStore,
+) -> None:
+    """Regression for R12.1: create_run must reflect the persisted DB state,
+    not just the input. Today started_at is set in Python so input == output;
+    this test pins the contract for future schema changes that might use
+    DB-side defaults."""
+    run = _new_run(id="run_r12")
+    created = await store.create_run(run)
+
+    refetched = await store.get_run(run.id)
+    assert refetched is not None
+    assert created.model_dump(mode="json") == refetched.model_dump(mode="json"), (
+        "create_run's return value must equal what get_run reads back"
+    )

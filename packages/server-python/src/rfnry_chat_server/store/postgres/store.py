@@ -233,11 +233,13 @@ class PostgresChatStore:
 
     async def create_run(self, run: Run) -> Run:
         async with self._pool.acquire() as conn:
-            await conn.execute(
+            row = await conn.fetchrow(
                 """
                 INSERT INTO runs (id, thread_id, actor, triggered_by, status,
                                   error, idempotency_key, metadata, started_at, completed_at)
                 VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6::jsonb, $7, $8::jsonb, $9, $10)
+                RETURNING id, thread_id, actor, triggered_by, status, error,
+                          idempotency_key, metadata, started_at, completed_at
                 """,
                 run.id,
                 run.thread_id,
@@ -250,7 +252,8 @@ class PostgresChatStore:
                 run.started_at,
                 run.completed_at,
             )
-        return run
+        assert row is not None  # INSERT ... RETURNING always returns a row
+        return _row_to_run(row)
 
     async def get_run(self, run_id: str) -> Run | None:
         async with self._pool.acquire() as conn:
