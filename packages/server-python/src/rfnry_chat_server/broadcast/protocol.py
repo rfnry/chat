@@ -37,15 +37,20 @@ class Broadcaster(Protocol):
         *,
         namespace: str | None = None,
     ) -> None: ...
-    async def broadcast_thread_created_to_sids(
+    async def broadcast_thread_created(
         self,
         thread: Thread,
-        targets: list[tuple[str, str]],
+        *,
+        namespace_keys: list[str] | None,
+        namespace: str | None = None,
     ) -> None: ...
-    async def broadcast_thread_deleted_to_sids(
+    async def broadcast_thread_deleted(
         self,
         thread_id: str,
-        targets: list[tuple[str, str]],
+        tenant: dict[str, str],
+        *,
+        namespace_keys: list[str] | None,
+        namespace: str | None = None,
     ) -> None: ...
     async def broadcast_stream_start(
         self,

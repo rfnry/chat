@@ -101,33 +101,34 @@ class SocketIOBroadcaster:
             namespace=namespace or "/",
         )
 
-    async def broadcast_thread_created_to_sids(
+    async def broadcast_thread_created(
         self,
         thread: Thread,
-        targets: list[tuple[str, str]],
+        *,
+        namespace_keys: list[str] | None,
+        namespace: str | None = None,
     ) -> None:
-        payload = thread.model_dump(mode="json", by_alias=True)
-        for sid, ns in targets:
-            await self._sio.emit(
-                "thread:created",
-                payload,
-                to=sid,
-                namespace=ns or "/",
-            )
+        await self._sio.emit(
+            "thread:created",
+            thread.model_dump(mode="json", by_alias=True),
+            room=_tenant_room(thread.tenant, namespace_keys=namespace_keys),
+            namespace=namespace or "/",
+        )
 
-    async def broadcast_thread_deleted_to_sids(
+    async def broadcast_thread_deleted(
         self,
         thread_id: str,
-        targets: list[tuple[str, str]],
+        tenant: dict[str, str],
+        *,
+        namespace_keys: list[str] | None,
+        namespace: str | None = None,
     ) -> None:
-        payload = {"thread_id": thread_id}
-        for sid, ns in targets:
-            await self._sio.emit(
-                "thread:deleted",
-                payload,
-                to=sid,
-                namespace=ns or "/",
-            )
+        await self._sio.emit(
+            "thread:deleted",
+            {"thread_id": thread_id},
+            room=_tenant_room(tenant, namespace_keys=namespace_keys),
+            namespace=namespace or "/",
+        )
 
     async def broadcast_stream_start(
         self,

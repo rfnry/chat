@@ -1,8 +1,8 @@
-"""R11.1: every authenticated socket auto-joins a tenant:<path> room on connect.
+"""R11.1/R11.2: tenant room join on connect + tenant-scoped broadcast isolation.
 
-The two tests exercise both deployment shapes:
   - namespace_keys=["org"]  → room is  tenant:/acme
   - namespace_keys=None     → room is  tenant:/   (single-tenant sentinel)
+  - thread:created for tenant A must NOT reach a socket from tenant B
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import asyncpg
+import httpx
 import pytest
 import socketio
 import uvicorn
@@ -164,3 +165,86 @@ async def test_single_tenant_socket_joins_root_tenant_room_on_connect(
     assert received[0]["thread_id"] == "th_root"
 
     await client.disconnect()
+
+
+async def test_thread_created_emits_only_to_matching_tenant_room(
+    clean_db: asyncpg.Pool,
+) -> None:
+    """R11.2 (tenant isolation): a thread:created event for tenant A must
+    NOT reach a socket from tenant B. The previous per-SID broadcast loop
+    enforced this via filtering; the new room-based emit enforces it via
+    Socket.IO room membership. This test pins the contract."""
+    alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "acme"}})
+    bob = UserIdentity(id="u_bob", name="Bob", metadata={"tenant": {"org": "globex"}})
+    identities: dict[str, Identity] = {"alice": alice, "bob": bob}
+
+    async def auth(handshake: HandshakeData) -> Identity | None:
+        user_id: str | None = None
+        if isinstance(handshake.auth, dict):
+            raw = handshake.auth.get("user")
+            if isinstance(raw, str):
+                user_id = raw
+        if user_id is None:
+            header_val = handshake.headers.get("x-user")
+            if isinstance(header_val, str):
+                user_id = header_val
+        return identities.get(user_id) if user_id is not None else None
+
+    store = PostgresChatStore(pool=clean_db)
+    chat_server = ChatServer(store=store, authenticate=auth, namespace_keys=["org"])
+    fastapi = FastAPI()
+    fastapi.state.chat_server = chat_server
+    fastapi.include_router(chat_server.router, prefix="/chat")
+    asgi = chat_server.mount_socketio(fastapi)
+    server = _Server(asgi)
+    base = await server.start()
+    try:
+        alice_received: list[dict[str, Any]] = []
+        bob_received: list[dict[str, Any]] = []
+        alice_got = asyncio.Event()
+
+        alice_client = socketio.AsyncClient()
+        bob_client = socketio.AsyncClient()
+
+        @alice_client.on("thread:created", namespace="/acme")
+        async def on_alice_created(data: dict[str, Any]) -> None:
+            alice_received.append(data)
+            alice_got.set()
+
+        @bob_client.on("thread:created", namespace="/globex")
+        async def on_bob_created(data: dict[str, Any]) -> None:
+            bob_received.append(data)
+
+        await alice_client.connect(
+            base,
+            namespaces=["/acme"],
+            transports=["websocket"],
+            socketio_path="/chat/ws",
+            auth={"user": "alice"},
+        )
+        await bob_client.connect(
+            base,
+            namespaces=["/globex"],
+            transports=["websocket"],
+            socketio_path="/chat/ws",
+            auth={"user": "bob"},
+        )
+
+        async with httpx.AsyncClient(base_url=base) as http:
+            resp = await http.post(
+                "/chat/threads",
+                json={"tenant": {"org": "acme"}},
+                headers={"x-user": "alice"},
+            )
+            assert resp.status_code == 201
+
+        await asyncio.wait_for(alice_got.wait(), timeout=5)
+
+        assert len(alice_received) == 1
+        assert len(bob_received) == 0
+    finally:
+        with contextlib.suppress(Exception):
+            await alice_client.disconnect()
+        with contextlib.suppress(Exception):
+            await bob_client.disconnect()
+        await server.stop()

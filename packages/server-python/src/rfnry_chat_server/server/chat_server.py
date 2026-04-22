@@ -22,7 +22,6 @@ from rfnry_chat_protocol import (
     Thread,
     ThreadInvitedFrame,
     ThreadMember,
-    matches,
     parse_identity,
 )
 
@@ -66,14 +65,6 @@ def _validate_namespace_keys(namespace_keys: list[str] | None) -> list[str] | No
 
 
 IDENTITY_HEADER = "x-rfnry-identity"
-
-
-def _identity_tenant_of(identity: Identity) -> dict[str, str]:
-    """Extract the tenant dict from an identity, dropping non-string values."""
-    raw = identity.metadata.get("tenant", {})
-    if not isinstance(raw, dict):
-        return {}
-    return {k: v for k, v in raw.items() if isinstance(v, str)}
 
 
 async def _identity_from_handshake(handshake: HandshakeData) -> Identity | None:
@@ -278,35 +269,34 @@ class ChatServer:
         await self.broadcaster.broadcast_thread_cleared(thread_id, namespace=namespace)
 
     async def publish_thread_created(self, thread: Thread) -> None:
-        """Fan `thread:created` to every connected socket whose identity
-        tenant matches the new thread. Enables live sidebar updates across
-        tabs/users without polling."""
-        if self.broadcaster is None or self._socketio is None:
+        """Fan thread:created to every connected socket whose identity tenant
+        matches the new thread, via the deterministic tenant room joined at
+        connect time."""
+        if self.broadcaster is None:
             return
-        targets = self._collect_tenant_targets(thread.tenant)
-        if targets:
-            await self.broadcaster.broadcast_thread_created_to_sids(thread, targets)
+        namespace: str | None = None
+        if self.namespace_keys is not None:
+            namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
+        await self.broadcaster.broadcast_thread_created(
+            thread,
+            namespace_keys=self.namespace_keys,
+            namespace=namespace,
+        )
 
     async def publish_thread_deleted(self, thread_id: str, tenant: TenantScope) -> None:
-        """Fan `thread:deleted` to every connected socket whose identity
-        tenant matched the (now-gone) thread. Tenant is passed explicitly
-        because the row is already gone by the time we broadcast."""
-        if self.broadcaster is None or self._socketio is None:
+        """Fan thread:deleted to the tenant room. Tenant is passed explicitly
+        because the row is gone by the time we broadcast."""
+        if self.broadcaster is None:
             return
-        targets = self._collect_tenant_targets(tenant)
-        if targets:
-            await self.broadcaster.broadcast_thread_deleted_to_sids(thread_id, targets)
-
-    def _collect_tenant_targets(self, thread_tenant: TenantScope) -> list[tuple[str, str]]:
-        """Snapshot connected identities → (sid, namespace) tuples where the
-        identity tenant matches `thread_tenant`."""
-        if self._socketio is None:
-            return []
-        out: list[tuple[str, str]] = []
-        for sid, ns, identity in self._socketio.connected_identities():
-            if matches(thread_tenant, _identity_tenant_of(identity)):
-                out.append((sid, ns))
-        return out
+        namespace: str | None = None
+        if self.namespace_keys is not None:
+            namespace = derive_namespace_path(tenant, namespace_keys=self.namespace_keys)
+        await self.broadcaster.broadcast_thread_deleted(
+            thread_id,
+            tenant,
+            namespace_keys=self.namespace_keys,
+            namespace=namespace,
+        )
 
     async def publish_members_updated(
         self,

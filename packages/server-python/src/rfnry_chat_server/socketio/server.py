@@ -85,11 +85,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
         # Maps sid -> concrete namespace path; populated in trigger_event when
         # the namespace was registered with the "*" wildcard.
         self._sid_namespaces: dict[str, str] = {}
-        # Maps sid -> Identity for every authenticated socket. Populated in
-        # on_connect, popped in on_disconnect. Used by ChatServer.publish_*
-        # methods to fan tenant-scoped frames (thread:created etc.) to the
-        # right subset of connected clients without polling.
-        self._sid_identities: dict[str, Identity] = {}
 
     # ------------------------------------------------------------------
     # Dispatch
@@ -215,29 +210,9 @@ class ThreadNamespace(socketio.AsyncNamespace):
             except NamespaceViolation as exc:
                 raise socketio.exceptions.ConnectionRefusedError(f"namespace_invalid: tenant room: {exc}") from exc
             await self.enter_room(sid, tenant_room_name)
-            self._sid_identities[sid] = identity
         except socketio.exceptions.ConnectionRefusedError:
             self._sid_namespaces.pop(sid, None)
-            self._sid_identities.pop(sid, None)
             raise
-
-    async def on_disconnect(self, sid: str) -> None:
-        self._sid_identities.pop(sid, None)
-        return None
-
-    def connected_identities(self) -> list[tuple[str, str, Identity]]:
-        """Snapshot of (sid, concrete_namespace, identity) for every currently
-        authenticated socket. Copied so callers can iterate without mutation
-        races while the socket.io event loop keeps processing connects."""
-        out: list[tuple[str, str, Identity]] = []
-        for sid, identity in self._sid_identities.items():
-            ns = self._sid_namespaces.get(sid) or self.namespace
-            if ns == "*":
-                # Shouldn't happen — wildcard-registered sids always land a
-                # concrete namespace via trigger_event. Skip defensively.
-                continue
-            out.append((sid, ns, identity))
-        return out
 
     async def _check_namespace_match(self, sid: str, thread_tenant: dict[str, str]) -> bool:
         """Return True if the thread's tenant agrees with the session's
@@ -548,9 +523,6 @@ class ChatSocketIO:
     @property
     def sio(self) -> socketio.AsyncServer:
         return self._sio
-
-    def connected_identities(self) -> list[tuple[str, str, Identity]]:
-        return self._namespace.connected_identities()
 
     def asgi_app(self, other_asgi_app: Any = None) -> Any:
         inner = socketio.ASGIApp(self._sio, other_asgi_app, socketio_path=self._socketio_path)
