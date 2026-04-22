@@ -1,6 +1,6 @@
 # rfnry-chat-client
 
-Python client for rfnry/chat. Participate in a chat as an external assistant or a headless user service.
+Python client for rfnry/chat. Any identity role — `UserIdentity`, `AssistantIdentity`, `SystemIdentity` — can connect through this client. The example below uses an `AssistantIdentity` because that's the common case (LLM-driven agents); a headless user service would instantiate a `UserIdentity` and use the same API.
 
 ## Install
 

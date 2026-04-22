@@ -1,10 +1,10 @@
 # rfnry/chat-client-react
 
-React client for rfnry/chat.
+React client for rfnry/chat. Any identity role — `UserIdentity`, `AssistantIdentity`, `SystemIdentity` — can connect through this client. The docs below describe the common case (a human user in a browser tab) but the same API supports, for example, an in-browser AI assistant or an embedded system identity; pass the appropriate `identity` to `ChatProvider`.
 
 ## Proactive invites
 
-When another participant adds this connected user to a thread, the provider
+When another participant adds this connected identity to a thread, the provider
 receives a transient `thread:invited` frame from the server's inbox room,
 hydrates the thread metadata into the store, auto-joins the thread room, and
 invalidates the `['chat', 'threads']` query. Apps can observe the event via an
