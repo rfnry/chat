@@ -19,6 +19,7 @@ from rfnry_chat_protocol import (
     parse_event,
 )
 
+from rfnry_chat_server.broadcast.socketio import _tenant_room
 from rfnry_chat_server.recipients import RecipientNotMemberError
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.namespace import NamespaceViolation, parse_namespace_path
@@ -185,6 +186,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
                 raise socketio.exceptions.ConnectionRefusedError("unauthenticated")
 
             ns_keys = self._server.namespace_keys
+            identity_tenant = _identity_tenant(identity)
             if ns_keys is not None:
                 concrete_ns = self._concrete_namespace_for(sid)
                 try:
@@ -192,7 +194,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
                 except NamespaceViolation as exc:
                     raise socketio.exceptions.ConnectionRefusedError(f"namespace_invalid: {exc}") from exc
 
-                identity_tenant = _identity_tenant(identity)
                 for key, expected in ns_tenant.items():
                     if identity_tenant.get(key) != expected:
                         raise socketio.exceptions.ConnectionRefusedError(
@@ -206,10 +207,14 @@ class ThreadNamespace(socketio.AsyncNamespace):
                         "namespace_tenant": ns_tenant,
                     },
                 )
-                await self.enter_room(sid, f"inbox:{identity.id}")
             else:
                 await self.save_session(sid, {"identity": identity})
-                await self.enter_room(sid, f"inbox:{identity.id}")
+            await self.enter_room(sid, f"inbox:{identity.id}")
+            try:
+                tenant_room_name = _tenant_room(identity_tenant, namespace_keys=ns_keys)
+            except NamespaceViolation as exc:
+                raise socketio.exceptions.ConnectionRefusedError(f"namespace_invalid: tenant room: {exc}") from exc
+            await self.enter_room(sid, tenant_room_name)
             self._sid_identities[sid] = identity
         except socketio.exceptions.ConnectionRefusedError:
             self._sid_namespaces.pop(sid, None)

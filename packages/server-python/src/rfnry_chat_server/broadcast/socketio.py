@@ -12,6 +12,8 @@ from rfnry_chat_protocol import (
     ThreadInvitedFrame,
 )
 
+from rfnry_chat_server.server.namespace import derive_namespace_path
+
 
 def _thread_room(thread_id: str) -> str:
     return f"thread:{thread_id}"
@@ -19,6 +21,13 @@ def _thread_room(thread_id: str) -> str:
 
 def _inbox_room(identity_id: str) -> str:
     return f"inbox:{identity_id}"
+
+
+def _tenant_room(tenant: dict[str, str], namespace_keys: list[str] | None) -> str:
+    """Deterministic room name for a tenant scope. Reuses derive_namespace_path
+    so the same logic that defines tenant scoping defines room membership."""
+    path = derive_namespace_path(tenant, namespace_keys=namespace_keys)
+    return f"tenant:{path}"
 
 
 class SocketIOBroadcaster:
