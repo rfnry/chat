@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import secrets
+from datetime import UTC, datetime, timedelta
+
 import asyncpg
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from rfnry_chat_protocol import Identity, UserIdentity
+from rfnry_chat_protocol import Identity, MessageEvent, TextPart, UserIdentity
 
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.chat_server import ChatServer
@@ -97,3 +100,38 @@ async def test_send_message_requires_membership(clean_db: asyncpg.Pool) -> None:
         json={"client_id": "x", "content": [{"type": "text", "text": "hi"}]},
     )
     assert resp.status_code == 403
+
+
+async def test_list_events_limit_capped_at_200(clean_db: asyncpg.Pool) -> None:
+    store = PostgresChatStore(pool=clean_db)
+    alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
+
+    async def auth(_h: HandshakeData) -> Identity:
+        return alice
+
+    chat_server = ChatServer(store=store, authenticate=auth)
+    app = FastAPI()
+    app.state.chat_server = chat_server
+    app.include_router(chat_server.router, prefix="/chat")
+    http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+    create = await http.post("/chat/threads", json={"tenant": {"org": "A"}})
+    thread_id = create.json()["id"]
+
+    # Seed 201 events directly via the store to avoid 201 HTTP round-trips
+    now = datetime.now(UTC)
+    for i in range(201):
+        event = MessageEvent(
+            id=f"evt_{secrets.token_hex(8)}",
+            thread_id=thread_id,
+            author=alice,
+            created_at=now + timedelta(seconds=i),
+            content=[TextPart(text=f"m{i}")],
+            client_id=f"cid_{i}",
+        )
+        await store.append_event(event)
+
+    resp = await http.get(f"/chat/threads/{thread_id}/events?limit=10000")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["items"]) == 200

@@ -10,6 +10,8 @@ from rfnry_chat_server.recipients import RecipientNotMemberError
 from rfnry_chat_server.server.rest.deps import get_server, identity_tenant, resolve_identity
 from rfnry_chat_server.store.types import Page
 
+MAX_EVENTS_LIMIT = 200
+
 
 def build_router() -> APIRouter:
     router = APIRouter(prefix="/threads/{thread_id}", tags=["messages"])
@@ -64,6 +66,6 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="thread not found")
         if not await server.check_authorize(identity, thread_id, "thread.read"):
             raise HTTPException(status_code=403, detail="not authorized: thread.read")
-        return await server.store.list_events(thread_id, limit=limit)
+        return await server.store.list_events(thread_id, limit=min(limit, MAX_EVENTS_LIMIT))
 
     return router
