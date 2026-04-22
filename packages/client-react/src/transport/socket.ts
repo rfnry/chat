@@ -32,6 +32,8 @@ export class SocketTransport {
       path: this.socketPath,
       transports: ['websocket'],
       auth,
+      reconnectionDelayMax: 30_000,
+      randomizationFactor: 0.5,
     })
     this.socket = socket
     await new Promise<void>((resolve, reject) => {
