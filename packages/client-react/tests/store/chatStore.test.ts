@@ -139,4 +139,13 @@ describe('chatStore', () => {
     store.getState().actions.addEvent(makeMessage('e_c', 'th_1', ts))
     expect(store.getState().events.th_1?.map((e) => e.id)).toEqual(['e_a', 'e_b', 'e_c'])
   })
+
+  it('addEvent prepend: earlier event inserted before all existing events', () => {
+    const store = createChatStore()
+    const { addEvent } = store.getState().actions
+    addEvent(makeMessage('e2', 'th_1', '2026-01-01T00:00:02Z'))
+    addEvent(makeMessage('e3', 'th_1', '2026-01-01T00:00:03Z'))
+    addEvent(makeMessage('e1', 'th_1', '2026-01-01T00:00:01Z'))
+    expect(store.getState().events.th_1?.map((e) => e.id)).toEqual(['e1', 'e2', 'e3'])
+  })
 })

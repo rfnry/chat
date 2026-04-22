@@ -35,7 +35,6 @@ function insertSorted(sorted: Event[], event: Event): Event[] {
   if (n === 0) return [event]
   // Hot path: events arrive in order — append at the end is the common case.
   if (compareEvents(sorted[n - 1]!, event) <= 0) return [...sorted, event]
-  // Out-of-order arrival: binary search for the insert point.
   let lo = 0
   let hi = n
   while (lo < hi) {
