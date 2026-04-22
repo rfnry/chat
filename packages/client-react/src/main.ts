@@ -86,8 +86,9 @@ export {
 export { Stream, type StreamOptions } from './stream'
 export {
   type MentionSpan,
+  type ParseMemberMentionsOptions,
   type ParseMentionsResult,
-  parseAssistantMentions,
+  parseMemberMentions,
 } from './utils/parseMentions'
 export {
   type UploadItem,
