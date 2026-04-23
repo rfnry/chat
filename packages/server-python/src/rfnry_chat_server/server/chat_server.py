@@ -230,15 +230,20 @@ class ChatServer:
                     if rid not in member_ids:
                         raise RecipientNotMemberError(rid)
 
-        appended = await self.store.append_event(event)
+        namespace: str | None = None
+        if self.broadcaster is not None and self.namespace_keys is not None:
+            if thread is None:
+                thread = await self.store.get_thread(event.thread_id)
+            if thread is not None:
+                namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
+
         if self.broadcaster is not None:
-            namespace: str | None = None
-            if self.namespace_keys is not None:
-                if thread is None:
-                    thread = await self.store.get_thread(event.thread_id)
-                if thread is not None:
-                    namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
-            await self.broadcaster.broadcast_event(appended, namespace=namespace)
+            appended, _ = await asyncio.gather(
+                self.store.append_event(event),
+                self.broadcaster.broadcast_event(event, namespace=namespace),
+            )
+        else:
+            appended = await self.store.append_event(event)
 
         if thread is None:
             thread = await self.store.get_thread(appended.thread_id)
