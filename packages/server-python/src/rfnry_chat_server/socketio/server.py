@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from rfnry_chat_protocol import (
     Identity,
     MessageEvent,
+    PresenceJoinedFrame,
     RunError,
     StreamDeltaFrame,
     StreamEndFrame,
@@ -19,7 +20,7 @@ from rfnry_chat_protocol import (
     parse_event,
 )
 
-from rfnry_chat_server.broadcast.socketio import _tenant_room
+from rfnry_chat_server.broadcast.socketio import _presence_room, _tenant_path
 from rfnry_chat_server.recipients import RecipientNotMemberError
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.namespace import NamespaceViolation, parse_namespace_path
@@ -202,14 +203,36 @@ class ThreadNamespace(socketio.AsyncNamespace):
                         "namespace_tenant": ns_tenant,
                     },
                 )
+                concrete_ns_for_emit = concrete_ns
             else:
                 await self.save_session(sid, {"identity": identity})
+                # Non-wildcard mode: there's only ever the default namespace.
+                concrete_ns_for_emit = "/"
             await self.enter_room(sid, f"inbox:{identity.id}")
             try:
-                tenant_room_name = _tenant_room(identity_tenant, namespace_keys=ns_keys)
+                tenant_path = _tenant_path(identity_tenant, namespace_keys=ns_keys)
             except NamespaceViolation as exc:
                 raise socketio.exceptions.ConnectionRefusedError(f"namespace_invalid: tenant room: {exc}") from exc
-            await self.enter_room(sid, tenant_room_name)
+            await self.enter_room(sid, f"tenant:{tenant_path}")
+            await self.enter_room(sid, _presence_room(tenant_path))
+
+            # Refcount semantics: only broadcast `presence:joined` on the 0→1
+            # edge so re-connecting tabs from the same identity don't spam the
+            # room. `skip_sid=sid` ensures the joining socket itself doesn't
+            # receive its own joined frame.
+            is_first = await self._server.presence.add(
+                identity.id,
+                sid,
+                identity,
+                tenant_path=tenant_path,
+            )
+            if is_first and self._server.broadcaster is not None:
+                await self._server.broadcaster.broadcast_presence_joined(
+                    PresenceJoinedFrame(identity=identity, at=datetime.now(UTC)),
+                    tenant_path=tenant_path,
+                    namespace=concrete_ns_for_emit,
+                    skip_sid=sid,
+                )
         except socketio.exceptions.ConnectionRefusedError:
             self._sid_namespaces.pop(sid, None)
             raise

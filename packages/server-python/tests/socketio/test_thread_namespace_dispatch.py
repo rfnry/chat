@@ -210,6 +210,10 @@ class TestOnConnectAutoJoinsInboxRoom:
         server = MagicMock()
         server.namespace_keys = None
         server.authenticate = AsyncMock(return_value=alice)
+        # Presence registry stub: `add` is awaited on every connect; returning
+        # False skips the broadcast so we don't need a broadcaster stub here.
+        server.presence.add = AsyncMock(return_value=False)
+        server.broadcaster = None
 
         ns = ThreadNamespace("/", server=server, replay_cap=100)
 
@@ -245,6 +249,8 @@ class TestOnConnectAutoJoinsInboxRoom:
         server = MagicMock()
         server.namespace_keys = ["org"]
         server.authenticate = AsyncMock(return_value=alice)
+        server.presence.add = AsyncMock(return_value=False)
+        server.broadcaster = None
 
         ns = ThreadNamespace("*", server=server, replay_cap=100)
 
