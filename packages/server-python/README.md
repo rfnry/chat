@@ -54,6 +54,68 @@ await uvicorn.Server(uvicorn.Config(
 )).serve()
 ```
 
+## Postgres connection pool sizing
+
+`PostgresChatStore` takes an `asyncpg.Pool` you build yourself. asyncpg's
+default (`min_size=10, max_size=10`) is a reasonable starting point for
+small to medium deployments, but the right size depends on your workload's
+peak concurrent connection demand. The pool **blocks on `acquire()` when
+exhausted** — under-sizing means requests serialize through pool waits,
+which looks like a slow server.
+
+Connection demand by code path (per uvicorn worker):
+
+- **Per published event**: 1 connection for `append_event`, plus 1 if
+  `namespace_keys` is set and the caller didn't pass `thread=...` (one-time
+  `get_thread` lookup before the parallel write+broadcast). Typical: 1-2
+  per publish.
+- **Per REST request**: 1-3 connections sequentially, depending on the
+  endpoint (e.g. `POST /threads` does create-then-fetch; `GET /events`
+  does one query).
+- **Per `thread:join` history replay**: 1 connection.
+- **Watchdog sweep**: N concurrent connections, where N is the number of
+  stale runs found in one sweep. Each `end_run` does ~3 sequential
+  acquisitions; the sweep parallelizes via `asyncio.gather`. With 100
+  stale runs (e.g. after a crash burst), the sweep wants 100 connections
+  for a brief window.
+
+Sizing guidance per worker:
+
+| Deployment | Suggested `max_size` | Rationale |
+|---|---|---|
+| Small (< 50 concurrent users, low message rate) | `10` (asyncpg default) | Steady-state demand under 5; default leaves headroom. |
+| Medium (typical chat, < 500 users, watchdog rarely fires with > 10 stale runs) | `20-30` | Covers concurrent REST + publish + a moderate watchdog burst. |
+| Large (1000+ users, frequent agent crashes producing stale runs) | `50-100` | Watchdog burst dominates; size for expected stale-run count + headroom. |
+
+A few additional knobs:
+
+- **`min_size`**: keep small (`1-5`). Idle deployments don't need to hold
+  connections; asyncpg grows the pool on demand up to `max_size`.
+- **PostgreSQL `max_connections`**: server-side cap. With N uvicorn workers
+  each holding a pool of `max_size`, total DB connections = `N × max_size`.
+  Stay well under PostgreSQL's `max_connections` (default 100). For
+  high-worker-count deployments, front the pool with PgBouncer in
+  transaction-pooling mode so each worker's pool reuses a smaller
+  upstream connection set.
+- **Streaming hot path doesn't pressure the pool**: `stream:delta` frames
+  go straight to the Socket.IO room with no DB hit (the authorized thread
+  is cached in the socket session at `stream:start`). High token rates
+  don't translate to high pool demand.
+
+Example pool construction:
+
+```python
+import asyncpg
+
+pool = await asyncpg.create_pool(
+    dsn="postgresql://...",
+    min_size=2,
+    max_size=20,  # sized for medium workload
+    command_timeout=30,  # circuit-break long-running queries
+)
+store = PostgresChatStore(pool=pool)
+```
+
 ## Auth callback caching
 
 `authenticate` is called on every REST request. If your callback hits a
