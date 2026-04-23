@@ -102,8 +102,8 @@ class SocketIOBroadcaster:
         frame: PresenceJoinedFrame,
         *,
         tenant_path: str,
+        namespace: str,
         skip_sid: str | None = None,
-        namespace: str | None = None,
     ) -> None:
         """Broadcast a presence:joined frame to the tenant's presence room.
 
@@ -111,13 +111,18 @@ class SocketIOBroadcaster:
         client doesn't receive its own "joined" event. Other sockets (same
         identity with multiple tabs + all other identities in the same tenant
         scope) receive it.
+
+        `namespace` is required (not defaulted to "/") because under wildcard
+        namespace mode, "/" is not a registered namespace and emitting there
+        silently no-ops. Callers in the connect/disconnect handlers already have
+        the concrete namespace in hand — pass it explicitly.
         """
         await self._sio.emit(
             "presence:joined",
             frame.model_dump(mode="json", by_alias=True),
             room=_presence_room(tenant_path),
             skip_sid=skip_sid,
-            namespace=namespace or "/",
+            namespace=namespace,
         )
 
     async def broadcast_presence_left(
@@ -125,18 +130,20 @@ class SocketIOBroadcaster:
         frame: PresenceLeftFrame,
         *,
         tenant_path: str,
-        namespace: str | None = None,
+        namespace: str,
     ) -> None:
         """Broadcast a presence:left frame to the tenant's presence room.
 
         No skip_sid here: by the time we broadcast, the departing socket is
         already disconnected and no longer in any room.
+
+        `namespace` is required for the same reason as broadcast_presence_joined.
         """
         await self._sio.emit(
             "presence:left",
             frame.model_dump(mode="json", by_alias=True),
             room=_presence_room(tenant_path),
-            namespace=namespace or "/",
+            namespace=namespace,
         )
 
     async def broadcast_thread_cleared(

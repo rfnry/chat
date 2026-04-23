@@ -15,9 +15,9 @@ async def test_records_presence_joined() -> None:
         identity=UserIdentity(id="u_a", name="Alice", metadata={}),
         at=datetime(2026, 4, 23, tzinfo=UTC),
     )
-    await bc.broadcast_presence_joined(frame, tenant_path="/", skip_sid=None)
+    await bc.broadcast_presence_joined(frame, tenant_path="/", namespace="/")
     assert bc.presence_joined == [frame]
-    assert bc.presence_joined_with_kwargs == [(frame, "/", None, None)]
+    assert bc.presence_joined_with_kwargs == [(frame, "/", None, "/")]
 
 
 @pytest.mark.asyncio
@@ -27,8 +27,10 @@ async def test_records_presence_joined_with_skip_sid() -> None:
         identity=UserIdentity(id="u_a", name="Alice", metadata={}),
         at=datetime(2026, 4, 23, tzinfo=UTC),
     )
-    await bc.broadcast_presence_joined(frame, tenant_path="/", skip_sid="sid_joining")
-    assert bc.presence_joined_with_kwargs == [(frame, "/", "sid_joining", None)]
+    await bc.broadcast_presence_joined(
+        frame, tenant_path="/", namespace="/", skip_sid="sid_joining"
+    )
+    assert bc.presence_joined_with_kwargs == [(frame, "/", "sid_joining", "/")]
 
 
 @pytest.mark.asyncio
@@ -38,6 +40,6 @@ async def test_records_presence_left() -> None:
         identity=UserIdentity(id="u_a", name="Alice", metadata={}),
         at=datetime(2026, 4, 23, tzinfo=UTC),
     )
-    await bc.broadcast_presence_left(frame, tenant_path="/")
+    await bc.broadcast_presence_left(frame, tenant_path="/", namespace="/")
     assert bc.presence_left == [frame]
-    assert bc.presence_left_with_kwargs == [(frame, "/", None)]
+    assert bc.presence_left_with_kwargs == [(frame, "/", "/")]

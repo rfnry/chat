@@ -78,8 +78,8 @@ class RecordingBroadcaster:
         frame: PresenceJoinedFrame,
         *,
         tenant_path: str,
+        namespace: str,
         skip_sid: str | None = None,
-        namespace: str | None = None,
     ) -> None:
         self.presence_joined.append(frame)
         self.presence_joined_with_kwargs.append((frame, tenant_path, skip_sid, namespace))
@@ -89,7 +89,7 @@ class RecordingBroadcaster:
         frame: PresenceLeftFrame,
         *,
         tenant_path: str,
-        namespace: str | None = None,
+        namespace: str,
     ) -> None:
         self.presence_left.append(frame)
         self.presence_left_with_kwargs.append((frame, tenant_path, namespace))

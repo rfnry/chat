@@ -38,15 +38,15 @@ class Broadcaster(Protocol):
         frame: PresenceJoinedFrame,
         *,
         tenant_path: str,
+        namespace: str,
         skip_sid: str | None = None,
-        namespace: str | None = None,
     ) -> None: ...
     async def broadcast_presence_left(
         self,
         frame: PresenceLeftFrame,
         *,
         tenant_path: str,
-        namespace: str | None = None,
+        namespace: str,
     ) -> None: ...
     async def broadcast_thread_cleared(
         self,
