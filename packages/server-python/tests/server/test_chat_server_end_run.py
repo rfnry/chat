@@ -28,9 +28,7 @@ async def _setup() -> tuple[ChatServer, RecordingBroadcaster, Thread]:
     rec = RecordingBroadcaster()
     server = ChatServer(store=store, broadcaster=rec)
     now = datetime.now(UTC)
-    thread = await store.create_thread(
-        Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now)
-    )
+    thread = await store.create_thread(Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now))
     return server, rec, thread
 
 
@@ -41,9 +39,7 @@ async def test_end_run_is_idempotent_on_completed() -> None:
     actor = AssistantIdentity(id="a_1", name="Bot")
     user = UserIdentity(id="u_1", name="Alice")
 
-    run = await server.begin_run(
-        thread=thread, actor=actor, triggered_by=user, idempotency_key=None
-    )
+    run = await server.begin_run(thread=thread, actor=actor, triggered_by=user, idempotency_key=None)
 
     first_end = await server.end_run(run_id=run.id, error=None)
     second_end = await server.end_run(run_id=run.id, error=None)
@@ -63,9 +59,7 @@ async def test_end_run_is_idempotent_on_failed() -> None:
     actor = AssistantIdentity(id="a_1", name="Bot")
     user = UserIdentity(id="u_1", name="Alice")
 
-    run = await server.begin_run(
-        thread=thread, actor=actor, triggered_by=user, idempotency_key=None
-    )
+    run = await server.begin_run(thread=thread, actor=actor, triggered_by=user, idempotency_key=None)
 
     err = RunError(code="handler_error", message="boom")
     await server.end_run(run_id=run.id, error=err)
@@ -90,9 +84,7 @@ async def test_end_run_is_idempotent_on_cancelled() -> None:
     actor = AssistantIdentity(id="a_1", name="Bot")
     user = UserIdentity(id="u_1", name="Alice")
 
-    run = await server.begin_run(
-        thread=thread, actor=actor, triggered_by=user, idempotency_key=None
-    )
+    run = await server.begin_run(thread=thread, actor=actor, triggered_by=user, idempotency_key=None)
     await server.cancel_run(run_id=run.id)
 
     # end_run on an already-cancelled run returns the existing run and does

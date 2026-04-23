@@ -23,9 +23,7 @@ async def _setup() -> tuple[ChatServer, RecordingBroadcaster, Thread]:
     rec = RecordingBroadcaster()
     server = ChatServer(store=store, broadcaster=rec)
     now = datetime.now(UTC)
-    thread = await store.create_thread(
-        Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now)
-    )
+    thread = await store.create_thread(Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now))
     return server, rec, thread
 
 
@@ -36,18 +34,14 @@ async def test_begin_run_creates_distinct_runs_for_same_actor() -> None:
     actor = AssistantIdentity(id="a_1", name="Bot")
     user = UserIdentity(id="u_1", name="Alice")
 
-    first = await server.begin_run(
-        thread=thread, actor=actor, triggered_by=user, idempotency_key=None
-    )
+    first = await server.begin_run(thread=thread, actor=actor, triggered_by=user, idempotency_key=None)
     # End the first run before starting the second, so we do not rely on
     # concurrent-active semantics (the Postgres store enforces a partial
     # unique index that would reject two simultaneous active runs for the
     # same actor; that concurrency constraint is separate from this contract).
     await server.end_run(run_id=first.id, error=None)
 
-    second = await server.begin_run(
-        thread=thread, actor=actor, triggered_by=user, idempotency_key=None
-    )
+    second = await server.begin_run(thread=thread, actor=actor, triggered_by=user, idempotency_key=None)
     await server.end_run(run_id=second.id, error=None)
 
     assert first.id != second.id
@@ -62,12 +56,8 @@ async def test_begin_run_reuses_via_idempotency_key() -> None:
     actor = AssistantIdentity(id="a_1", name="Bot")
     user = UserIdentity(id="u_1", name="Alice")
 
-    first = await server.begin_run(
-        thread=thread, actor=actor, triggered_by=user, idempotency_key="key-a"
-    )
-    second = await server.begin_run(
-        thread=thread, actor=actor, triggered_by=user, idempotency_key="key-a"
-    )
+    first = await server.begin_run(thread=thread, actor=actor, triggered_by=user, idempotency_key="key-a")
+    second = await server.begin_run(thread=thread, actor=actor, triggered_by=user, idempotency_key="key-a")
 
     assert first.id == second.id
     started = [e for e in rec.events if e.type == "run.started"]

@@ -134,9 +134,7 @@ def _authenticate_as(identity_id: str) -> Any:
 
 async def _create_thread_with_members(base: str, members: list[Identity]) -> str:
     async with httpx.AsyncClient(base_url=base, headers={"x-identity-id": USER.id}) as http:
-        create = await http.post(
-            "/chat/threads", json={"tenant": {}, "metadata": {"kind": "channel"}}
-        )
+        create = await http.post("/chat/threads", json={"tenant": {}, "metadata": {"kind": "channel"}})
         assert create.status_code == 201, create.text
         thread_id = create.json()["id"]
         for member in members:
@@ -157,25 +155,15 @@ async def test_three_agent_channel_user_message_produces_3_runs(
     early-returns on sibling agents' fanout."""
     base, chat_server = multi_agent_server
 
-    thread_id = await _create_thread_with_members(
-        base, [USER, AGENT_A, AGENT_B, AGENT_C]
-    )
+    thread_id = await _create_thread_with_members(base, [USER, AGENT_A, AGENT_B, AGENT_C])
 
     # User client observes all events (including run.started / run.completed
     # frames) and counts them. The client passes `all_events=True` on the
     # handler so the default self/recipient filter does not drop run frames.
-    user_client = ChatClient(
-        base_url=base, identity=USER, authenticate=_authenticate_as(USER.id)
-    )
-    agent_a = ChatClient(
-        base_url=base, identity=AGENT_A, authenticate=_authenticate_as(AGENT_A.id)
-    )
-    agent_b = ChatClient(
-        base_url=base, identity=AGENT_B, authenticate=_authenticate_as(AGENT_B.id)
-    )
-    agent_c = ChatClient(
-        base_url=base, identity=AGENT_C, authenticate=_authenticate_as(AGENT_C.id)
-    )
+    user_client = ChatClient(base_url=base, identity=USER, authenticate=_authenticate_as(USER.id))
+    agent_a = ChatClient(base_url=base, identity=AGENT_A, authenticate=_authenticate_as(AGENT_A.id))
+    agent_b = ChatClient(base_url=base, identity=AGENT_B, authenticate=_authenticate_as(AGENT_B.id))
+    agent_c = ChatClient(base_url=base, identity=AGENT_C, authenticate=_authenticate_as(AGENT_C.id))
 
     received: list[dict[str, Any]] = []
     last_event = asyncio.Event()
@@ -211,9 +199,7 @@ async def test_three_agent_channel_user_message_produces_3_runs(
         await agent_c.join_thread(thread_id)
 
         # User sends one message.
-        await user_client.send_message(
-            thread_id=thread_id, content=[TextPart(text="hello team")]
-        )
+        await user_client.send_message(thread_id=thread_id, content=[TextPart(text="hello team")])
 
         # Wait until activity quiesces. We expect:
         #   1 user message + 3 agent messages + 3 run.started + 3 run.completed
@@ -233,16 +219,10 @@ async def test_three_agent_channel_user_message_produces_3_runs(
         run_completed = [e for e in received if e["type"] == "run.completed"]
         messages = [e for e in received if e["type"] == "message"]
 
-        assert len(run_started) == 3, (
-            f"expected 3 run.started, got {len(run_started)}; full stream: {types}"
-        )
-        assert len(run_completed) == 3, (
-            f"expected 3 run.completed, got {len(run_completed)}; full stream: {types}"
-        )
+        assert len(run_started) == 3, f"expected 3 run.started, got {len(run_started)}; full stream: {types}"
+        assert len(run_completed) == 3, f"expected 3 run.completed, got {len(run_completed)}; full stream: {types}"
         # 1 user message + 3 agent replies.
-        assert len(messages) == 4, (
-            f"expected 4 messages (1 user + 3 agents), got {len(messages)}; full stream: {types}"
-        )
+        assert len(messages) == 4, f"expected 4 messages (1 user + 3 agents), got {len(messages)}; full stream: {types}"
     finally:
         await user_client.disconnect()
         await agent_a.disconnect()

@@ -62,9 +62,7 @@ class HandlerSend:
         if self._run_id is not None:
             return self._run_id
         if self._run_starter is None:
-            raise RuntimeError(
-                "HandlerSend has no run_id and no run_starter; cannot lazily start a run"
-            )
+            raise RuntimeError("HandlerSend has no run_id and no run_starter; cannot lazily start a run")
         run_id = await self._run_starter()
         self._run_id = run_id
         return run_id
