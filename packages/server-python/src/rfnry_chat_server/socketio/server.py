@@ -241,12 +241,25 @@ class ThreadNamespace(socketio.AsyncNamespace):
                 # if the ns_path ever changes (e.g. a test harness mounts at
                 # a non-default path) and prevents the silent-no-op failure mode
                 # that broadcast_presence_joined's docstring warns about.
-                await self._server.broadcaster.broadcast_presence_joined(
-                    PresenceJoinedFrame(identity=identity, at=datetime.now(UTC)),
-                    tenant_path=tenant_path,
-                    namespace=self._concrete_namespace_for(sid),
-                    skip_sid=sid,
-                )
+                #
+                # If the broadcast itself fails (e.g. transport-level error from
+                # socketio.emit), roll back the presence.add so the identity
+                # isn't stuck "online" — python-socketio won't dispatch
+                # `disconnect` for a sid that never fully connected, so the
+                # registry entry would otherwise leak until another socket for
+                # the same identity cycles through a full connect+disconnect.
+                try:
+                    await self._server.broadcaster.broadcast_presence_joined(
+                        PresenceJoinedFrame(identity=identity, at=datetime.now(UTC)),
+                        tenant_path=tenant_path,
+                        namespace=self._concrete_namespace_for(sid),
+                        skip_sid=sid,
+                    )
+                except Exception as exc:
+                    await self._server.presence.remove(identity.id, sid)
+                    raise socketio.exceptions.ConnectionRefusedError(
+                        f"presence_broadcast_failed: {exc}"
+                    ) from exc
         except socketio.exceptions.ConnectionRefusedError:
             self._sid_namespaces.pop(sid, None)
             raise
