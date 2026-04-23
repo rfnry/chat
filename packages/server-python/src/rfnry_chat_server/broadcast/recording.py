@@ -27,9 +27,7 @@ class RecordingBroadcaster:
         self.thread_invited: list[ThreadInvitedFrame] = []
         self.thread_invited_with_namespace: list[tuple[ThreadInvitedFrame, str | None]] = []
         self.presence_joined: list[PresenceJoinedFrame] = []
-        self.presence_joined_with_kwargs: list[
-            tuple[PresenceJoinedFrame, str, str | None, str | None]
-        ] = []
+        self.presence_joined_with_kwargs: list[tuple[PresenceJoinedFrame, str, str | None, str | None]] = []
         self.presence_left: list[PresenceLeftFrame] = []
         self.presence_left_with_kwargs: list[tuple[PresenceLeftFrame, str, str | None]] = []
         self.thread_cleared: list[str] = []

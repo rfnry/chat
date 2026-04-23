@@ -182,9 +182,7 @@ class TestStreamSessionCache:
         assert "error" not in end_result, f"stream:end failed: {end_result}"
 
         calls_during = store.get_thread_call_count - calls_before
-        assert calls_during == 1, (
-            f"expected 1 get_thread call (start only), got {calls_during}"
-        )
+        assert calls_during == 1, f"expected 1 get_thread call (start only), got {calls_during}"
 
     async def test_stream_delta_bogus_event_id_returns_not_found(self) -> None:
         """stream:delta with an event_id that was never started must return not_found."""

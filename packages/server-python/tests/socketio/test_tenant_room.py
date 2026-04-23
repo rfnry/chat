@@ -1,8 +1,8 @@
 """R11.1/R11.2: tenant room join on connect + tenant-scoped broadcast isolation.
 
-  - namespace_keys=["org"]  → room is  tenant:/acme
-  - namespace_keys=None     → room is  tenant:/   (single-tenant sentinel)
-  - thread:created for tenant A must NOT reach a socket from tenant B
+- namespace_keys=["org"]  → room is  tenant:/acme
+- namespace_keys=None     → room is  tenant:/   (single-tenant sentinel)
+- thread:created for tenant A must NOT reach a socket from tenant B
 """
 
 from __future__ import annotations

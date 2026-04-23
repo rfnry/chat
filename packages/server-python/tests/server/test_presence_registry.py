@@ -61,9 +61,7 @@ async def test_concurrent_adds_yield_exactly_one_true():
     """
     reg = PresenceRegistry()
     alice = UserIdentity(id="u_a", name="Alice", metadata={})
-    results = await asyncio.gather(
-        *[reg.add("u_a", f"sid{i}", alice, tenant_path="/") for i in range(50)]
-    )
+    results = await asyncio.gather(*[reg.add("u_a", f"sid{i}", alice, tenant_path="/") for i in range(50)])
     assert sum(1 for r in results if r is True) == 1
 
 
@@ -74,9 +72,7 @@ async def test_concurrent_removes_yield_exactly_one_was_last():
     alice = UserIdentity(id="u_a", name="Alice", metadata={})
     for i in range(50):
         await reg.add("u_a", f"sid{i}", alice, tenant_path="/")
-    results = await asyncio.gather(
-        *[reg.remove("u_a", f"sid{i}") for i in range(50)]
-    )
+    results = await asyncio.gather(*[reg.remove("u_a", f"sid{i}") for i in range(50)])
     assert sum(1 for was_last, _ident, _tp in results if was_last is True) == 1
 
 

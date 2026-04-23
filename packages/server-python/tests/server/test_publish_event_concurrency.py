@@ -41,9 +41,7 @@ async def test_publish_event_runs_write_and_broadcast_concurrently() -> None:
     server = ChatServer(store=store, broadcaster=broadcaster, authenticate=auth)
 
     now = datetime.now(UTC)
-    thread = await store.create_thread(
-        Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now)
-    )
+    thread = await store.create_thread(Thread(id="th_1", tenant={}, metadata={}, created_at=now, updated_at=now))
 
     event = MessageEvent(
         id="evt_1",

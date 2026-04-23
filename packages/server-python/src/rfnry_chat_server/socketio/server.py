@@ -232,9 +232,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
                     tenant_path=tenant_path,
                 )
             except ValueError as exc:
-                raise socketio.exceptions.ConnectionRefusedError(
-                    f"presence_tenant_conflict: {exc}"
-                ) from exc
+                raise socketio.exceptions.ConnectionRefusedError(f"presence_tenant_conflict: {exc}") from exc
             if is_first and self._server.broadcaster is not None:
                 # Derive the concrete namespace from the sid itself rather than
                 # hardcoding "/" in the static branch — this stays correct even
@@ -257,9 +255,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
                     )
                 except Exception as exc:
                     await self._server.presence.remove(identity.id, sid)
-                    raise socketio.exceptions.ConnectionRefusedError(
-                        f"presence_broadcast_failed: {exc}"
-                    ) from exc
+                    raise socketio.exceptions.ConnectionRefusedError(f"presence_broadcast_failed: {exc}") from exc
         except socketio.exceptions.ConnectionRefusedError:
             self._sid_namespaces.pop(sid, None)
             raise
@@ -284,9 +280,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
             # No session → either pre-auth or already cleaned up. Nothing to do.
             return
 
-        was_last, removed_identity, tenant_path = await self._server.presence.remove(
-            identity.id, sid
-        )
+        was_last, removed_identity, tenant_path = await self._server.presence.remove(identity.id, sid)
         if was_last and removed_identity is not None and tenant_path is not None:
             if self._server.broadcaster is not None:
                 # Mirror on_connect: derive namespace from the sid's concrete ns
@@ -298,9 +292,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
                     # stored namespace (populated in on_connect) or "/".
                     namespace = session.get("namespace") or "/"
                 await self._server.broadcaster.broadcast_presence_left(
-                    PresenceLeftFrame(
-                        identity=removed_identity, at=datetime.now(UTC)
-                    ),
+                    PresenceLeftFrame(identity=removed_identity, at=datetime.now(UTC)),
                     tenant_path=tenant_path,
                     namespace=namespace,
                 )

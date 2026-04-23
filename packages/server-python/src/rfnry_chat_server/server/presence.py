@@ -68,8 +68,4 @@ class PresenceRegistry:
 
     async def list_for_tenant(self, tenant_path: str) -> list[Identity]:
         async with self._lock:
-            return [
-                self._identities[iid]
-                for iid, tp in self._tenant_paths.items()
-                if tp == tenant_path
-            ]
+            return [self._identities[iid] for iid, tp in self._tenant_paths.items() if tp == tenant_path]

@@ -47,6 +47,7 @@ class ChatStore(Protocol):
         a server-generated id) must signal this requirement so the parallel
         path can be reverted to sequential."""
         ...
+
     async def list_events(
         self,
         thread_id: str,
