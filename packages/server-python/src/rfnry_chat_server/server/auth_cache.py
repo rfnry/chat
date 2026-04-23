@@ -50,8 +50,9 @@ def cached_authenticate(
             del cache[cache_key]
 
         value = await authenticate(handshake)
+        # New keys land at the end of OrderedDict by default — that's the MRU
+        # position. The hit path above is the only one that needs move_to_end.
         cache[cache_key] = (value, now + ttl_seconds)
-        cache.move_to_end(cache_key)
 
         # LRU eviction
         while len(cache) > max_size:
