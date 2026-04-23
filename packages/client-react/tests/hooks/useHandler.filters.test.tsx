@@ -9,6 +9,8 @@ import type { EventListener, EventRegistry } from '../../src/provider/ChatContex
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+import { createPresenceSlice } from '../../src/store/presence'
+
 function makeEventRegistry(): { registry: EventRegistry; dispatch: (event: Event) => void } {
   const listeners = new Set<EventListener>()
   const registry: EventRegistry = {
@@ -31,7 +33,12 @@ function harness(
 ) {
   return ({ children }: { children: ReactNode }) => (
     <ChatContext.Provider
-      value={{ client: client as ChatClient, store: createChatStore(), events }}
+      value={{
+        client: client as ChatClient,
+        store: createChatStore(),
+        events,
+        presence: createPresenceSlice(),
+      }}
     >
       {children}
     </ChatContext.Provider>

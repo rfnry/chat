@@ -7,6 +7,8 @@ import { useThreadEvents } from '../../src/hooks/useThreadEvents'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+import { createPresenceSlice } from '../../src/store/presence'
+
 function makeEvent(id: string, threadId: string, createdAt = '2026-01-01T00:00:00Z'): Event {
   return {
     type: 'message',
@@ -24,7 +26,14 @@ const noopEvents = { subscribe: () => () => {} }
 
 function harness(store: ReturnType<typeof createChatStore>) {
   return ({ children }: { children: ReactNode }) => (
-    <ChatContext.Provider value={{ client: {} as ChatClient, store, events: noopEvents }}>
+    <ChatContext.Provider
+      value={{
+        client: {} as ChatClient,
+        store,
+        events: noopEvents,
+        presence: createPresenceSlice(),
+      }}
+    >
       {children}
     </ChatContext.Provider>
   )

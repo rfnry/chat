@@ -10,6 +10,7 @@ import { useHandler } from '../../src/hooks/useHandler'
 import type { EventListener, EventRegistry } from '../../src/provider/ChatContext'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
+import { createPresenceSlice } from '../../src/store/presence'
 
 // ---------------------------------------------------------------------------
 // Count toEvent calls via spy on the real implementation.
@@ -87,6 +88,7 @@ function Wrapper({ events, children }: { events: EventRegistry; children: ReactN
         client: { identity: null } as unknown as ChatClient,
         store: createChatStore(),
         events,
+        presence: createPresenceSlice(),
       }}
     >
       {children}

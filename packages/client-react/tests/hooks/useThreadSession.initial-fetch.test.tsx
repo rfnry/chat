@@ -6,11 +6,15 @@ import { useThreadSession } from '../../src/hooks/useThreadSession'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+import { createPresenceSlice } from '../../src/store/presence'
+
 const noopEvents = { subscribe: () => () => {} }
 
 function harness(client: ChatClient, store: ReturnType<typeof createChatStore>) {
   return ({ children }: { children: ReactNode }) => (
-    <ChatContext.Provider value={{ client, store, events: noopEvents }}>
+    <ChatContext.Provider
+      value={{ client, store, events: noopEvents, presence: createPresenceSlice() }}
+    >
       {children}
     </ChatContext.Provider>
   )

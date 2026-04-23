@@ -5,6 +5,8 @@ import { useThreadMetadata } from '../../src/hooks/useThreadMetadata'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+import { createPresenceSlice } from '../../src/store/presence'
+
 const fakeThread = {
   id: 'th_1',
   tenant: { org: 'A' },
@@ -23,7 +25,12 @@ describe('useThreadMetadata', () => {
     const store = createChatStore()
     const { getByTestId } = render(
       <ChatContext.Provider
-        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+        value={{
+          client: {} as ChatClient,
+          store,
+          events: { subscribe: () => () => {} },
+          presence: createPresenceSlice(),
+        }}
       >
         <Probe />
       </ChatContext.Provider>
@@ -35,7 +42,12 @@ describe('useThreadMetadata', () => {
     const store = createChatStore()
     const { getByTestId } = render(
       <ChatContext.Provider
-        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+        value={{
+          client: {} as ChatClient,
+          store,
+          events: { subscribe: () => () => {} },
+          presence: createPresenceSlice(),
+        }}
       >
         <Probe />
       </ChatContext.Provider>

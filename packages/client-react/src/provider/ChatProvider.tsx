@@ -1,5 +1,7 @@
 import {
   type Identity,
+  parsePresenceJoinedFrame,
+  parsePresenceLeftFrame,
   type Thread,
   toEvent,
   toIdentity,
@@ -11,6 +13,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { ChatClient, type ChatClientOptions } from '../client'
 import { createChatStore } from '../store/chatStore'
+import { createPresenceSlice } from '../store/presence'
 import {
   ChatContext,
   type ChatContextValue,
@@ -72,6 +75,7 @@ export function ChatProvider(props: ChatProviderProps) {
   useEffect(() => {
     const client = new ChatClient(optsRef.current)
     const store = createChatStore()
+    const presence = createPresenceSlice()
     clientRef.current = client
     const disposers: Array<() => void> = []
 
@@ -166,7 +170,46 @@ export function ChatProvider(props: ChatProviderProps) {
           })
         )
 
-        setValue({ client, store, events: eventRegistry })
+        // Presence. Subscribe to live frames BEFORE hydrating so we never
+        // miss a `presence:left` for an identity that appears in the REST
+        // snapshot (the hydrate→subscribe order would let a
+        // delete-before-subscribe frame slip through, leaving a stale
+        // member). The inverse race — a `presence:joined` firing before
+        // hydrate completes — is benign: if the joined identity is ALSO in
+        // the REST snapshot, hydrate's Map rebuild is idempotent; if it's
+        // not, the next frame for that identity (or the next manual refresh)
+        // corrects it. See Task 4.3 notes on eventual consistency for
+        // presence.
+        disposers.push(
+          client.on('presence:joined', (data) => {
+            presence.applyJoined(parsePresenceJoinedFrame(data))
+          })
+        )
+        disposers.push(
+          client.on('presence:left', (data) => {
+            presence.applyLeft(parsePresenceLeftFrame(data))
+          })
+        )
+
+        // Publish the context value NOW — don't block on the presence REST
+        // fetch. Consumers that need presence read from an unhydrated slice
+        // and re-render once hydrate() lands (usePresence in Task 4.4
+        // exposes `hydrated` so UIs can show a spinner). Blocking here would
+        // mean a flaky presence endpoint delays (or prevents) the whole
+        // ChatProvider from becoming usable, which is the wrong tradeoff.
+        setValue({ client, store, events: eventRegistry, presence })
+
+        void client
+          .listPresence()
+          .then((snapshot) => {
+            if (cancelled) return
+            presence.hydrate(snapshot)
+          })
+          .catch((err) => {
+            // Don't fail the whole provider on a presence fetch miss — the
+            // slice stays unhydrated; live frames still patch.
+            console.warn('[rfnry] failed to hydrate presence:', err)
+          })
       } catch {
         if (cancelled) return
         store.getState().actions.setConnectionStatus('disconnected')

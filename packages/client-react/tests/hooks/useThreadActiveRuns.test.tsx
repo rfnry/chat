@@ -7,6 +7,8 @@ import { useThreadActiveRuns } from '../../src/hooks/useThreadActiveRuns'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+import { createPresenceSlice } from '../../src/store/presence'
+
 function makeRun(id: string, threadId: string, status: Run['status'] = 'running'): Run {
   return {
     id,
@@ -23,7 +25,14 @@ const noopEvents = { subscribe: () => () => {} }
 
 function harness(store: ReturnType<typeof createChatStore>) {
   return ({ children }: { children: ReactNode }) => (
-    <ChatContext.Provider value={{ client: {} as ChatClient, store, events: noopEvents }}>
+    <ChatContext.Provider
+      value={{
+        client: {} as ChatClient,
+        store,
+        events: noopEvents,
+        presence: createPresenceSlice(),
+      }}
+    >
       {children}
     </ChatContext.Provider>
   )

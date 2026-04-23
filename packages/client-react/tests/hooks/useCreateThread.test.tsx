@@ -7,12 +7,21 @@ import { useCreateThread } from '../../src/hooks/useCreateThread'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+import { createPresenceSlice } from '../../src/store/presence'
+
 const noopEvents = { subscribe: () => () => {} }
 
 function wrapper(client: ChatClient, qc: QueryClient) {
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>
-      <ChatContext.Provider value={{ client, store: createChatStore(), events: noopEvents }}>
+      <ChatContext.Provider
+        value={{
+          client,
+          store: createChatStore(),
+          events: noopEvents,
+          presence: createPresenceSlice(),
+        }}
+      >
         {children}
       </ChatContext.Provider>
     </QueryClientProvider>

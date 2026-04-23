@@ -4,6 +4,7 @@ import type {
   EventDraft,
   Identity,
   MessageEvent,
+  PresenceSnapshot,
   ReasoningEvent,
   Run,
   RunError,
@@ -155,6 +156,10 @@ export class ChatClient {
 
   removeMember(threadId: string, identityId: string): Promise<void> {
     return this.rest.removeMember(threadId, identityId)
+  }
+
+  listPresence(): Promise<PresenceSnapshot> {
+    return this.rest.listPresence()
   }
 
   /**

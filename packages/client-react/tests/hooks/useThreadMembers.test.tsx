@@ -5,6 +5,8 @@ import { useThreadMembers } from '../../src/hooks/useThreadMembers'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+import { createPresenceSlice } from '../../src/store/presence'
+
 function Probe() {
   const members = useThreadMembers('th_1')
   return <div data-testid="count">{members.length}</div>
@@ -15,7 +17,12 @@ describe('useThreadMembers', () => {
     const store = createChatStore()
     const { getByTestId } = render(
       <ChatContext.Provider
-        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+        value={{
+          client: {} as ChatClient,
+          store,
+          events: { subscribe: () => () => {} },
+          presence: createPresenceSlice(),
+        }}
       >
         <Probe />
       </ChatContext.Provider>
@@ -27,7 +34,12 @@ describe('useThreadMembers', () => {
     const store = createChatStore()
     const { getByTestId } = render(
       <ChatContext.Provider
-        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+        value={{
+          client: {} as ChatClient,
+          store,
+          events: { subscribe: () => () => {} },
+          presence: createPresenceSlice(),
+        }}
       >
         <Probe />
       </ChatContext.Provider>
@@ -59,14 +71,24 @@ describe('useThreadMembers', () => {
     }
     const { rerender } = render(
       <ChatContext.Provider
-        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+        value={{
+          client: {} as ChatClient,
+          store,
+          events: { subscribe: () => () => {} },
+          presence: createPresenceSlice(),
+        }}
       >
         <Probe2 />
       </ChatContext.Provider>
     )
     rerender(
       <ChatContext.Provider
-        value={{ client: {} as ChatClient, store, events: { subscribe: () => () => {} } }}
+        value={{
+          client: {} as ChatClient,
+          store,
+          events: { subscribe: () => () => {} },
+          presence: createPresenceSlice(),
+        }}
       >
         <Probe2 />
       </ChatContext.Provider>

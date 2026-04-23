@@ -7,6 +7,8 @@ import { useSuspenseThread } from '../../src/hooks/useSuspenseThread'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
+import { createPresenceSlice } from '../../src/store/presence'
+
 const thread1 = {
   id: 'th_1',
   tenant: { org: 'A' },
@@ -20,7 +22,9 @@ const noopEvents = { subscribe: () => () => {} }
 function wrapper(client: ChatClient, qc: QueryClient, store = createChatStore()) {
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={qc}>
-      <ChatContext.Provider value={{ client, store, events: noopEvents }}>
+      <ChatContext.Provider
+        value={{ client, store, events: noopEvents, presence: createPresenceSlice() }}
+      >
         <Suspense fallback={<div data-testid="loading">loading</div>}>{children}</Suspense>
       </ChatContext.Provider>
     </QueryClientProvider>
