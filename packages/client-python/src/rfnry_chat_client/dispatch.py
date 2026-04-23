@@ -4,6 +4,7 @@ import asyncio
 import contextvars
 import inspect
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from rfnry_chat_protocol import Event, Identity, RunError, parse_event
@@ -114,11 +115,28 @@ class Dispatcher:
                 # Trigger begin_run on the first emission and stamp the
                 # run_id onto the emitted event. Events are frozen Pydantic
                 # models, so we use model_copy to produce a patched copy.
+                #
+                # We also re-stamp `created_at` here — right before the socket
+                # RPC that publishes the event — so the server's event log
+                # orders correctly. The HandlerSend.message()/.reasoning()/
+                # .tool_call()/.tool_result() constructors stamp `created_at`
+                # at the moment the handler calls them, which is BEFORE
+                # begin_run has run (lazy-run on first yield). Without this
+                # re-stamp, a handler that does `yield send.message(...)` can
+                # emit an event whose `created_at` precedes the run.started
+                # frame's `created_at`, and an event log sorted by `created_at`
+                # shows the message arriving before its own run started.
+                updates: dict[str, Any] = {}
                 if began_run_id is None:
                     run_id = await _start_run()
                     send.set_run_id(run_id)
                     if emitted.run_id is None:
-                        emitted = emitted.model_copy(update={"run_id": run_id})
+                        updates["run_id"] = run_id
+                # Sample created_at AFTER any lazy begin_run call so the
+                # timestamp is strictly greater than the run.started frame
+                # the server published inside begin_run.
+                updates["created_at"] = datetime.now(UTC)
+                emitted = emitted.model_copy(update=updates)
                 await self._client.emit_event(emitted)
         except Exception as exc:
             if began_run_id is not None:

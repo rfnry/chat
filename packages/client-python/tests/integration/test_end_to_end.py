@@ -223,6 +223,87 @@ async def test_client_streams_message(live_server: tuple[str, Any]) -> None:
         await client.disconnect()
 
 
+async def test_event_log_ordering_run_started_before_message(
+    live_server: tuple[str, Any],
+) -> None:
+    """Regression for event-ordering bug: the server's event log, sorted by
+    `created_at`, must show run.started BEFORE the handler's message and
+    run.completed AFTER it. Before the fix, HandlerSend stamped created_at
+    at handler-yield time (before lazy begin_run), so the published message
+    carried a timestamp earlier than the run.started frame's timestamp —
+    making the log read as "message, then run.started", which is visually
+    incoherent."""
+    base, _ = live_server
+    thread_id = await _seed_thread_with_member(base, DEFAULT_ASSISTANT.model_dump(mode="json"))
+
+    async def authenticate() -> dict[str, Any]:
+        return {"auth": {"identity_id": DEFAULT_ASSISTANT.id}}
+
+    client = ChatClient(
+        base_url=base,
+        identity=DEFAULT_ASSISTANT,
+        authenticate=authenticate,
+    )
+
+    @client.on_message()
+    async def reply(ctx: HandlerContext, send: HandlerSend):
+        if ctx.event.author.role != "user":
+            return
+        yield send.message(content=[TextPart(text="ack")])
+
+    try:
+        await client.connect()
+        await client.join_thread(thread_id)
+
+        async with httpx.AsyncClient(base_url=base) as http:
+            await http.post(
+                f"/chat/threads/{thread_id}/messages",
+                json={"client_id": "c_ord", "content": [{"type": "text", "text": "hi"}]},
+            )
+
+            # Wait until the thread's event log contains the expected frames.
+            async def _has_full_run() -> bool:
+                resp = await http.get(f"/chat/threads/{thread_id}/events")
+                if resp.status_code != 200:
+                    return False
+                body = resp.json()
+                items = body.get("items", body) if isinstance(body, dict) else body
+                types = [e["type"] for e in items]
+                return (
+                    "run.started" in types
+                    and "run.completed" in types
+                    and types.count("message") >= 2  # user + assistant
+                )
+
+            for _ in range(100):
+                if await _has_full_run():
+                    break
+                await asyncio.sleep(0.05)
+
+            resp = await http.get(f"/chat/threads/{thread_id}/events")
+            body = resp.json()
+            items = body.get("items", body) if isinstance(body, dict) else body
+
+        # Among only the frames produced by the agent's run, the order by
+        # created_at must be: run.started -> assistant message -> run.completed.
+        assistant_frames = [
+            e for e in items
+            if (
+                e["type"] == "run.started"
+                or e["type"] == "run.completed"
+                or (e["type"] == "message" and e["author"]["id"] == DEFAULT_ASSISTANT.id)
+            )
+        ]
+        assistant_frames.sort(key=lambda e: e["created_at"])
+        observed_types = [e["type"] for e in assistant_frames]
+        assert observed_types == ["run.started", "message", "run.completed"], (
+            f"expected [run.started, message, run.completed] ordered by "
+            f"created_at; got {observed_types}"
+        )
+    finally:
+        await client.disconnect()
+
+
 async def test_server_tool_handler_responds_to_client_tool_call(
     live_server: tuple[str, ChatClient],
 ) -> None:

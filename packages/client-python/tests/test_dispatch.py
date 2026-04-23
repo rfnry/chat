@@ -356,3 +356,79 @@ async def test_emitter_exception_after_first_yield_ends_run_with_error() -> None
     assert len(client.end_calls) == 1
     assert client.end_calls[0].get("error") is not None
     assert client.end_calls[0]["error"]["code"] == "handler_error"
+
+
+async def test_emitter_restamps_created_at_at_publish_time() -> None:
+    """Regression for event-ordering bug: HandlerSend.message() and siblings
+    stamp `created_at=datetime.now(UTC)` at handler-yield time (i.e. before
+    lazy-run begin_run runs). Without a re-stamp, a handler that yields a
+    message can produce an event whose `created_at` is strictly earlier than
+    the run.started frame that the server publishes inside begin_run — which
+    makes an event log sorted by `created_at` render as "message before its
+    own run started". The dispatcher must re-stamp `created_at` right before
+    calling emit_event so the published timestamp reflects publish order."""
+    import asyncio
+
+    from rfnry_chat_protocol import TextPart
+
+    me = AssistantIdentity(id="a_me", name="Me")
+    client = _RunTrackingStubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+
+    constructed_at: list[datetime] = []
+
+    async def reply(_ctx: HandlerContext, send: HandlerSend):
+        msg = send.message(content=[TextPart(text="hi")])
+        constructed_at.append(msg.created_at)
+        # Yield to the event loop so "publish time" is strictly after
+        # "construction time" even on very fast clocks.
+        await asyncio.sleep(0)
+        yield msg
+
+    dispatcher.register("message", reply)
+    await dispatcher.feed(_msg(author_id="u_other"))
+
+    assert len(client.emitted) == 1
+    assert len(constructed_at) == 1
+    emitted_created_at = client.emitted[0].created_at
+    # The emitted (published) event's created_at must be strictly later than
+    # the timestamp the handler saw when it built the event.
+    assert emitted_created_at > constructed_at[0], (
+        f"expected published created_at ({emitted_created_at}) to be strictly "
+        f"greater than handler-build time ({constructed_at[0]}); dispatcher "
+        f"did not re-stamp created_at at emit time"
+    )
+
+
+async def test_emitter_restamps_created_at_on_every_yield() -> None:
+    """Each emitted event's created_at must be sampled right before its own
+    emit_event call — not shared across yields. Two yields => two distinct
+    re-stamps, both strictly greater than the constructor timestamps."""
+    import asyncio
+
+    from rfnry_chat_protocol import TextPart
+
+    me = AssistantIdentity(id="a_me", name="Me")
+    client = _RunTrackingStubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+
+    constructed_at: list[datetime] = []
+
+    async def reply(_ctx: HandlerContext, send: HandlerSend):
+        m1 = send.message(content=[TextPart(text="first")])
+        constructed_at.append(m1.created_at)
+        await asyncio.sleep(0)
+        yield m1
+        m2 = send.message(content=[TextPart(text="second")])
+        constructed_at.append(m2.created_at)
+        await asyncio.sleep(0)
+        yield m2
+
+    dispatcher.register("message", reply)
+    await dispatcher.feed(_msg(author_id="u_other"))
+
+    assert len(client.emitted) == 2
+    assert client.emitted[0].created_at > constructed_at[0]
+    assert client.emitted[1].created_at > constructed_at[1]
+    # And the second publish is strictly after the first.
+    assert client.emitted[1].created_at >= client.emitted[0].created_at
