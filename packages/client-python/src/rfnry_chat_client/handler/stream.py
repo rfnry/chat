@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal
@@ -27,14 +28,21 @@ class Stream:
         *,
         client: ChatClient,
         thread_id: str,
-        run_id: str,
+        run_id: str | None,
         author: Identity,
         target_type: StreamTargetType,
         metadata: dict[str, Any] | None = None,
+        run_resolver: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
+        # run_id is allowed to be None at construction time as long as
+        # run_resolver is provided — __aenter__ awaits the resolver to get
+        # the real id. This supports lazy run creation in the dispatcher.
+        if run_id is None and run_resolver is None:
+            raise RuntimeError("Stream requires either a run_id or a run_resolver")
         self._client = client
         self._thread_id = thread_id
         self._run_id = run_id
+        self._run_resolver = run_resolver
         self._author = author
         self._target_type = target_type
         self._metadata = metadata or {}
@@ -52,6 +60,9 @@ class Stream:
         return self._finalized
 
     async def __aenter__(self) -> Stream:
+        if self._run_id is None:
+            assert self._run_resolver is not None  # guarded in __init__
+            self._run_id = await self._run_resolver()
         frame = StreamStartFrame(
             event_id=self._event_id,
             thread_id=self._thread_id,

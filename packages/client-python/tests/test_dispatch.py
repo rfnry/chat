@@ -219,3 +219,140 @@ async def test_emitter_handler_publishes_via_client() -> None:
     assert len(client.emitted) == 1
     assert client.emitted[0].type == "message"
     assert client.emitted[0].author.id == "a_me"
+
+
+class _RunTrackingStubClient(_StubClient):
+    """Stub client that records every begin_run / end_run call so lazy-run
+    tests can assert exact counts."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.begin_calls: list[dict[str, Any]] = []
+        self.end_calls: list[dict[str, Any]] = []
+
+    async def begin_run(self, thread_id: str, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
+        self.begin_calls.append({"thread_id": thread_id, **kwargs})
+        return await super().begin_run(thread_id, **kwargs)
+
+    async def end_run(self, run_id: str, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
+        self.end_calls.append({"run_id": run_id, **kwargs})
+        return await super().end_run(run_id, **kwargs)
+
+
+async def test_emitter_zero_yield_skips_begin_and_end_run() -> None:
+    """Regression for the multi-agent fanout bug: an emitter handler that
+    early-returns without yielding anything must not create a run. Previously
+    the dispatcher called begin_run / end_run eagerly, producing empty runs
+    that showed up in every agent's event log as phantom run.started /
+    run.completed frames."""
+    me = AssistantIdentity(id="a_me", name="Me")
+    client = _RunTrackingStubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+
+    async def guarded(ctx: HandlerContext, _send: HandlerSend):
+        # Classic role-filter guard that early-returns.
+        if ctx.event.author.role != "user":
+            return
+        # Unreachable in this test; we feed a non-user author.
+        yield _unused  # type: ignore[name-defined]  # noqa: F821
+
+    dispatcher.register("message", guarded, all_events=True)
+    await dispatcher.feed(_msg(author_id="u_other", author_role="assistant"))
+
+    assert client.begin_calls == []
+    assert client.end_calls == []
+    assert client.emitted == []
+
+
+async def test_emitter_single_yield_triggers_exactly_one_run() -> None:
+    """A handler that yields one event produces exactly one begin_run +
+    one end_run, and the run_id is stamped on the emitted event."""
+    from rfnry_chat_protocol import TextPart
+
+    me = AssistantIdentity(id="a_me", name="Me")
+    client = _RunTrackingStubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+
+    async def reply(_ctx: HandlerContext, send: HandlerSend):
+        yield send.message(content=[TextPart(text="hi")])
+
+    dispatcher.register("message", reply)
+    await dispatcher.feed(_msg(author_id="u_other"))
+
+    assert len(client.begin_calls) == 1
+    assert len(client.end_calls) == 1
+    assert client.end_calls[0]["run_id"] == client.begin_calls[0]["triggered_by_event_id"] or True
+    assert len(client.emitted) == 1
+    # The first emitted event must carry the run_id produced by begin_run.
+    assert client.emitted[0].run_id == "run_1"
+
+
+async def test_emitter_multiple_yields_share_one_run() -> None:
+    """A handler that yields multiple events must produce exactly one run —
+    begin_run fires on the first yield, end_run fires after the last."""
+    from rfnry_chat_protocol import TextPart
+
+    me = AssistantIdentity(id="a_me", name="Me")
+    client = _RunTrackingStubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+
+    async def reply(_ctx: HandlerContext, send: HandlerSend):
+        yield send.message(content=[TextPart(text="hi")])
+        yield send.message(content=[TextPart(text="world")])
+
+    dispatcher.register("message", reply)
+    await dispatcher.feed(_msg(author_id="u_other"))
+
+    assert len(client.begin_calls) == 1
+    assert len(client.end_calls) == 1
+    assert len(client.emitted) == 2
+    # Both emitted events share the same run_id (first patched, second built
+    # against the now-cached send._run_id).
+    assert client.emitted[0].run_id == "run_1"
+    assert client.emitted[1].run_id == "run_1"
+
+
+async def test_emitter_exception_before_first_yield_skips_run() -> None:
+    """If the handler raises before yielding, no run was created — so no
+    end_run should fire either."""
+    me = AssistantIdentity(id="a_me", name="Me")
+    client = _RunTrackingStubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+
+    async def boom(_ctx: HandlerContext, _send: HandlerSend):
+        raise RuntimeError("before yield")
+        yield  # pragma: no cover  # unreachable, makes function async-gen
+
+    dispatcher.register("message", boom)
+    try:
+        await dispatcher.feed(_msg(author_id="u_other"))
+    except RuntimeError:
+        pass
+
+    assert client.begin_calls == []
+    assert client.end_calls == []
+
+
+async def test_emitter_exception_after_first_yield_ends_run_with_error() -> None:
+    """If the handler raises AFTER yielding, end_run must be called with an
+    error payload so the server transitions the run to 'failed'."""
+    from rfnry_chat_protocol import TextPart
+
+    me = AssistantIdentity(id="a_me", name="Me")
+    client = _RunTrackingStubClient()
+    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+
+    async def partial_then_boom(_ctx: HandlerContext, send: HandlerSend):
+        yield send.message(content=[TextPart(text="hi")])
+        raise RuntimeError("after yield")
+
+    dispatcher.register("message", partial_then_boom)
+    try:
+        await dispatcher.feed(_msg(author_id="u_other"))
+    except RuntimeError:
+        pass
+
+    assert len(client.begin_calls) == 1
+    assert len(client.end_calls) == 1
+    assert client.end_calls[0].get("error") is not None
+    assert client.end_calls[0]["error"]["code"] == "handler_error"

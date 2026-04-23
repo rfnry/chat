@@ -77,30 +77,58 @@ class Dispatcher:
         await self._run_observer(reg.handler, event)
 
     async def _run_emitter(self, handler: HandlerCallable, event: Event) -> None:
-        begin_reply = await self._client.socket.begin_run(
-            event.thread_id,
-            triggered_by_event_id=event.id,
-        )
-        run_id = begin_reply["run_id"]
+        # Lazy run creation. Previously we called begin_run unconditionally
+        # on every dispatch — so a handler that early-returned (e.g. a role
+        # filter guard `if event.author.role != "user": return`) still
+        # produced an empty run and one run.started + run.completed frame.
+        # In a multi-agent channel that fans out to N-1 other agents, this
+        # caused N phantom runs per user message.
+        #
+        # Now: build a `run_starter` closure. We only call begin_run on the
+        # handler's first yield (or first stream open). Handlers that yield
+        # nothing skip begin_run AND end_run entirely.
+        began_run_id: str | None = None
+
+        async def _start_run() -> str:
+            nonlocal began_run_id
+            if began_run_id is not None:
+                return began_run_id
+            reply = await self._client.socket.begin_run(
+                event.thread_id,
+                triggered_by_event_id=event.id,
+            )
+            began_run_id = reply["run_id"]
+            return began_run_id
 
         ctx = HandlerContext(event=event, identity=self._identity, client=self._client)
         send = HandlerSend(
             thread_id=event.thread_id,
             author=self._identity,
-            run_id=run_id,
+            run_id=None,
             client=self._client,
+            run_starter=_start_run,
         )
 
         try:
             async for emitted in handler(ctx, send):  # type: ignore[union-attr]
+                # Trigger begin_run on the first emission and stamp the
+                # run_id onto the emitted event. Events are frozen Pydantic
+                # models, so we use model_copy to produce a patched copy.
+                if began_run_id is None:
+                    run_id = await _start_run()
+                    send.set_run_id(run_id)
+                    if emitted.run_id is None:
+                        emitted = emitted.model_copy(update={"run_id": run_id})
                 await self._client.emit_event(emitted)
         except Exception as exc:
-            await self._client.socket.end_run(
-                run_id,
-                error={"code": "handler_error", "message": str(exc)},
-            )
+            if began_run_id is not None:
+                await self._client.socket.end_run(
+                    began_run_id,
+                    error={"code": "handler_error", "message": str(exc)},
+                )
             raise
-        await self._client.socket.end_run(run_id)
+        if began_run_id is not None:
+            await self._client.socket.end_run(began_run_id)
 
     async def _run_observer(self, handler: HandlerCallable, event: Event) -> None:
         ctx = HandlerContext(event=event, identity=self._identity, client=self._client)
