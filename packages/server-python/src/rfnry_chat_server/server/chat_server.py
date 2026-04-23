@@ -407,6 +407,14 @@ class ChatServer:
         return updated
 
     async def end_run(self, *, run_id: str, error: RunError | None) -> Run:
+        # Idempotent on terminal runs: a double-end (e.g. handler raises after
+        # already yielding, or watchdog timeout racing a normal completion)
+        # used to produce duplicate run.completed / run.failed frames.
+        # Short-circuit here so callers can safely end_run twice.
+        existing = await self.store.get_run(run_id)
+        if existing is not None and existing.status in ("completed", "failed", "cancelled"):
+            return existing
+
         if error is None:
             updated = await self.store.update_run_status(run_id, "completed")
             thread = await self.store.get_thread(updated.thread_id)
