@@ -194,3 +194,22 @@ async def test_delete_thread_204_returns_none() -> None:
     rest = _make_transport(httpx.MockTransport(handle))
     result = await rest.delete_thread("t_1")
     assert result is None
+
+
+async def test_list_presence_round_trips() -> None:
+    async def handle(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == "/chat/presence"
+        return httpx.Response(
+            200,
+            json={
+                "members": [
+                    {"role": "user", "id": "u_a", "name": "Alice", "metadata": {}},
+                    {"role": "assistant", "id": "agent-a", "name": "Agent A", "metadata": {}},
+                ]
+            },
+        )
+
+    rest = _make_transport(httpx.MockTransport(handle))
+    snap = await rest.list_presence()
+    assert [m.id for m in snap.members] == ["u_a", "agent-a"]

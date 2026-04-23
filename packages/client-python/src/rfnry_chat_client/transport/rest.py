@@ -7,6 +7,7 @@ import httpx
 from rfnry_chat_protocol import (
     Event,
     Identity,
+    PresenceSnapshot,
     Run,
     Thread,
     ThreadMember,
@@ -144,6 +145,15 @@ class RestTransport:
 
     async def remove_member(self, thread_id: str, identity_id: str) -> None:
         await self._request("DELETE", f"/threads/{thread_id}/members/{identity_id}")
+
+    async def list_presence(self) -> PresenceSnapshot:
+        """GET /chat/presence - snapshot of identities currently online in the
+        caller's tenant scope. Caller is excluded by the server; merge this
+        snapshot with live `presence:joined` / `presence:left` frames to keep
+        a consistent view.
+        """
+        payload = await self._request("GET", "/presence")
+        return PresenceSnapshot.model_validate(payload)
 
     async def get_run(self, run_id: str) -> Run:
         payload = await self._request("GET", f"/runs/{run_id}")
