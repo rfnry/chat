@@ -11,6 +11,13 @@ export type PresenceSliceState = {
   hydrated: boolean
 }
 
+// Hybrid shape: spreads StoreApi (exposes getState/setState/subscribe for
+// useStore-based reactivity in usePresence) AND exposes flat ergonomic methods
+// so ChatProvider can call `presence.hydrate(snapshot)` directly. This diverges
+// from chatStore.ts (which nests actions under state.actions) — presence chose
+// the flatter surface because its actions are called from non-React code
+// (socket handlers in the provider), where the nested form would force a
+// getState() + method-lookup dance at every call site.
 export type PresenceSlice = StoreApi<PresenceSliceState> & {
   hydrate(snapshot: PresenceSnapshot): void
   applyJoined(frame: PresenceJoinedFrame): void
@@ -18,6 +25,8 @@ export type PresenceSlice = StoreApi<PresenceSliceState> & {
   list(): Identity[]
   isHydrated(): boolean
 }
+
+export type PresenceStore = ReturnType<typeof createPresenceSlice>
 
 const initialState = (): PresenceSliceState => ({
   members: new Map(),
