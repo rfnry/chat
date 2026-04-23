@@ -125,6 +125,7 @@ class ChatServer:
 
         from rfnry_chat_server.server.rest.members import build_router as build_members
         from rfnry_chat_server.server.rest.messages import build_router as build_messages
+        from rfnry_chat_server.server.rest.presence import build_router as build_presence
         from rfnry_chat_server.server.rest.runs import build_router as build_runs
         from rfnry_chat_server.server.rest.threads import build_router as build_threads
 
@@ -133,6 +134,7 @@ class ChatServer:
         self.router.include_router(build_messages())
         self.router.include_router(build_members())
         self.router.include_router(build_runs())
+        self.router.include_router(build_presence())
 
     async def start(self) -> None:
         if self._watchdog_task is not None and not self._watchdog_task.done():
