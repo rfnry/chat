@@ -1,8 +1,8 @@
-"""Task 2.4: presence:joined broadcast on the 0→1 socket edge per identity.
+"""Presence lifecycle: presence:joined / presence:left refcount semantics.
 
-The matching presence:left test lives here too but is skipped until Task 2.5
-lands the on_disconnect handler. Design pin: the joining socket itself must
-not receive its own joined frame (skip_sid).
+Covers the 0→1 joined edge (Task 2.4) and the 1→0 left edge (Task 2.5). Design
+pins: the joining socket itself must not receive its own joined frame
+(skip_sid), and intermediate opens/closes (2→1, 1→2) must not re-broadcast.
 """
 
 from __future__ import annotations
@@ -176,11 +176,11 @@ async def test_joining_socket_does_not_receive_own_joined(
             await client.disconnect()
 
 
-@pytest.mark.skip(reason="depends on Task 2.5 disconnect handler")
 async def test_last_socket_broadcasts_left(
     live_multi_identity: tuple[str, ChatServer],
 ) -> None:
-    """1→0 transition fires `presence:left`. Pending Task 2.5."""
+    """1→0 transition fires `presence:left` exactly once. Closing a non-last
+    socket (2→1) stays silent; only the final close broadcasts."""
     base, _ = live_multi_identity
 
     observer_received: list[tuple[str, dict[str, Any]]] = []
@@ -198,6 +198,7 @@ async def test_last_socket_broadcasts_left(
     )
 
     a1 = socketio.AsyncClient()
+    a2 = socketio.AsyncClient()
     try:
         await a1.connect(
             base,
@@ -205,12 +206,31 @@ async def test_last_socket_broadcasts_left(
             socketio_path="/chat/ws",
             auth={"user": "agent-a"},
         )
+        await a2.connect(
+            base,
+            transports=["websocket"],
+            socketio_path="/chat/ws",
+            auth={"user": "agent-a"},
+        )
         await _settle()
+
+        # Closing one of two sockets for agent-a must NOT broadcast left
+        # (refcount 2→1).
         await a1.disconnect()
         await _settle()
         left = [e for e in observer_received if e[0] == "left"]
-        assert len(left) == 1
+        assert len(left) == 0, f"2→1 disconnect leaked a presence:left: {left!r}"
+
+        # Closing the final socket (1→0) broadcasts exactly one presence:left.
+        await a2.disconnect()
+        await _settle()
+        left = [e for e in observer_received if e[0] == "left"]
+        assert len(left) == 1, f"expected exactly one left, got {left!r}"
         assert left[0][1]["identity"]["id"] == "agent-a"
     finally:
+        with contextlib.suppress(Exception):
+            await a1.disconnect()
+        with contextlib.suppress(Exception):
+            await a2.disconnect()
         with contextlib.suppress(Exception):
             await obs.disconnect()

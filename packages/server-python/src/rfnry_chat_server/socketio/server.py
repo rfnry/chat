@@ -11,6 +11,7 @@ from rfnry_chat_protocol import (
     Identity,
     MessageEvent,
     PresenceJoinedFrame,
+    PresenceLeftFrame,
     RunError,
     StreamDeltaFrame,
     StreamEndFrame,
@@ -248,6 +249,47 @@ class ThreadNamespace(socketio.AsyncNamespace):
         except socketio.exceptions.ConnectionRefusedError:
             self._sid_namespaces.pop(sid, None)
             raise
+
+    async def on_disconnect(self, sid: str, *_args: Any) -> None:
+        """Decrement presence refcount and broadcast `presence:left` on the 1→0
+        edge for this identity. Safe to call even if the sid never completed
+        auth — `presence.remove` returns (False, None, None) for unknown sids.
+
+        We derive the namespace via `_concrete_namespace_for(sid)` BEFORE
+        trigger_event's disconnect cleanup pops the cache; as long as we run
+        ourselves within the same dispatch window, the entry is still present.
+        """
+        try:
+            session = await self.get_session(sid)
+        except KeyError:
+            # Session dict never got stored (e.g. connect refused before save).
+            # presence.remove is safe to call with an unknown sid.
+            session = {}
+        identity = session.get("identity")
+        if identity is None:
+            # No session → either pre-auth or already cleaned up. Nothing to do.
+            return
+
+        was_last, removed_identity, tenant_path = await self._server.presence.remove(
+            identity.id, sid
+        )
+        if was_last and removed_identity is not None and tenant_path is not None:
+            if self._server.broadcaster is not None:
+                # Mirror on_connect: derive namespace from the sid's concrete ns
+                # so the emit lands in the right room manager under wildcard mode.
+                try:
+                    namespace = self._concrete_namespace_for(sid)
+                except RuntimeError:
+                    # sid already popped from cache — fall back to the session's
+                    # stored namespace (populated in on_connect) or "/".
+                    namespace = session.get("namespace") or "/"
+                await self._server.broadcaster.broadcast_presence_left(
+                    PresenceLeftFrame(
+                        identity=removed_identity, at=datetime.now(UTC)
+                    ),
+                    tenant_path=tenant_path,
+                    namespace=namespace,
+                )
 
     async def _check_namespace_match(self, sid: str, thread_tenant: dict[str, str]) -> bool:
         """Return True if the thread's tenant agrees with the session's
