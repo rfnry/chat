@@ -2,12 +2,14 @@ import type {
   Event,
   EventDraft,
   Identity,
+  PresenceSnapshot,
   Run,
   Thread,
   ThreadMember,
   ThreadPatch,
 } from '@rfnry/chat-protocol'
 import {
+  parsePresenceSnapshot,
   toEvent,
   toEventDraftWire,
   toIdentityWire,
@@ -161,6 +163,11 @@ export class RestTransport {
 
   async removeMember(threadId: string, identityId: string): Promise<void> {
     await this.req<void>('DELETE', `/threads/${threadId}/members/${identityId}`)
+  }
+
+  async listPresence(): Promise<PresenceSnapshot> {
+    const wire = await this.req<unknown>('GET', '/presence')
+    return parsePresenceSnapshot(wire)
   }
 
   async getRun(runId: string): Promise<Run> {
