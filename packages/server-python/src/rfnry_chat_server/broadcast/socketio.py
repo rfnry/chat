@@ -25,17 +25,18 @@ def _inbox_room(identity_id: str) -> str:
     return f"inbox:{identity_id}"
 
 
-def _tenant_path(tenant: dict[str, str], *, namespace_keys: list[str] | None) -> str:
+def tenant_path(tenant: dict[str, str], *, namespace_keys: list[str] | None) -> str:
     """Deterministic tenant-path string for a tenant scope. Single source of
-    truth for the path used by both tenant rooms and presence rooms — callers
-    that need both should derive once and reuse to avoid drift."""
+    truth for the path used by tenant rooms, presence rooms, and REST tenant
+    filtering — callers that need the path for multiple purposes should derive
+    it once and reuse to avoid drift."""
     return derive_namespace_path(tenant, namespace_keys=namespace_keys)
 
 
 def _tenant_room(tenant: dict[str, str], namespace_keys: list[str] | None) -> str:
     """Deterministic room name for a tenant scope. Reuses derive_namespace_path
     so the same logic that defines tenant scoping defines room membership."""
-    return f"tenant:{_tenant_path(tenant, namespace_keys=namespace_keys)}"
+    return f"tenant:{tenant_path(tenant, namespace_keys=namespace_keys)}"
 
 
 def _presence_room(tenant_path: str) -> str:

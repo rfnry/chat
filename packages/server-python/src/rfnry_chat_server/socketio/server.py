@@ -21,7 +21,8 @@ from rfnry_chat_protocol import (
     parse_event,
 )
 
-from rfnry_chat_server.broadcast.socketio import _presence_room, _tenant_path
+from rfnry_chat_server.broadcast.socketio import _presence_room
+from rfnry_chat_server.broadcast.socketio import tenant_path as _derive_tenant_path
 from rfnry_chat_server.recipients import RecipientNotMemberError
 from rfnry_chat_server.server.auth import HandshakeData
 from rfnry_chat_server.server.namespace import NamespaceViolation, parse_namespace_path
@@ -208,7 +209,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
                 await self.save_session(sid, {"identity": identity})
             await self.enter_room(sid, f"inbox:{identity.id}")
             try:
-                tenant_path = _tenant_path(identity_tenant, namespace_keys=ns_keys)
+                tenant_path = _derive_tenant_path(identity_tenant, namespace_keys=ns_keys)
             except NamespaceViolation as exc:
                 raise socketio.exceptions.ConnectionRefusedError(f"namespace_invalid: tenant room: {exc}") from exc
             await self.enter_room(sid, f"tenant:{tenant_path}")
