@@ -5,6 +5,8 @@ from typing import Protocol
 from rfnry_chat_protocol import (
     Event,
     Identity,
+    PresenceJoinedFrame,
+    PresenceLeftFrame,
     Run,
     StreamDeltaFrame,
     StreamEndFrame,
@@ -29,6 +31,21 @@ class Broadcaster(Protocol):
         self,
         frame: ThreadInvitedFrame,
         *,
+        namespace: str | None = None,
+    ) -> None: ...
+    async def broadcast_presence_joined(
+        self,
+        frame: PresenceJoinedFrame,
+        *,
+        tenant_path: str,
+        skip_sid: str | None = None,
+        namespace: str | None = None,
+    ) -> None: ...
+    async def broadcast_presence_left(
+        self,
+        frame: PresenceLeftFrame,
+        *,
+        tenant_path: str,
         namespace: str | None = None,
     ) -> None: ...
     async def broadcast_thread_cleared(

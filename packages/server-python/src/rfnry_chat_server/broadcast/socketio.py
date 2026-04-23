@@ -4,6 +4,8 @@ import socketio
 from rfnry_chat_protocol import (
     Event,
     Identity,
+    PresenceJoinedFrame,
+    PresenceLeftFrame,
     Run,
     StreamDeltaFrame,
     StreamEndFrame,
@@ -28,6 +30,13 @@ def _tenant_room(tenant: dict[str, str], namespace_keys: list[str] | None) -> st
     so the same logic that defines tenant scoping defines room membership."""
     path = derive_namespace_path(tenant, namespace_keys=namespace_keys)
     return f"tenant:{path}"
+
+
+def _presence_room(tenant_path: str) -> str:
+    """Room name for presence-scope broadcasts. Every socket that authenticates
+    into a given tenant path enters this room; presence:joined / presence:left
+    frames go here."""
+    return f"presence:{tenant_path}"
 
 
 class SocketIOBroadcaster:
@@ -85,6 +94,48 @@ class SocketIOBroadcaster:
             "thread:invited",
             frame.model_dump(mode="json", by_alias=True),
             room=_inbox_room(frame.added_member.id),
+            namespace=namespace or "/",
+        )
+
+    async def broadcast_presence_joined(
+        self,
+        frame: PresenceJoinedFrame,
+        *,
+        tenant_path: str,
+        skip_sid: str | None = None,
+        namespace: str | None = None,
+    ) -> None:
+        """Broadcast a presence:joined frame to the tenant's presence room.
+
+        `skip_sid` is the joining socket itself — excluded so the newly-connected
+        client doesn't receive its own "joined" event. Other sockets (same
+        identity with multiple tabs + all other identities in the same tenant
+        scope) receive it.
+        """
+        await self._sio.emit(
+            "presence:joined",
+            frame.model_dump(mode="json", by_alias=True),
+            room=_presence_room(tenant_path),
+            skip_sid=skip_sid,
+            namespace=namespace or "/",
+        )
+
+    async def broadcast_presence_left(
+        self,
+        frame: PresenceLeftFrame,
+        *,
+        tenant_path: str,
+        namespace: str | None = None,
+    ) -> None:
+        """Broadcast a presence:left frame to the tenant's presence room.
+
+        No skip_sid here: by the time we broadcast, the departing socket is
+        already disconnected and no longer in any room.
+        """
+        await self._sio.emit(
+            "presence:left",
+            frame.model_dump(mode="json", by_alias=True),
+            room=_presence_room(tenant_path),
             namespace=namespace or "/",
         )
 

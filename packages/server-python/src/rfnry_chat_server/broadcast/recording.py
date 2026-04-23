@@ -3,6 +3,8 @@ from __future__ import annotations
 from rfnry_chat_protocol import (
     Event,
     Identity,
+    PresenceJoinedFrame,
+    PresenceLeftFrame,
     Run,
     StreamDeltaFrame,
     StreamEndFrame,
@@ -24,6 +26,12 @@ class RecordingBroadcaster:
         self.runs_updated_with_namespace: list[tuple[Run, str | None]] = []
         self.thread_invited: list[ThreadInvitedFrame] = []
         self.thread_invited_with_namespace: list[tuple[ThreadInvitedFrame, str | None]] = []
+        self.presence_joined: list[PresenceJoinedFrame] = []
+        self.presence_joined_with_kwargs: list[
+            tuple[PresenceJoinedFrame, str, str | None, str | None]
+        ] = []
+        self.presence_left: list[PresenceLeftFrame] = []
+        self.presence_left_with_kwargs: list[tuple[PresenceLeftFrame, str, str | None]] = []
         self.thread_cleared: list[str] = []
         self.thread_cleared_with_namespace: list[tuple[str, str | None]] = []
         self.threads_created: list[Thread] = []
@@ -64,6 +72,27 @@ class RecordingBroadcaster:
     ) -> None:
         self.thread_invited.append(frame)
         self.thread_invited_with_namespace.append((frame, namespace))
+
+    async def broadcast_presence_joined(
+        self,
+        frame: PresenceJoinedFrame,
+        *,
+        tenant_path: str,
+        skip_sid: str | None = None,
+        namespace: str | None = None,
+    ) -> None:
+        self.presence_joined.append(frame)
+        self.presence_joined_with_kwargs.append((frame, tenant_path, skip_sid, namespace))
+
+    async def broadcast_presence_left(
+        self,
+        frame: PresenceLeftFrame,
+        *,
+        tenant_path: str,
+        namespace: str | None = None,
+    ) -> None:
+        self.presence_left.append(frame)
+        self.presence_left_with_kwargs.append((frame, tenant_path, namespace))
 
     async def broadcast_thread_cleared(
         self,
