@@ -39,7 +39,14 @@ class ChatStore(Protocol):
     async def update_thread(self, thread_id: str, patch: ThreadPatch) -> Thread: ...
     async def delete_thread(self, thread_id: str) -> None: ...
 
-    async def append_event(self, event: Event) -> Event: ...
+    async def append_event(self, event: Event) -> Event:
+        """Persist `event` and return it. Implementations MUST return the input
+        event unmodified — `ChatServer.publish_event` broadcasts `event` and
+        persists it concurrently, which is only safe if the persisted form is
+        identical to the input. A future store that needs to mutate (e.g. assign
+        a server-generated id) must signal this requirement so the parallel
+        path can be reverted to sequential."""
+        ...
     async def list_events(
         self,
         thread_id: str,

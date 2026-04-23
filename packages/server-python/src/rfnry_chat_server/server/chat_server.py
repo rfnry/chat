@@ -237,6 +237,17 @@ class ChatServer:
             if thread is not None:
                 namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
 
+        # Pipeline the DB write and the broadcast. The broadcast doesn't depend
+        # on the write completing — it carries the event payload directly. Total
+        # latency drops from write+broadcast to max(write, broadcast).
+        #
+        # Error-path note: if append_event raises, asyncio.gather propagates the
+        # exception but does NOT cancel the in-flight broadcast (default
+        # return_exceptions=False semantics). The broadcast may still complete
+        # and reach live subscribers, producing a "ghost event" they see on
+        # WebSocket but won't find in REST history. Accepted as the cost of
+        # parallelization — DB write failures are rare and the WebSocket
+        # subscriber will reconcile on reconnect/replay.
         if self.broadcaster is not None:
             appended, _ = await asyncio.gather(
                 self.store.append_event(event),
