@@ -54,6 +54,28 @@ await uvicorn.Server(uvicorn.Config(
 )).serve()
 ```
 
+## Auth callback caching
+
+`authenticate` is called on every REST request. If your callback hits a
+database, a JWT verifier with JWKS fetch, or any external auth service,
+that's one extra network hop per request. Wrap it with `cached_authenticate`
+to TTL-cache results by Authorization header:
+
+```python
+from rfnry_chat_server import ChatServer, cached_authenticate
+
+async def my_authenticate(handshake):
+    token = handshake.headers.get("authorization", "")
+    return await my_auth_service.verify(token)  # slow
+
+auth = cached_authenticate(my_authenticate, ttl_seconds=60.0, max_size=4096)
+server = ChatServer(store=store, authenticate=auth)
+```
+
+Both successful (`Identity`) and failed (`None`) results are cached so an
+attacker can't probe token validity by timing. For non-header auth schemes
+(cookie, custom payload), pass `key=lambda hs: ...` to override the default.
+
 ## Server-side handlers
 
 The server exposes a generic dispatcher so you can react to any event type directly from the server process. Handlers take `(ctx, send)` and may either observe (no yield) or emit events (yield from `send`). Emitted events are authored by the server's `SystemIdentity`.

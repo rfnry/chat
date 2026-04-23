@@ -63,6 +63,7 @@ from rfnry_chat_server.handler.send import HandlerSend
 from rfnry_chat_server.handler.types import HandlerCallable
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
 from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback, HandshakeData
+from rfnry_chat_server.server.auth_cache import cached_authenticate
 from rfnry_chat_server.server.chat_server import ChatServer
 from rfnry_chat_server.server.namespace import (
     NamespaceViolation,
@@ -83,6 +84,7 @@ __all__ = [
     "AuthenticateCallback",
     "AuthorizeCallback",
     "Broadcaster",
+    "cached_authenticate",
     "ChatServer",
     "ChatStore",
     "ContentPart",
