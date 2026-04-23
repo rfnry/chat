@@ -203,11 +203,8 @@ class ThreadNamespace(socketio.AsyncNamespace):
                         "namespace_tenant": ns_tenant,
                     },
                 )
-                concrete_ns_for_emit = concrete_ns
             else:
                 await self.save_session(sid, {"identity": identity})
-                # Non-wildcard mode: there's only ever the default namespace.
-                concrete_ns_for_emit = "/"
             await self.enter_room(sid, f"inbox:{identity.id}")
             try:
                 tenant_path = _tenant_path(identity_tenant, namespace_keys=ns_keys)
@@ -220,17 +217,32 @@ class ThreadNamespace(socketio.AsyncNamespace):
             # edge so re-connecting tabs from the same identity don't spam the
             # room. `skip_sid=sid` ensures the joining socket itself doesn't
             # receive its own joined frame.
-            is_first = await self._server.presence.add(
-                identity.id,
-                sid,
-                identity,
-                tenant_path=tenant_path,
-            )
+            #
+            # Re-raise PresenceRegistry's ValueError (cross-tenant re-add
+            # invariant) as ConnectionRefusedError so python-socketio dispatches
+            # `disconnect` and the `_sid_namespaces` cleanup in the except block
+            # below fires — an un-caught raise here would leak the sid entry.
+            try:
+                is_first = await self._server.presence.add(
+                    identity.id,
+                    sid,
+                    identity,
+                    tenant_path=tenant_path,
+                )
+            except ValueError as exc:
+                raise socketio.exceptions.ConnectionRefusedError(
+                    f"presence_tenant_conflict: {exc}"
+                ) from exc
             if is_first and self._server.broadcaster is not None:
+                # Derive the concrete namespace from the sid itself rather than
+                # hardcoding "/" in the static branch — this stays correct even
+                # if the ns_path ever changes (e.g. a test harness mounts at
+                # a non-default path) and prevents the silent-no-op failure mode
+                # that broadcast_presence_joined's docstring warns about.
                 await self._server.broadcaster.broadcast_presence_joined(
                     PresenceJoinedFrame(identity=identity, at=datetime.now(UTC)),
                     tenant_path=tenant_path,
-                    namespace=concrete_ns_for_emit,
+                    namespace=self._concrete_namespace_for(sid),
                     skip_sid=sid,
                 )
         except socketio.exceptions.ConnectionRefusedError:
