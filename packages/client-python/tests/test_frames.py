@@ -276,6 +276,31 @@ async def test_multiple_presence_joined_handlers_all_fire() -> None:
     assert calls_b == ["u_alice"]
 
 
+async def test_multiple_presence_left_handlers_all_fire() -> None:
+    client, sio = _build_client()
+    calls_a: list[str] = []
+    calls_b: list[str] = []
+
+    @client.on_presence_left()
+    async def h_a(frame: PresenceLeftFrame) -> None:
+        calls_a.append(frame.identity.id)
+
+    @client.on_presence_left()
+    async def h_b(frame: PresenceLeftFrame) -> None:
+        calls_b.append(frame.identity.id)
+
+    await client.connect()
+    raw = sio.handlers["presence:left"]
+    await raw(
+        {
+            "identity": {"role": "assistant", "id": "agent-a", "name": "Agent A", "metadata": {}},
+            "at": "2026-04-23T12:05:00Z",
+        }
+    )
+    assert calls_a == ["agent-a"]
+    assert calls_b == ["agent-a"]
+
+
 async def test_feed_presence_joined_fans_handlers_concurrently() -> None:
     """R16: presence:joined handlers must run concurrently."""
     import asyncio

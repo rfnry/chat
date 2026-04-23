@@ -26,7 +26,8 @@ _log = logging.getLogger("rfnry_chat_client.frames")
 
 class FrameDispatcher:
     """Dispatches transient server broadcast frames (thread:updated,
-    members:updated, run:updated) to registered handlers.
+    members:updated, run:updated, presence:joined, presence:left) to
+    registered handlers.
 
     These frames are snapshots carried over Socket.IO room broadcasts; they
     are NOT persisted events. For persisted events (message, tool.call, etc.)
