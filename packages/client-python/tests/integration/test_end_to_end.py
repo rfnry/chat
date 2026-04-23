@@ -287,7 +287,8 @@ async def test_event_log_ordering_run_started_before_message(
         # Among only the frames produced by the agent's run, the order by
         # created_at must be: run.started -> assistant message -> run.completed.
         assistant_frames = [
-            e for e in items
+            e
+            for e in items
             if (
                 e["type"] == "run.started"
                 or e["type"] == "run.completed"
@@ -297,8 +298,7 @@ async def test_event_log_ordering_run_started_before_message(
         assistant_frames.sort(key=lambda e: e["created_at"])
         observed_types = [e["type"] for e in assistant_frames]
         assert observed_types == ["run.started", "message", "run.completed"], (
-            f"expected [run.started, message, run.completed] ordered by "
-            f"created_at; got {observed_types}"
+            f"expected [run.started, message, run.completed] ordered by created_at; got {observed_types}"
         )
     finally:
         await client.disconnect()
