@@ -32,6 +32,7 @@ from rfnry_chat_server.handler.types import HandlerCallable
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
 from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback, HandshakeData
 from rfnry_chat_server.server.namespace import NamespaceViolation, derive_namespace_path
+from rfnry_chat_server.server.presence import PresenceRegistry
 from rfnry_chat_server.server.run_events import (
     run_cancelled as _run_cancelled_event,
 )
@@ -108,6 +109,7 @@ class ChatServer:
         self.authorize = authorize
         self.replay_cap = replay_cap
         self.broadcaster = broadcaster
+        self.presence = PresenceRegistry()
         self.namespace_keys = _validate_namespace_keys(namespace_keys)
         self.run_timeout_seconds = run_timeout_seconds
         self.watchdog_interval_seconds = watchdog_interval_seconds

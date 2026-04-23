@@ -71,6 +71,7 @@ from rfnry_chat_server.server.namespace import (
     parse_namespace_path,
     validate_namespace_value,
 )
+from rfnry_chat_server.server.presence import PresenceRegistry
 from rfnry_chat_server.store.memory.store import InMemoryChatStore
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 from rfnry_chat_server.store.protocol import ChatStore
@@ -103,6 +104,7 @@ __all__ = [
     "OnAnalyticsCallback",
     "Page",
     "PostgresChatStore",
+    "PresenceRegistry",
     "ReasoningEvent",
     "RecipientNotMemberError",
     "RecordingBroadcaster",
