@@ -28,9 +28,15 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE UNIQUE INDEX IF NOT EXISTS runs_idempotency
   ON runs (thread_id, idempotency_key)
   WHERE idempotency_key IS NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS runs_active_per_actor
-  ON runs (thread_id, (actor->>'id'))
-  WHERE status IN ('pending', 'running');
+-- runs_active_per_actor (partial unique on thread_id + actor->>'id' while
+-- status IN ('pending','running')) was dropped: after begin_run stopped
+-- silently reusing active runs, this index turned truly concurrent
+-- begin_run calls from the same actor into UniqueViolationErrors instead
+-- of producing two distinct runs. Runs are observability envelopes, not
+-- per-actor locks — callers that want dedup pass an idempotency_key.
+-- The drop below handles databases that were created against the old
+-- schema; the index is idempotently removed on every ensure_schema().
+DROP INDEX IF EXISTS runs_active_per_actor;
 CREATE INDEX IF NOT EXISTS runs_thread ON runs (thread_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS runs_active_started
   ON runs (started_at)

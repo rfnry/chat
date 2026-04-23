@@ -85,12 +85,20 @@ async def test_find_active_run(store: PostgresChatStore) -> None:
     assert after is None
 
 
-async def test_concurrency_partial_unique_blocks_second_active(
+async def test_allows_multiple_active_runs_per_actor(
     store: PostgresChatStore,
 ) -> None:
-    await store.create_run(_new_run(id="run_1"))
-    with pytest.raises(asyncpg.exceptions.UniqueViolationError):
-        await store.create_run(_new_run(id="run_2"))
+    """The runs_active_per_actor partial unique index was dropped: concurrent
+    begin_run calls from the same (thread, actor) must both succeed and
+    produce distinct runs. Runs are observability envelopes, not per-actor
+    locks — callers that want dedup pass an idempotency_key."""
+    first = await store.create_run(_new_run(id="run_1"))
+    second = await store.create_run(_new_run(id="run_2"))
+    assert first.id == "run_1"
+    assert second.id == "run_2"
+    assert first.actor.id == second.actor.id
+    assert first.status == "pending"
+    assert second.status == "pending"
 
 
 async def test_idempotency_key_partial_unique(store: PostgresChatStore) -> None:
@@ -114,6 +122,23 @@ async def test_runs_active_started_index_exists(clean_db: asyncpg.Pool) -> None:
             """
         )
     assert len(rows) == 1, "runs_active_started partial index must exist"
+
+
+async def test_runs_active_per_actor_index_is_absent(clean_db: asyncpg.Pool) -> None:
+    """The runs_active_per_actor partial unique index was dropped: it turned
+    truly concurrent begin_run calls for the same (thread, actor) into
+    UniqueViolationErrors. ensure_schema must also drop the index from
+    any database created against the old schema."""
+    s = PostgresChatStore(pool=clean_db)
+    await s.ensure_schema()
+    async with clean_db.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT indexname FROM pg_indexes
+            WHERE tablename = 'runs' AND indexname = 'runs_active_per_actor'
+            """
+        )
+    assert len(rows) == 0, "runs_active_per_actor unique index must be absent"
 
 
 async def test_create_run_returns_persisted_state_via_returning(
