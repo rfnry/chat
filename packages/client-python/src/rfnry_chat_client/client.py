@@ -24,6 +24,8 @@ from rfnry_chat_client.dispatch import Dispatcher
 from rfnry_chat_client.frames import (
     FrameDispatcher,
     MembersUpdatedHandler,
+    PresenceJoinedHandler,
+    PresenceLeftHandler,
     RunUpdatedHandler,
     ThreadUpdatedHandler,
 )
@@ -108,6 +110,8 @@ class ChatClient:
         self._socket.on_raw_event("thread:updated", self._frames.feed_thread_updated)
         self._socket.on_raw_event("members:updated", self._frames.feed_members_updated)
         self._socket.on_raw_event("run:updated", self._frames.feed_run_updated)
+        self._socket.on_raw_event("presence:joined", self._frames.feed_presence_joined)
+        self._socket.on_raw_event("presence:left", self._frames.feed_presence_left)
         await self._socket.connect()
 
     async def disconnect(self) -> None:
@@ -386,6 +390,22 @@ class ChatClient:
     ) -> Callable[[RunUpdatedHandler], RunUpdatedHandler]:
         def decorator(handler: RunUpdatedHandler) -> RunUpdatedHandler:
             return self._frames.register_run_updated(handler)
+
+        return decorator
+
+    def on_presence_joined(
+        self,
+    ) -> Callable[[PresenceJoinedHandler], PresenceJoinedHandler]:
+        def decorator(handler: PresenceJoinedHandler) -> PresenceJoinedHandler:
+            return self._frames.register_presence_joined(handler)
+
+        return decorator
+
+    def on_presence_left(
+        self,
+    ) -> Callable[[PresenceLeftHandler], PresenceLeftHandler]:
+        def decorator(handler: PresenceLeftHandler) -> PresenceLeftHandler:
+            return self._frames.register_presence_left(handler)
 
         return decorator
 

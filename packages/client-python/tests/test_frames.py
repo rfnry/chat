@@ -5,7 +5,14 @@ from typing import Any
 
 import httpx
 from conftest import FakeSioClient
-from rfnry_chat_protocol import AssistantIdentity, Identity, Run, Thread
+from rfnry_chat_protocol import (
+    AssistantIdentity,
+    Identity,
+    PresenceJoinedFrame,
+    PresenceLeftFrame,
+    Run,
+    Thread,
+)
 
 from rfnry_chat_client.client import ChatClient
 from rfnry_chat_client.transport.socket import SocketTransport
@@ -197,4 +204,133 @@ async def test_feed_run_updated_fans_handlers_concurrently() -> None:
         order.append("fast_done")
 
     await fd.feed_run_updated(_run_payload())
+    assert order == ["fast_done", "slow_done"]
+
+
+async def test_on_presence_joined_fires_on_frame() -> None:
+    client, sio = _build_client()
+    received: list[PresenceJoinedFrame] = []
+
+    @client.on_presence_joined()
+    async def handle(frame: PresenceJoinedFrame) -> None:
+        received.append(frame)
+
+    await client.connect()
+    raw = sio.handlers["presence:joined"]
+    await raw(
+        {
+            "identity": {"role": "user", "id": "u_alice", "name": "Alice", "metadata": {}},
+            "at": "2026-04-23T12:00:00Z",
+        }
+    )
+
+    assert len(received) == 1
+    assert received[0].identity.id == "u_alice"
+    assert received[0].identity.role == "user"
+
+
+async def test_on_presence_left_fires_on_frame() -> None:
+    client, sio = _build_client()
+    received: list[PresenceLeftFrame] = []
+
+    @client.on_presence_left()
+    async def handle(frame: PresenceLeftFrame) -> None:
+        received.append(frame)
+
+    await client.connect()
+    raw = sio.handlers["presence:left"]
+    await raw(
+        {
+            "identity": {"role": "assistant", "id": "agent-a", "name": "Agent A", "metadata": {}},
+            "at": "2026-04-23T12:05:00Z",
+        }
+    )
+
+    assert len(received) == 1
+    assert received[0].identity.id == "agent-a"
+    assert received[0].identity.role == "assistant"
+
+
+async def test_multiple_presence_joined_handlers_all_fire() -> None:
+    client, sio = _build_client()
+    calls_a: list[str] = []
+    calls_b: list[str] = []
+
+    @client.on_presence_joined()
+    async def h_a(frame: PresenceJoinedFrame) -> None:
+        calls_a.append(frame.identity.id)
+
+    @client.on_presence_joined()
+    async def h_b(frame: PresenceJoinedFrame) -> None:
+        calls_b.append(frame.identity.id)
+
+    await client.connect()
+    raw = sio.handlers["presence:joined"]
+    await raw(
+        {
+            "identity": {"role": "user", "id": "u_alice", "name": "Alice", "metadata": {}},
+            "at": "2026-04-23T12:00:00Z",
+        }
+    )
+    assert calls_a == ["u_alice"]
+    assert calls_b == ["u_alice"]
+
+
+async def test_feed_presence_joined_fans_handlers_concurrently() -> None:
+    """R16: presence:joined handlers must run concurrently."""
+    import asyncio
+
+    from rfnry_chat_client.frames import FrameDispatcher
+
+    fd = FrameDispatcher()
+    order: list[str] = []
+    started = asyncio.Event()
+
+    @fd.register_presence_joined
+    async def slow(frame: PresenceJoinedFrame) -> None:
+        started.set()
+        await asyncio.sleep(0.05)
+        order.append("slow_done")
+
+    @fd.register_presence_joined
+    async def fast(frame: PresenceJoinedFrame) -> None:
+        await started.wait()
+        order.append("fast_done")
+
+    await fd.feed_presence_joined(
+        {
+            "identity": {"role": "user", "id": "u_alice", "name": "Alice", "metadata": {}},
+            "at": "2026-04-23T12:00:00Z",
+        }
+    )
+    assert order == ["fast_done", "slow_done"]
+
+
+async def test_feed_presence_left_fans_handlers_concurrently() -> None:
+    """R16: presence:left handlers must run concurrently."""
+    import asyncio
+
+    from rfnry_chat_client.frames import FrameDispatcher
+
+    fd = FrameDispatcher()
+    order: list[str] = []
+    started = asyncio.Event()
+
+    @fd.register_presence_left
+    async def slow(frame: PresenceLeftFrame) -> None:
+        started.set()
+        await asyncio.sleep(0.05)
+        order.append("slow_done")
+
+    @fd.register_presence_left
+    async def fast(frame: PresenceLeftFrame) -> None:
+        await started.wait()
+        order.append("fast_done")
+
+    await fd.feed_presence_left(
+        {
+            "identity": {"role": "user", "id": "u_alice", "name": "Alice", "metadata": {}},
+            "at": "2026-04-23T12:00:00Z",
+        }
+    )
     assert order == ["fast_done", "slow_done"]

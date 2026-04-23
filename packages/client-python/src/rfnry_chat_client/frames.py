@@ -6,11 +6,20 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from rfnry_chat_protocol import Identity, Run, Thread, parse_identity
+from rfnry_chat_protocol import (
+    Identity,
+    PresenceJoinedFrame,
+    PresenceLeftFrame,
+    Run,
+    Thread,
+    parse_identity,
+)
 
 ThreadUpdatedHandler = Callable[[Thread], Awaitable[None] | None]
 MembersUpdatedHandler = Callable[[str, list[Identity]], Awaitable[None] | None]
 RunUpdatedHandler = Callable[[Run], Awaitable[None] | None]
+PresenceJoinedHandler = Callable[[PresenceJoinedFrame], Awaitable[None] | None]
+PresenceLeftHandler = Callable[[PresenceLeftFrame], Awaitable[None] | None]
 
 _log = logging.getLogger("rfnry_chat_client.frames")
 
@@ -30,6 +39,8 @@ class FrameDispatcher:
         self._thread_updated: list[ThreadUpdatedHandler] = []
         self._members_updated: list[MembersUpdatedHandler] = []
         self._run_updated: list[RunUpdatedHandler] = []
+        self._presence_joined: list[PresenceJoinedHandler] = []
+        self._presence_left: list[PresenceLeftHandler] = []
 
     def register_thread_updated(self, handler: ThreadUpdatedHandler) -> ThreadUpdatedHandler:
         self._thread_updated.append(handler)
@@ -41,6 +52,14 @@ class FrameDispatcher:
 
     def register_run_updated(self, handler: RunUpdatedHandler) -> RunUpdatedHandler:
         self._run_updated.append(handler)
+        return handler
+
+    def register_presence_joined(self, handler: PresenceJoinedHandler) -> PresenceJoinedHandler:
+        self._presence_joined.append(handler)
+        return handler
+
+    def register_presence_left(self, handler: PresenceLeftHandler) -> PresenceLeftHandler:
+        self._presence_left.append(handler)
         return handler
 
     async def feed_thread_updated(self, raw: dict[str, Any]) -> None:
@@ -62,6 +81,20 @@ class FrameDispatcher:
     async def feed_run_updated(self, raw: dict[str, Any]) -> None:
         run = Run.model_validate(raw)
         results = [handler(run) for handler in self._run_updated]
+        awaitables = [r for r in results if inspect.isawaitable(r)]
+        if awaitables:
+            await asyncio.gather(*awaitables)
+
+    async def feed_presence_joined(self, raw: dict[str, Any]) -> None:
+        frame = PresenceJoinedFrame.model_validate(raw)
+        results = [handler(frame) for handler in self._presence_joined]
+        awaitables = [r for r in results if inspect.isawaitable(r)]
+        if awaitables:
+            await asyncio.gather(*awaitables)
+
+    async def feed_presence_left(self, raw: dict[str, Any]) -> None:
+        frame = PresenceLeftFrame.model_validate(raw)
+        results = [handler(frame) for handler in self._presence_left]
         awaitables = [r for r in results if inspect.isawaitable(r)]
         if awaitables:
             await asyncio.gather(*awaitables)
