@@ -61,6 +61,7 @@ export {
   useToolResultHandler,
 } from './hooks/useHandler'
 export { type InviteHandler, useInviteHandler } from './hooks/useInviteHandler'
+export { type PresenceByRole, type UsePresenceResult, usePresence } from './hooks/usePresence'
 export { useSuspenseThread } from './hooks/useSuspenseThread'
 export { type UseThreadActions, useThreadActions } from './hooks/useThreadActions'
 export { useThreadActiveRuns } from './hooks/useThreadActiveRuns'
