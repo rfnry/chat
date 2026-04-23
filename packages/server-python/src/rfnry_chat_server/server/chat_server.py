@@ -375,14 +375,18 @@ class ChatServer:
         triggered_by: Identity,
         idempotency_key: str | None,
     ) -> Run:
+        # Explicit reuse mechanism: if the caller supplies an idempotency_key,
+        # return the existing run. This is the ONLY supported reuse path.
+        # Previously we also silently returned any active run for the same
+        # (thread, actor) pair via find_active_run — that violated the
+        # caller's mental model ("each begin_run yields its own run") and
+        # produced phantom run.started/run.completed fan-out in multi-agent
+        # channels. Callers that want de-duplication should pass an
+        # idempotency_key explicitly.
         if idempotency_key is not None:
             existing = await self.store.find_run_by_idempotency_key(thread.id, idempotency_key)
             if existing is not None:
                 return existing
-
-        existing_active = await self.store.find_active_run(thread.id, actor_id=actor.id)
-        if existing_active is not None:
-            return existing_active
 
         run = Run(
             id=f"run_{secrets.token_hex(8)}",
