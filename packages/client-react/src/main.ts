@@ -98,4 +98,5 @@ export {
   useUpload,
 } from './utils/useUpload'
 
-export const VERSION = '0.1.0-alpha.0'
+declare const __PKG_VERSION__: string
+export const VERSION: string = __PKG_VERSION__
