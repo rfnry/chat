@@ -53,24 +53,47 @@ class HandlerDispatcher:
         await self._run_observer(entry.handler, event, thread)
 
     async def _run_emitter(self, handler: HandlerCallable, event: Event, thread: Thread) -> None:
-        run = await self._server.begin_run(
-            thread=thread,
-            actor=self._system,
-            triggered_by=event.author,
-            idempotency_key=None,
-        )
+        # Lazy run creation — handlers that early-return without yielding open
+        # no run, no run.started / run.completed frames.
+        began_run_id: str | None = None
+
+        async def _start_run() -> str:
+            nonlocal began_run_id
+            if began_run_id is not None:
+                return began_run_id
+            run = await self._server.begin_run(
+                thread=thread,
+                actor=self._system,
+                triggered_by=event.author,
+                idempotency_key=None,
+            )
+            began_run_id = run.id
+            return began_run_id
+
         ctx = HandlerContext(event=event, thread=thread, store=self._server.store, server=self._server)
-        send = HandlerSend(thread_id=thread.id, author=self._system, run_id=run.id)
+        send = HandlerSend(
+            thread_id=thread.id,
+            author=self._system,
+            run_id=None,
+            run_starter=_start_run,
+        )
         try:
             async for emitted in handler(ctx, send):  # type: ignore[union-attr]
+                if began_run_id is None:
+                    run_id = await _start_run()
+                    send.set_run_id(run_id)
+                    if emitted.run_id is None:
+                        emitted = emitted.model_copy(update={"run_id": run_id})
                 await self._server.publish_event(emitted, thread=ctx.thread)
         except Exception as exc:
-            await self._server.end_run(
-                run_id=run.id,
-                error=RunError(code="handler_error", message=str(exc)),
-            )
+            if began_run_id is not None:
+                await self._server.end_run(
+                    run_id=began_run_id,
+                    error=RunError(code="handler_error", message=str(exc)),
+                )
             raise
-        await self._server.end_run(run_id=run.id, error=None)
+        if began_run_id is not None:
+            await self._server.end_run(run_id=began_run_id, error=None)
 
     async def _run_observer(self, handler: HandlerCallable, event: Event, thread: Thread) -> None:
         ctx = HandlerContext(event=event, thread=thread, store=self._server.store, server=self._server)
