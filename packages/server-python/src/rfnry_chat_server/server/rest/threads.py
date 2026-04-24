@@ -16,6 +16,8 @@ from rfnry_chat_protocol import (
 from rfnry_chat_server.server.rest.deps import get_server, identity_tenant, resolve_identity
 from rfnry_chat_server.store.types import Page, ThreadCursor
 
+MAX_THREADS_LIMIT = 200
+
 
 def build_router() -> APIRouter:
     router = APIRouter(prefix="/threads", tags=["threads"])
@@ -74,10 +76,11 @@ def build_router() -> APIRouter:
                 created_at=datetime.fromisoformat(cursor_created_at),
                 id=cursor_id,
             )
+        effective_limit = min(max(limit, 1), MAX_THREADS_LIMIT)
         return await server.store.list_threads(
             tenant_filter=identity_tenant(identity),
             cursor=cursor,
-            limit=limit,
+            limit=effective_limit,
             member_identity_id=identity.id,
         )
 
