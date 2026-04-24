@@ -18,6 +18,8 @@ from rfnry_chat_client.errors import http_error_for
 
 AuthenticateHeaders = Callable[[], Awaitable[dict[str, str]]]
 
+DEFAULT_HTTP_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+
 
 class RestTransport:
     def __init__(
@@ -30,7 +32,7 @@ class RestTransport:
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._path = path
-        self._http = http_client or httpx.AsyncClient()
+        self._http = http_client or httpx.AsyncClient(timeout=DEFAULT_HTTP_TIMEOUT)
         self._authenticate = authenticate
 
     @property
