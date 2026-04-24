@@ -93,6 +93,51 @@ def test_lifespan_noise_filter_drops_cancelled_error() -> None:
     assert f.filter(record) is False
 
 
+def test_lifespan_noise_filter_drops_starlette_shutdown_failed_cancelled() -> None:
+    """Path 2: starlette sends lifespan.shutdown.failed with a raw traceback
+    text when CancelledError propagates through the lifespan receive() await."""
+    import traceback
+
+    f = _LifespanNoiseFilter()
+    try:
+        raise asyncio.CancelledError()
+    except asyncio.CancelledError:
+        exc_text = traceback.format_exc()
+
+    record = logging.LogRecord(
+        name="uvicorn.error",
+        level=logging.ERROR,
+        pathname="",
+        lineno=0,
+        msg=exc_text,
+        args=(),
+        exc_info=None,
+    )
+    assert f.filter(record) is False
+
+
+def test_lifespan_noise_filter_keeps_starlette_shutdown_failed_non_cancelled() -> None:
+    """Path 2: must NOT suppress shutdown.failed tracebacks for real errors."""
+    import traceback
+
+    f = _LifespanNoiseFilter()
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError:
+        exc_text = traceback.format_exc()
+
+    record = logging.LogRecord(
+        name="uvicorn.error",
+        level=logging.ERROR,
+        pathname="",
+        lineno=0,
+        msg=exc_text,
+        args=(),
+        exc_info=None,
+    )
+    assert f.filter(record) is True
+
+
 def test_lifespan_noise_filter_keeps_other_errors() -> None:
     f = _LifespanNoiseFilter()
     record = logging.LogRecord(
@@ -119,54 +164,34 @@ def test_lifespan_noise_filter_keeps_other_errors() -> None:
     assert f.filter(record2) is True
 
 
-def test_serve_wraps_app_lifespan_and_calls_uvicorn_run(monkeypatch) -> None:
-    """serve() should patch the app's lifespan with session + call uvicorn.run."""
+def test_serve_calls_uvicorn_run_with_kwargs(monkeypatch) -> None:
+    """serve() calls uvicorn.run(app, **kwargs) and does not add its own session.
+
+    The session lifecycle is the caller's responsibility (typically wired via
+    ``client.session()`` inside the FastAPI lifespan). serve() only installs
+    the noise filter and catches the top-level CancelledError.
+    """
     from fastapi import FastAPI
 
     client = _stub_client()
-    # Pre-existing lifespan on the app
-    original_called = {"entered": False, "exited": False}
-
-    from contextlib import asynccontextmanager
-
-    @asynccontextmanager
-    async def original_lifespan(_app):
-        original_called["entered"] = True
-        try:
-            yield
-        finally:
-            original_called["exited"] = True
-
-    app = FastAPI(lifespan=original_lifespan)
 
     calls: dict = {}
 
     def fake_uvicorn_run(the_app, **kwargs):
-        # Simulate uvicorn running: drive the lifespan to verify chaining.
         calls["app"] = the_app
         calls["kwargs"] = kwargs
-        # Drive the (now-wrapped) lifespan manually
-        import asyncio as _asyncio
-
-        async def _drive():
-            ctx = the_app.router.lifespan_context(the_app)
-            await ctx.__aenter__()
-            await ctx.__aexit__(None, None, None)
-
-        _asyncio.run(_drive())
 
     import uvicorn
 
     monkeypatch.setattr(uvicorn, "run", fake_uvicorn_run)
 
+    app = FastAPI()
     client.serve(app, host="127.0.0.1", port=9999)
 
     assert calls["app"] is app
     assert calls["kwargs"] == {"host": "127.0.0.1", "port": 9999}
-    assert original_called["entered"] is True
-    assert original_called["exited"] is True
-    # disconnect should have been awaited during the wrapped lifespan exit
-    client._socket.disconnect.assert_awaited()
+    # serve() does not manage the session — disconnect is not called here.
+    client._socket.disconnect.assert_not_awaited()
 
 
 def test_serve_catches_top_level_cancelled_error(monkeypatch) -> None:
