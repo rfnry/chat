@@ -60,6 +60,7 @@ def test_serve_wraps_lifespan_includes_router_mounts_socketio(monkeypatch) -> No
     def fake_uvicorn_run(asgi: Any, **kwargs: Any) -> None:
         captured["asgi"] = asgi
         captured["kwargs"] = kwargs
+
         # drive the wrapped lifespan
         async def _drive() -> None:
             ctx = app.router.lifespan_context(app)
@@ -69,6 +70,7 @@ def test_serve_wraps_lifespan_includes_router_mounts_socketio(monkeypatch) -> No
         asyncio.run(_drive())
 
     import uvicorn
+
     monkeypatch.setattr(uvicorn, "run", fake_uvicorn_run)
 
     server.serve(app, router_prefix="/chat", host="127.0.0.1", port=9999)
@@ -96,6 +98,7 @@ def test_serve_default_router_prefix_is_chat(monkeypatch) -> None:
         pass
 
     import uvicorn
+
     monkeypatch.setattr(uvicorn, "run", fake_uvicorn_run)
 
     server.serve(app, host="127.0.0.1", port=9999)
@@ -117,6 +120,7 @@ def test_serve_allows_consumer_route_override(monkeypatch) -> None:
         pass
 
     import uvicorn
+
     monkeypatch.setattr(uvicorn, "run", fake_uvicorn_run)
 
     server.serve(app, host="127.0.0.1", port=9999)

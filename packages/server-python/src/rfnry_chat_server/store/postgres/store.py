@@ -115,7 +115,8 @@ class PostgresChatStore:
                 "SELECT threads.id, threads.tenant, threads.metadata, threads.created_at, threads.updated_at"
                 " FROM threads"
                 " JOIN thread_members m ON m.thread_id = threads.id"
-                " WHERE " + " AND ".join(where)
+                " WHERE "
+                + " AND ".join(where)
                 + f" ORDER BY threads.created_at DESC, threads.id DESC LIMIT ${len(args)}"
             )
         else:

@@ -70,11 +70,7 @@ class InMemoryChatStore:
     ) -> Page[Thread]:
         threads = [t for t in self._threads.values() if matches(t.tenant, tenant_filter)]
         if member_identity_id is not None:
-            threads = [
-                t
-                for t in threads
-                if member_identity_id in self._members.get(t.id, {})
-            ]
+            threads = [t for t in threads if member_identity_id in self._members.get(t.id, {})]
         threads.sort(key=lambda t: (t.created_at, t.id), reverse=True)
         if cursor is not None:
             threads = [t for t in threads if (t.created_at, t.id) < (cursor.created_at, cursor.id)]
