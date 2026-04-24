@@ -148,8 +148,8 @@ See `examples/python/monitoring-assistant/` for the canonical webhook-driven sha
 
 ### Running an agent that also exposes HTTP endpoints
 
-Plug `client.session()` into a FastAPI lifespan and run uvicorn yourself.
-`session()` manages the background connect/disconnect and installs a
+Plug `client.running()` into a FastAPI lifespan and run uvicorn yourself.
+`running()` manages the background connect/disconnect and installs a
 logging filter that suppresses a known-harmless `uvicorn.error` traceback
 triggered when SIGINT races the outbound socketio connection.
 
@@ -163,7 +163,7 @@ client = ChatClient(base_url="http://chat.example", identity=...)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with client.session(on_connect=my_on_connect):
+    async with client.running(on_connect=my_on_connect):
         yield
 
 app = FastAPI(lifespan=lifespan)

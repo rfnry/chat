@@ -57,7 +57,7 @@ class _LifespanNoiseFilter(logging.Filter):
     the underlying exception is CancelledError.
 
     Background: a consumer's lifespan may open an outbound socketio-client
-    (e.g. via `rfnry_chat_client.ChatClient.session()`). The client's
+    (e.g. via `rfnry_chat_client.ChatClient.running()`). The client's
     background aiohttp tasks prevent uvicorn from reaching its normal
     graceful shutdown on SIGINT, causing the lifespan task to be cancelled
     at `await receive()`. Starlette logs this via uvicorn.error — cosmetic,
@@ -213,7 +213,7 @@ class ChatServer:
             self._watchdog_task = None
 
     @asynccontextmanager
-    async def session(self) -> AsyncIterator[None]:
+    async def running(self) -> AsyncIterator[None]:
         """Async context manager for running this ChatServer alongside a
         FastAPI app's lifespan.
 
@@ -221,7 +221,7 @@ class ChatServer:
 
             @asynccontextmanager
             async def lifespan(app):
-                async with chat_server.session():
+                async with chat_server.running():
                     yield
 
         Calls `start()` on enter and `stop()` on exit. Handles the watchdog
@@ -245,7 +245,7 @@ class ChatServer:
         ChatServer mounted + lifecycle wired up.
 
         Internally:
-          1. Wraps `app.router.lifespan_context` with `session()` so
+          1. Wraps `app.router.lifespan_context` with `running()` so
              `start()` / `stop()` run around the app's existing lifespan.
           2. Includes `self.router` at `router_prefix` (default "/chat").
           3. Wraps the app with Socket.IO via `mount_socketio()`.
@@ -270,7 +270,7 @@ class ChatServer:
 
         @asynccontextmanager
         async def _wrapped_lifespan(inner_app: Any) -> AsyncIterator[Any]:
-            async with self.session():
+            async with self.running():
                 async with original_lifespan(inner_app) as maybe_state:
                     yield maybe_state
 
@@ -280,7 +280,7 @@ class ChatServer:
         asgi = self.mount_socketio(app)
 
         # Defensive: if the consumer's lifespan spins up an outbound
-        # socketio-client (e.g. via `chat_client.session()`), uvicorn 0.46+
+        # socketio-client (e.g. via `chat_client.running()`), uvicorn 0.46+
         # propagates CancelledError on SIGINT. Silence it here the same way
         # rfnry_chat_client.serve() does (duplicated to keep the one-way
         # import rule: server must not import client).

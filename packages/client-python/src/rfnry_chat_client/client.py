@@ -273,7 +273,7 @@ class ChatClient:
             _log.info("disconnected")
 
     @asynccontextmanager
-    async def session(
+    async def running(
         self,
         *,
         on_connect: Callable[[], Awaitable[None]] | None = None,
@@ -288,7 +288,7 @@ class ChatClient:
 
             @asynccontextmanager
             async def lifespan(app):
-                async with client.session(on_connect=_join_channels):
+                async with client.running(on_connect=_join_channels):
                     yield
 
         Handles the background ``run()`` task, connect retry, on_connect hook,

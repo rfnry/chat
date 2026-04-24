@@ -26,14 +26,14 @@ def _stub_client() -> ChatClient:
 
 
 @pytest.mark.asyncio
-async def test_session_calls_on_connect_and_disconnect() -> None:
+async def test_running_calls_on_connect_and_disconnect() -> None:
     client = _stub_client()
     calls: list[str] = []
 
     async def _on_connect() -> None:
         calls.append("on_connect")
 
-    async with client.session(on_connect=_on_connect):
+    async with client.running(on_connect=_on_connect):
         # give the background task a chance to reach on_connect
         for _ in range(20):
             if "on_connect" in calls:
@@ -46,35 +46,35 @@ async def test_session_calls_on_connect_and_disconnect() -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_without_on_connect_still_works() -> None:
+async def test_running_without_on_connect_still_works() -> None:
     client = _stub_client()
-    async with client.session():
+    async with client.running():
         await asyncio.sleep(0.05)
     client._socket.disconnect.assert_awaited()
 
 
 @pytest.mark.asyncio
-async def test_session_cancels_run_task_on_exit() -> None:
+async def test_running_cancels_run_task_on_exit() -> None:
     client = _stub_client()
 
-    async with client.session():
+    async with client.running():
         pass  # immediate exit — task should be cleaned up
 
     # The run() task spun up internally must have been cancelled / completed.
     # We don't expose the task, but ensure no asyncio warnings about
     # never-awaited or pending. A sentinel check via gc of tasks is flaky;
-    # instead, rely on the contract that session() blocks until cleanup.
-    # Assert that after exit, a second session() works cleanly.
-    async with client.session():
+    # instead, rely on the contract that running() blocks until cleanup.
+    # Assert that after exit, a second running() works cleanly.
+    async with client.running():
         pass
 
 
 @pytest.mark.asyncio
-async def test_session_installs_logging_filter() -> None:
+async def test_running_installs_logging_filter() -> None:
     client = _stub_client()
     uvicorn_logger = logging.getLogger("uvicorn.error")
 
-    async with client.session():
+    async with client.running():
         filters = [type(f).__name__ for f in uvicorn_logger.filters]
         assert "_LifespanNoiseFilter" in filters
 
@@ -162,5 +162,3 @@ def test_lifespan_noise_filter_keeps_other_errors() -> None:
         exc_info=(ValueError, ValueError("x"), None),
     )
     assert f.filter(record2) is True
-
-

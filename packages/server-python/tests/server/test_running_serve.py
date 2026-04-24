@@ -16,11 +16,11 @@ def _server() -> ChatServer:
 
 
 @pytest.mark.asyncio
-async def test_session_calls_start_and_stop() -> None:
+async def test_running_calls_start_and_stop() -> None:
     server = _server()
     assert server._watchdog_task is None  # pre-start
 
-    async with server.session():
+    async with server.running():
         assert server._watchdog_task is not None  # start was called
         assert not server._watchdog_task.done()
 
@@ -29,10 +29,10 @@ async def test_session_calls_start_and_stop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_stop_runs_even_on_error() -> None:
+async def test_running_stop_runs_even_on_error() -> None:
     server = _server()
     with pytest.raises(RuntimeError, match="inside"):
-        async with server.session():
+        async with server.running():
             assert server._watchdog_task is not None
             raise RuntimeError("inside")
 
@@ -77,7 +77,7 @@ def test_serve_wraps_lifespan_includes_router_mounts_socketio(monkeypatch) -> No
     assert captured["asgi"] is not app  # socketio wrapper returned from mount_socketio
     assert captured["kwargs"] == {"host": "127.0.0.1", "port": 9999}
 
-    # consumer's original lifespan was chained inside server.session()
+    # consumer's original lifespan was chained inside server.running()
     assert original_called["entered"] is True
     assert original_called["exited"] is True
 
