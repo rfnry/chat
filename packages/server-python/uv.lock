@@ -1228,6 +1228,7 @@ version = "0.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
+    { name = "fastapi" },
     { name = "pydantic" },
     { name = "python-socketio" },
     { name = "rfnry-chat-protocol" },
@@ -1237,7 +1238,6 @@ dependencies = [
 dev = [
     { name = "aiohttp" },
     { name = "build" },
-    { name = "fastapi" },
     { name = "httpx" },
     { name = "mypy" },
     { name = "poethepoet" },
@@ -1253,7 +1253,7 @@ requires-dist = [
     { name = "aiohttp", marker = "extra == 'dev'", specifier = ">=3.13.5" },
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "build", marker = "extra == 'dev'", specifier = ">=1.4.3" },
-    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.136.0" },
+    { name = "fastapi", specifier = ">=0.136.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.1" },
     { name = "poethepoet", marker = "extra == 'dev'", specifier = ">=0.44.0" },

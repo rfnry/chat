@@ -22,6 +22,7 @@ dependencies = [
     "pydantic>=2.13.2",
     "asyncpg>=0.31.0",
     "python-socketio>=5.16.1",
+    "fastapi>=0.136.0",
     "rfnry-chat-protocol",
 ]
 
@@ -46,7 +47,6 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.11",
-    "fastapi>=0.136.0",
     "httpx>=0.28.1",
     "uvicorn>=0.44.0",
     "aiohttp>=3.13.5",
