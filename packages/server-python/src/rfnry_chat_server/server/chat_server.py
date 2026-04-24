@@ -105,6 +105,7 @@ class ChatServer:
         watchdog_interval_seconds: float = 30.0,
     ) -> None:
         self.store = store
+        self._authenticate_is_default = authenticate is None
         self.authenticate = authenticate or _identity_from_handshake
         self.authorize = authorize
         self.replay_cap = replay_cap
@@ -139,6 +140,13 @@ class ChatServer:
     async def start(self) -> None:
         if self._watchdog_task is not None and not self._watchdog_task.done():
             return
+        if self._authenticate_is_default:
+            _log.warning(
+                "ChatServer started without an authenticate= callback; "
+                "the default trusts client-supplied identity and is NOT "
+                "safe for production. Pass authenticate= to verify "
+                "credentials (e.g. JWT, session cookie)."
+            )
         await self.store.ensure_schema()
         self._watchdog_task = asyncio.create_task(self._watchdog_loop())
 
