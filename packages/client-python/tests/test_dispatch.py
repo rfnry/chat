@@ -5,8 +5,8 @@ from typing import Any
 
 from rfnry_chat_protocol import AssistantIdentity, UserIdentity
 
-from rfnry_chat_client.dispatch import Dispatcher
 from rfnry_chat_client.handler.context import HandlerContext
+from rfnry_chat_client.handler.dispatcher import HandlerDispatcher
 from rfnry_chat_client.handler.send import HandlerSend
 
 
@@ -67,7 +67,7 @@ def _msg(
 async def test_default_drops_self_authored() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
     async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
@@ -81,7 +81,7 @@ async def test_default_drops_self_authored() -> None:
 async def test_default_drops_non_addressed() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
     async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
@@ -95,7 +95,7 @@ async def test_default_drops_non_addressed() -> None:
 async def test_default_fires_for_broadcast() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
     async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
@@ -109,7 +109,7 @@ async def test_default_fires_for_broadcast() -> None:
 async def test_default_fires_when_addressed() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
     async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
@@ -123,7 +123,7 @@ async def test_default_fires_when_addressed() -> None:
 async def test_all_events_opt_out_bypasses_filters() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
     async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
@@ -138,7 +138,7 @@ async def test_all_events_opt_out_bypasses_filters() -> None:
 async def test_tool_call_name_filter() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     stock_calls: list[Any] = []
     weather_calls: list[Any] = []
 
@@ -158,7 +158,7 @@ async def test_tool_call_name_filter() -> None:
 async def test_wildcard_event_type() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
     async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
@@ -173,7 +173,7 @@ async def test_wildcard_event_type() -> None:
 async def test_multiple_handlers_fire_concurrently() -> None:
     me = AssistantIdentity(id="a_me", name="Me")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     counter = {"value": 0}
 
     async def handler_a(_ctx: HandlerContext, _send: HandlerSend) -> None:
@@ -191,7 +191,7 @@ async def test_multiple_handlers_fire_concurrently() -> None:
 async def test_user_identity_works_as_own_client() -> None:
     me = UserIdentity(id="u_human", name="Operator")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
     async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
@@ -209,7 +209,7 @@ async def test_emitter_handler_publishes_via_client() -> None:
 
     me = AssistantIdentity(id="a_me", name="Me")
     client = _StubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     async def reply(_ctx: HandlerContext, send: HandlerSend):
         yield send.message(content=[TextPart(text="hi")])
@@ -247,7 +247,7 @@ async def test_emitter_zero_yield_skips_begin_and_end_run() -> None:
     run.completed frames."""
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     async def guarded(ctx: HandlerContext, _send: HandlerSend):
         # Classic role-filter guard that early-returns.
@@ -271,7 +271,7 @@ async def test_emitter_single_yield_triggers_exactly_one_run() -> None:
 
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     async def reply(_ctx: HandlerContext, send: HandlerSend):
         yield send.message(content=[TextPart(text="hi")])
@@ -294,7 +294,7 @@ async def test_emitter_multiple_yields_share_one_run() -> None:
 
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     async def reply(_ctx: HandlerContext, send: HandlerSend):
         yield send.message(content=[TextPart(text="hi")])
@@ -317,7 +317,7 @@ async def test_emitter_exception_before_first_yield_skips_run() -> None:
     end_run should fire either."""
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     async def boom(_ctx: HandlerContext, _send: HandlerSend):
         raise RuntimeError("before yield")
@@ -340,7 +340,7 @@ async def test_emitter_exception_after_first_yield_ends_run_with_error() -> None
 
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     async def partial_then_boom(_ctx: HandlerContext, send: HandlerSend):
         yield send.message(content=[TextPart(text="hi")])
@@ -373,7 +373,7 @@ async def test_emitter_restamps_created_at_at_publish_time() -> None:
 
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     constructed_at: list[datetime] = []
 
@@ -410,7 +410,7 @@ async def test_emitter_restamps_created_at_on_every_yield() -> None:
 
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
-    dispatcher = Dispatcher(identity=me, client=client)  # type: ignore[arg-type]
+    dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     constructed_at: list[datetime] = []
 

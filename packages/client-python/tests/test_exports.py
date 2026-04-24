@@ -6,7 +6,7 @@ def test_public_exports() -> None:
         "ChatClient",
         "ChatAuthError",
         "ChatHttpError",
-        "Dispatcher",
+        "HandlerDispatcher",
         "HandlerCallable",
         "HandlerContext",
         "HandlerSend",

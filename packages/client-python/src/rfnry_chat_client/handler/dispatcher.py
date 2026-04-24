@@ -29,7 +29,7 @@ class _Registration:
     tool_name: str | None
 
 
-class Dispatcher:
+class HandlerDispatcher:
     def __init__(self, *, identity: Identity, client: ChatClient) -> None:
         self._identity = identity
         self._client = client
@@ -179,4 +179,4 @@ def _passes_default_filters(event: Event, self_id: str) -> bool:
     return True
 
 
-__all__ = ["Dispatcher", "HandlerCallable", "MAX_HANDLER_CHAIN_DEPTH", "RunError"]
+__all__ = ["HandlerDispatcher", "HandlerCallable", "MAX_HANDLER_CHAIN_DEPTH", "RunError"]

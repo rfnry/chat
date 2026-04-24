@@ -21,7 +21,6 @@ from rfnry_chat_protocol import (
     parse_event,
 )
 
-from rfnry_chat_client.dispatch import Dispatcher
 from rfnry_chat_client.frames import (
     FrameDispatcher,
     MembersUpdatedHandler,
@@ -30,6 +29,7 @@ from rfnry_chat_client.frames import (
     RunUpdatedHandler,
     ThreadUpdatedHandler,
 )
+from rfnry_chat_client.handler.dispatcher import HandlerDispatcher
 from rfnry_chat_client.handler.types import HandlerCallable
 from rfnry_chat_client.inbox import InboxDispatcher, InviteHandler
 from rfnry_chat_client.transport.rest import RestTransport
@@ -149,7 +149,7 @@ class ChatClient:
             authenticate=authenticate,
             socket_call_timeout=socket_call_timeout,
         )
-        self._dispatcher = Dispatcher(identity=identity, client=self)
+        self._dispatcher = HandlerDispatcher(identity=identity, client=self)
         self._inbox = InboxDispatcher(client=self, auto_join=auto_join_on_invite)
         self._frames = FrameDispatcher()
 
