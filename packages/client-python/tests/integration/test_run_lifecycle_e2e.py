@@ -36,8 +36,8 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from rfnry_chat_protocol import AssistantIdentity, Identity, TextPart, UserIdentity
-from rfnry_chat_server.server.auth import HandshakeData
-from rfnry_chat_server.server.chat_server import ChatServer
+from rfnry_chat_server.auth import HandshakeData
+from rfnry_chat_server.server import ChatServer
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 
 from rfnry_chat_client.client import ChatClient
@@ -112,7 +112,7 @@ async def multi_agent_server(
     app = FastAPI()
     app.state.chat_server = chat_server
     app.include_router(chat_server.router, prefix="/chat")
-    asgi = chat_server.mount_socketio(app)
+    asgi = chat_server.mount(app)
 
     live = _LiveServer(asgi)
     base = await live.start()
