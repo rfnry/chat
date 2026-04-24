@@ -13,6 +13,8 @@ export type SocketTransportOptions = {
   socketPath?: string
   authenticate?: () => Promise<SocketAuthPayload>
   ackTimeoutMs?: number
+  reconnectionAttempts?: number
+  onReconnectFailed?: () => void
 }
 
 export class SocketTransport {
@@ -20,6 +22,8 @@ export class SocketTransport {
   readonly socketPath: string
   private readonly authenticate?: SocketTransportOptions['authenticate']
   private readonly ackTimeoutMs: number
+  private readonly reconnectionAttempts: number
+  private readonly onReconnectFailed?: () => void
   private socket: Socket | null = null
 
   constructor(opts: SocketTransportOptions) {
@@ -27,6 +31,8 @@ export class SocketTransport {
     this.socketPath = opts.socketPath ?? '/chat/ws'
     this.authenticate = opts.authenticate
     this.ackTimeoutMs = opts.ackTimeoutMs ?? 15_000
+    this.reconnectionAttempts = opts.reconnectionAttempts ?? 20
+    this.onReconnectFailed = opts.onReconnectFailed
   }
 
   async connect(): Promise<void> {
@@ -36,8 +42,14 @@ export class SocketTransport {
       transports: ['websocket'],
       auth,
       reconnectionDelayMax: 30_000,
+      reconnectionAttempts: this.reconnectionAttempts,
     })
     this.socket = socket
+
+    if (this.onReconnectFailed) {
+      socket.on('reconnect_failed', this.onReconnectFailed)
+    }
+
     await new Promise<void>((resolve, reject) => {
       socket.once('connect', () => resolve())
       socket.once('connect_error', (err) => reject(err))

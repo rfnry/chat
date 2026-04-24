@@ -68,12 +68,31 @@ export function ChatProvider(props: ChatProviderProps) {
   autoJoinRef.current = autoJoinOnInvite
   const [value, setValue] = useState<ChatContextValue | null>(null)
   const [failed, setFailed] = useState(false)
-  const qcRef = useRef<QueryClient>(externalQc ?? new QueryClient())
+  const qcRef = useRef<QueryClient>(
+    externalQc ??
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 30_000,
+            retry: 1,
+            refetchOnWindowFocus: false,
+          },
+        },
+      })
+  )
   const clientRef = useRef<ChatClient | null>(null)
   const lastOptsRef = useRef({ url: clientOpts.url, identity: clientOpts.identity ?? null })
 
   useEffect(() => {
-    const client = new ChatClient(optsRef.current)
+    const callerOnReconnectFailed = optsRef.current.onReconnectFailed
+    const clientOpts = {
+      ...optsRef.current,
+      onReconnectFailed: () => {
+        setFailed(true)
+        callerOnReconnectFailed?.()
+      },
+    }
+    const client = new ChatClient(clientOpts)
     const store = createChatStore()
     const presence = createPresenceSlice()
     clientRef.current = client

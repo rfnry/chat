@@ -29,6 +29,8 @@ export type ChatClientOptions = {
   path?: string
   socketPath?: string
   fetchImpl?: typeof fetch
+  reconnectionAttempts?: number
+  onReconnectFailed?: () => void
 }
 
 export type { Page } from './transport/rest'
@@ -52,6 +54,8 @@ export class ChatClient {
   private socketTransport: SocketTransport
   private fetchImpl: typeof fetch | undefined
   private authenticateFn: (() => Promise<AuthenticatePayload>) | undefined
+  private readonly reconnectionAttempts: number | undefined
+  private readonly onReconnectFailed: (() => void) | undefined
   private readonly listeners: ListenerEntry[] = []
 
   constructor(opts: ChatClientOptions) {
@@ -60,6 +64,8 @@ export class ChatClient {
     this.socketPath = opts.socketPath ?? '/chat/ws'
     this.identity = opts.identity ?? null
     this.fetchImpl = opts.fetchImpl
+    this.reconnectionAttempts = opts.reconnectionAttempts
+    this.onReconnectFailed = opts.onReconnectFailed
 
     let authenticate = opts.authenticate
     if (!authenticate && opts.identity) {
@@ -87,6 +93,8 @@ export class ChatClient {
       baseUrl: this.url,
       socketPath: this.socketPath,
       authenticate,
+      reconnectionAttempts: this.reconnectionAttempts,
+      onReconnectFailed: this.onReconnectFailed,
     })
   }
 
@@ -104,6 +112,8 @@ export class ChatClient {
       baseUrl: this.url,
       socketPath: this.socketPath,
       authenticate: this.authenticateFn,
+      reconnectionAttempts: this.reconnectionAttempts,
+      onReconnectFailed: this.onReconnectFailed,
     })
     return { rest, socketTransport }
   }
