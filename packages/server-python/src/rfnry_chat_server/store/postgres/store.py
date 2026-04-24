@@ -306,6 +306,29 @@ class PostgresChatStore:
             raise LookupError(f"run not found: {run_id}")
         return _row_to_run(row)
 
+    async def update_run_status_if_active(
+        self,
+        run_id: str,
+        new_status: RunStatus,
+        *,
+        error: RunError | None = None,
+    ) -> Run | None:
+        args: list[Any] = [run_id, new_status]
+        error_sql = ""
+        if error is not None:
+            args.append(json.dumps(error.model_dump(mode="json")))
+            error_sql = f", error = ${len(args)}::jsonb"
+        sql = (
+            "UPDATE runs "
+            f"SET status = $2, completed_at = COALESCE(completed_at, now()){error_sql} "
+            "WHERE id = $1 AND status IN ('pending', 'running') "
+            "RETURNING id, thread_id, actor, triggered_by, status, error, "
+            "          idempotency_key, metadata, started_at, completed_at"
+        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(sql, *args)
+        return _row_to_run(row) if row else None
+
     async def find_run_by_idempotency_key(self, thread_id: str, key: str) -> Run | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(

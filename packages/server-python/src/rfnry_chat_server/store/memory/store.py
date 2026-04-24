@@ -173,6 +173,18 @@ class InMemoryChatStore:
         self._runs[run_id] = updated
         return updated
 
+    async def update_run_status_if_active(
+        self,
+        run_id: str,
+        new_status: RunStatus,
+        *,
+        error: RunError | None = None,
+    ) -> Run | None:
+        current = self._runs.get(run_id)
+        if current is None or current.status not in ("pending", "running"):
+            return None
+        return await self.update_run_status(run_id, new_status, error=error)
+
     async def find_run_by_idempotency_key(self, thread_id: str, key: str) -> Run | None:
         for run in self._runs.values():
             if run.thread_id == thread_id and run.idempotency_key == key:

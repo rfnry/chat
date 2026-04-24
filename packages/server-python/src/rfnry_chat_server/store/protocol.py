@@ -69,6 +69,21 @@ class ChatStore(Protocol):
         status: RunStatus,
         error: RunError | None = None,
     ) -> Run: ...
+    async def update_run_status_if_active(
+        self,
+        run_id: str,
+        new_status: RunStatus,
+        *,
+        error: RunError | None = None,
+    ) -> Run | None:
+        """Atomic conditional update.
+
+        Set the run's status ONLY if it is currently pending or running.
+        Returns the updated Run on success, None if the run is already
+        in a terminal state (completed / failed / cancelled) or not
+        found. Folds the idempotency check into a single DB round-trip.
+        """
+        ...
     async def find_run_by_idempotency_key(self, thread_id: str, key: str) -> Run | None: ...
     async def find_active_run(self, thread_id: str, actor_id: str) -> Run | None: ...
     async def find_runs_started_before(

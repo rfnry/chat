@@ -98,3 +98,23 @@ async def test_end_run_is_idempotent_on_cancelled() -> None:
     assert completed == []
     assert failed == []
     assert len(cancelled) == 1
+
+
+async def test_end_run_raises_for_missing_run() -> None:
+    """end_run on a non-existent run_id must raise LookupError."""
+    server, _, _ = await _setup()
+    try:
+        await server.end_run(run_id="run_nonexistent", error=None)
+        assert False, "expected LookupError"
+    except LookupError as exc:
+        assert "run_nonexistent" in str(exc)
+
+
+async def test_cancel_run_raises_for_missing_run() -> None:
+    """cancel_run on a non-existent run_id must raise LookupError."""
+    server, _, _ = await _setup()
+    try:
+        await server.cancel_run(run_id="run_nonexistent")
+        assert False, "expected LookupError"
+    except LookupError as exc:
+        assert "run_nonexistent" in str(exc)

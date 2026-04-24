@@ -14,6 +14,7 @@ from rfnry_chat_protocol import (
     Identity,
     Run,
     RunError,
+    RunStatus,
     StreamDeltaFrame,
     StreamEndFrame,
     StreamStartFrame,
@@ -411,7 +412,13 @@ class ChatServer:
         return created
 
     async def cancel_run(self, *, run_id: str) -> Run:
-        updated = await self.store.update_run_status(run_id, "cancelled")
+        updated = await self.store.update_run_status_if_active(run_id, "cancelled")
+        if updated is None:
+            # Already terminal (idempotent) or missing.
+            existing = await self.store.get_run(run_id)
+            if existing is None:
+                raise LookupError(f"run not found: {run_id}")
+            return existing
         thread = await self.store.get_thread(updated.thread_id)
         if thread is not None:
             await self.publish_run_updated(updated, thread=thread)
@@ -419,26 +426,23 @@ class ChatServer:
         return updated
 
     async def end_run(self, *, run_id: str, error: RunError | None) -> Run:
-        # Idempotent on terminal runs: a double-end (e.g. handler raises after
-        # already yielding, or watchdog timeout racing a normal completion)
-        # used to produce duplicate run.completed / run.failed frames.
-        # Short-circuit here so callers can safely end_run twice.
-        existing = await self.store.get_run(run_id)
-        if existing is not None and existing.status in ("completed", "failed", "cancelled"):
+        target_status: RunStatus = "completed" if error is None else "failed"
+        updated = await self.store.update_run_status_if_active(run_id, target_status, error=error)
+        if updated is None:
+            # Already terminal — idempotent no-op, no publish.
+            existing = await self.store.get_run(run_id)
+            if existing is None:
+                raise LookupError(f"run not found: {run_id}")
             return existing
-
-        if error is None:
-            updated = await self.store.update_run_status(run_id, "completed")
-            thread = await self.store.get_thread(updated.thread_id)
-            if thread is not None:
-                await self.publish_run_updated(updated, thread=thread)
-                await self.publish_event(_run_completed_event(updated, thread, updated.actor), thread=thread)
-            return updated
-        updated = await self.store.update_run_status(run_id, "failed", error=error)
         thread = await self.store.get_thread(updated.thread_id)
         if thread is not None:
             await self.publish_run_updated(updated, thread=thread)
-            await self.publish_event(_run_failed_event(updated, thread, updated.actor, error), thread=thread)
+            event = (
+                _run_completed_event(updated, thread, updated.actor)
+                if error is None
+                else _run_failed_event(updated, thread, updated.actor, error)
+            )
+            await self.publish_event(event, thread=thread)
         return updated
 
     async def broadcast_stream_start(self, frame: StreamStartFrame, *, thread: Thread) -> None:
