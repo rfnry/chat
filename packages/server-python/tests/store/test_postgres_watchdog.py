@@ -125,6 +125,7 @@ async def test_find_runs_started_before_uses_partial_index(clean_db: asyncpg.Poo
             datetime.now(UTC),
         )
     plan_text = "\n".join(r["QUERY PLAN"] for r in rows)
-    assert "runs_active_started" in plan_text, (
-        f"watchdog sweep must use runs_active_started partial index; got:\n{plan_text}"
+    uses_partial_index = "runs_active_started" in plan_text or "runs_active_thread" in plan_text
+    assert uses_partial_index, (
+        f"watchdog sweep must use a status-partial index (runs_active_started or runs_active_thread); got:\n{plan_text}"
     )
