@@ -221,6 +221,9 @@ class ChatServer:
     def on_tool_result(self) -> Callable[[HandlerCallable], HandlerCallable]:
         return self._handlers.decorator("tool.result")
 
+    def on_any_event(self) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("*")
+
     async def check_authorize(
         self,
         identity: Identity,

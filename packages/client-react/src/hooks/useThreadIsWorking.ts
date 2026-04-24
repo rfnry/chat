@@ -6,6 +6,8 @@ export function useThreadIsWorking(threadId: string | null): boolean {
   return useStore(store, (state) => {
     if (!threadId) return false
     const runs = state.activeRuns[threadId]
-    return runs !== undefined && Object.keys(runs).length > 0
+    if (runs === undefined) return false
+    for (const _k in runs) return true
+    return false
   })
 }

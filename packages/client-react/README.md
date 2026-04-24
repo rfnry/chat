@@ -89,9 +89,38 @@ const { thread } = await client.openThreadWith({
 })
 ```
 
-## Error types
+## Error handling
 
-Socket-level failures throw `SocketTransportError(code, message)`; HTTP-level failures throw `ChatHttpError(status, message)` (or its narrower subclasses `ThreadNotFoundError`, `ThreadConflictError`, `ChatAuthError`). Don't catch `ChatHttpError` expecting a socket error — they're deliberately distinct.
+Socket failures throw `SocketTransportError` (with `code` and `message`).
+HTTP failures throw `ChatHttpError`, or one of its subclasses:
+`ThreadNotFoundError`, `ThreadConflictError`, `ChatAuthError`. Catch them
+separately.
+
+```ts
+import {
+  ChatAuthError,
+  ChatHttpError,
+  SocketTransportError,
+  ThreadConflictError,
+  ThreadNotFoundError,
+} from '@rfnry/chat-client-react'
+
+try {
+  await client.getThread('th_missing')
+} catch (e) {
+  if (e instanceof ThreadNotFoundError) { /* ... */ }
+  else if (e instanceof ChatAuthError) { /* ... */ }
+  else if (e instanceof ChatHttpError) { /* ... */ }
+}
+
+try {
+  await client.joinThread(threadId)
+} catch (e) {
+  if (e instanceof SocketTransportError) {
+    console.error(e.code, e.message)
+  }
+}
+```
 
 ## Reconnecting with new options
 
