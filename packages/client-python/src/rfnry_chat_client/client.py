@@ -301,8 +301,8 @@ class ChatClient:
         a real failure — exit code is still 0).
 
         For FULLY silent SIGINT shutdown (no top-level asyncio.CancelledError
-        traceback either), use ``serve()`` instead, or wrap your own
-        ``uvicorn.run()`` in ``try/except asyncio.CancelledError``.
+        traceback either), wrap your own ``uvicorn.run()`` in
+        ``try/except asyncio.CancelledError``.
         """
         _install_lifespan_noise_filter()
         task = asyncio.create_task(
@@ -321,56 +321,6 @@ class ChatClient:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError, TimeoutError, Exception):
                 await asyncio.wait_for(task, timeout=disconnect_timeout)
-
-    def serve(
-        self,
-        app: Any,
-        *,
-        on_connect: Callable[[], Awaitable[None]] | None = None,
-        **uvicorn_kwargs: Any,
-    ) -> None:
-        """Run a FastAPI (or other ASGI) app under uvicorn with ChatClient
-        lifecycle wired up + SIGINT shutdown fully silent.
-
-        Wraps ``app.router.lifespan_context`` with ``session()`` so the client
-        connects alongside the app and disconnects cleanly on shutdown. Any
-        existing lifespan on the app is chained *inside* session, not replaced.
-
-        **Do not also add ``session()`` to your lifespan** — ``serve()`` injects
-        it for you. Use ``session()`` in your lifespan only if you're running
-        your own uvicorn (skip ``serve()``).
-
-        ``on_connect`` is forwarded into the internal ``session(on_connect=...)``
-        call, matching the ``session()`` API.
-
-        All uvicorn kwargs (host, port, workers, ssl_*, log_config, etc.) pass
-        through to ``uvicorn.run``.
-
-        Usage::
-
-            if __name__ == "__main__":
-                client.serve(app, on_connect=_join_channels, host="0.0.0.0", port=9100)
-
-        Produces fully silent SIGINT shutdown: exit code 0, no traceback.
-        """
-        _install_lifespan_noise_filter()
-
-        original_lifespan = app.router.lifespan_context
-
-        @asynccontextmanager
-        async def _wrapped_lifespan(inner_app: Any) -> AsyncIterator[Any]:
-            async with self.session(on_connect=on_connect):
-                async with original_lifespan(inner_app) as maybe_state:
-                    yield maybe_state
-
-        app.router.lifespan_context = _wrapped_lifespan
-
-        import uvicorn
-
-        try:
-            uvicorn.run(app, **uvicorn_kwargs)
-        except asyncio.CancelledError:
-            pass
 
     async def join_thread(self, thread_id: str, since: dict[str, str] | None = None) -> dict[str, Any]:
         return await self._socket.join_thread(thread_id, since=since)

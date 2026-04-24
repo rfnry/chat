@@ -146,6 +146,40 @@ await pool.close_all()  # or await pool.close("http://chat-a.internal")
 
 See `examples/python/monitoring-assistant/` for the canonical webhook-driven shape.
 
+### Running an agent that also exposes HTTP endpoints
+
+Plug `client.session()` into a FastAPI lifespan and run uvicorn yourself.
+`session()` manages the background connect/disconnect and installs a
+logging filter that suppresses a known-harmless `uvicorn.error` traceback
+triggered when SIGINT races the outbound socketio connection.
+
+```python
+import asyncio
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from rfnry_chat_client import ChatClient
+
+client = ChatClient(base_url="http://chat.example", identity=...)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with client.session(on_connect=my_on_connect):
+        yield
+
+app = FastAPI(lifespan=lifespan)
+# ... routes, middleware ...
+
+if __name__ == "__main__":
+    import uvicorn
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=9100)
+    except asyncio.CancelledError:
+        pass  # silence uvicorn's post-shutdown re-raise on SIGINT
+```
+
+If your consumer has **no HTTP endpoints** and is a pure background
+agent, skip FastAPI entirely and use `asyncio.run(client.run(...))`.
+
 ## Error handling
 
 Socket failures raise `SocketTransportError(code, message)`. HTTP failures
