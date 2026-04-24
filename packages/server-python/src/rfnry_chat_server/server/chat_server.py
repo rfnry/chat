@@ -52,6 +52,52 @@ from rfnry_chat_server.store.protocol import ChatStore
 _log = logging.getLogger(__name__)
 
 
+class _LifespanNoiseFilter(logging.Filter):
+    """Silence uvicorn.error's "Exception in 'lifespan' protocol" log when
+    the underlying exception is CancelledError.
+
+    Background: a consumer's lifespan may open an outbound socketio-client
+    (e.g. via `rfnry_chat_client.ChatClient.session()`). The client's
+    background aiohttp tasks prevent uvicorn from reaching its normal
+    graceful shutdown on SIGINT, causing the lifespan task to be cancelled
+    at `await receive()`. Starlette logs this via uvicorn.error — cosmetic,
+    exit code remains 0.
+
+    Duplicated from rfnry_chat_client.client to keep the one-way import
+    rule (server must not import client). Kept in lockstep.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if not isinstance(record.msg, str):
+            return True
+
+        if record.msg.startswith("Exception in 'lifespan' protocol"):
+            exc_type = record.exc_info[0] if record.exc_info else None
+            if exc_type is None:
+                return True
+            try:
+                is_cancelled = issubclass(exc_type, asyncio.CancelledError)
+            except TypeError:
+                is_cancelled = False
+            return not is_cancelled
+
+        if record.msg.startswith("Traceback (most recent call last):") and "CancelledError" in record.msg:
+            return False
+
+        return True
+
+
+_LIFESPAN_NOISE_FILTER_INSTALLED = False
+
+
+def _install_lifespan_noise_filter() -> None:
+    global _LIFESPAN_NOISE_FILTER_INSTALLED
+    if _LIFESPAN_NOISE_FILTER_INSTALLED:
+        return
+    logging.getLogger("uvicorn.error").addFilter(_LifespanNoiseFilter())
+    _LIFESPAN_NOISE_FILTER_INSTALLED = True
+
+
 def _validate_namespace_keys(namespace_keys: list[str] | None) -> list[str] | None:
     if namespace_keys is None:
         return None
@@ -233,9 +279,19 @@ class ChatServer:
         app.include_router(self.router, prefix=router_prefix)
         asgi = self.mount_socketio(app)
 
+        # Defensive: if the consumer's lifespan spins up an outbound
+        # socketio-client (e.g. via `chat_client.session()`), uvicorn 0.46+
+        # propagates CancelledError on SIGINT. Silence it here the same way
+        # rfnry_chat_client.serve() does (duplicated to keep the one-way
+        # import rule: server must not import client).
+        _install_lifespan_noise_filter()
+
         import uvicorn
 
-        uvicorn.run(asgi, **uvicorn_kwargs)
+        try:
+            uvicorn.run(asgi, **uvicorn_kwargs)
+        except asyncio.CancelledError:
+            pass
 
     async def _watchdog_loop(self) -> None:
         while True:
