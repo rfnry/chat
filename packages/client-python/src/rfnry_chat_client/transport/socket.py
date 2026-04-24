@@ -39,6 +39,7 @@ class SocketTransport:
         sio_client: _SioClient | None = None,
         socketio_path: str = "/chat/ws",
         authenticate: AuthenticateCallable | None = None,
+        socket_call_timeout: float = 15.0,
     ) -> None:
         if sio_client is None:
             import socketio
@@ -48,6 +49,7 @@ class SocketTransport:
         self._base_url = base_url.rstrip("/")
         self._socketio_path = socketio_path
         self._authenticate = authenticate
+        self._call_timeout = socket_call_timeout
 
     @property
     def base_url(self) -> str:
@@ -56,6 +58,11 @@ class SocketTransport:
     @property
     def socketio_path(self) -> str:
         return self._socketio_path
+
+    async def _call(self, event: str, data: Any = None) -> Any:
+        reply = await self._sio.call(event, data, timeout=self._call_timeout)
+        _raise_if_error(reply)
+        return reply
 
     async def connect(self) -> None:
         auth_payload: AuthenticatePayload = {}
@@ -83,23 +90,19 @@ class SocketTransport:
         payload: dict[str, Any] = {"thread_id": thread_id}
         if since is not None:
             payload["since"] = since
-        reply = await self._sio.call("thread:join", payload)
-        _raise_if_error(reply)
+        reply = await self._call("thread:join", payload)
         return reply
 
     async def leave_thread(self, thread_id: str) -> dict[str, Any]:
-        reply = await self._sio.call("thread:leave", {"thread_id": thread_id})
-        _raise_if_error(reply)
+        reply = await self._call("thread:leave", {"thread_id": thread_id})
         return reply
 
     async def send_message(self, thread_id: str, draft: dict[str, Any]) -> dict[str, Any]:
-        reply = await self._sio.call("message:send", {"thread_id": thread_id, "draft": draft})
-        _raise_if_error(reply)
+        reply = await self._call("message:send", {"thread_id": thread_id, "draft": draft})
         return reply
 
     async def send_event(self, thread_id: str, event: dict[str, Any]) -> dict[str, Any]:
-        reply = await self._sio.call("event:send", {"thread_id": thread_id, "event": event})
-        _raise_if_error(reply)
+        reply = await self._call("event:send", {"thread_id": thread_id, "event": event})
         return reply
 
     async def begin_run(
@@ -114,8 +117,7 @@ class SocketTransport:
             payload["triggered_by_event_id"] = triggered_by_event_id
         if idempotency_key is not None:
             payload["idempotency_key"] = idempotency_key
-        reply = await self._sio.call("run:begin", payload)
-        _raise_if_error(reply)
+        reply = await self._call("run:begin", payload)
         return reply
 
     async def end_run(
@@ -127,18 +129,15 @@ class SocketTransport:
         payload: dict[str, Any] = {"run_id": run_id}
         if error is not None:
             payload["error"] = error
-        reply = await self._sio.call("run:end", payload)
-        _raise_if_error(reply)
+        reply = await self._call("run:end", payload)
         return reply
 
     async def cancel_run(self, run_id: str) -> dict[str, Any]:
-        reply = await self._sio.call("run:cancel", {"run_id": run_id})
-        _raise_if_error(reply)
+        reply = await self._call("run:cancel", {"run_id": run_id})
         return reply
 
     async def send_stream_start(self, frame: dict[str, Any]) -> dict[str, Any]:
-        reply = await self._sio.call("stream:start", frame)
-        _raise_if_error(reply)
+        reply = await self._call("stream:start", frame)
         return reply
 
     async def send_stream_delta(self, frame: dict[str, Any]) -> None:
@@ -149,8 +148,7 @@ class SocketTransport:
         await self._sio.emit("stream:delta", frame)
 
     async def send_stream_end(self, frame: dict[str, Any]) -> dict[str, Any]:
-        reply = await self._sio.call("stream:end", frame)
-        _raise_if_error(reply)
+        reply = await self._call("stream:end", frame)
         return reply
 
 

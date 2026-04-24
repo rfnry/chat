@@ -52,6 +52,7 @@ class ChatClient:
         http_client: httpx.AsyncClient | None = None,
         socket_transport: SocketTransport | None = None,
         auto_join_on_invite: bool = True,
+        socket_call_timeout: float = 15.0,
     ) -> None:
         self._identity = identity
 
@@ -83,10 +84,12 @@ class ChatClient:
             path=path,
             authenticate=_auth_headers,
         )
+        self._socket_call_timeout = socket_call_timeout
         self._socket = socket_transport or SocketTransport(
             base_url=base_url,
             socketio_path=socketio_path,
             authenticate=authenticate,
+            socket_call_timeout=socket_call_timeout,
         )
         self._dispatcher = Dispatcher(identity=identity, client=self)
         self._inbox = InboxDispatcher(client=self, auto_join=auto_join_on_invite)
@@ -165,6 +168,7 @@ class ChatClient:
             base_url=new_base,
             socketio_path=new_sio_path,
             authenticate=self._authenticate,
+            socket_call_timeout=self._socket_call_timeout,
         )
         await self.connect()
 
