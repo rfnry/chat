@@ -4,7 +4,8 @@ import asyncio
 import contextlib
 import logging
 import secrets
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -164,6 +165,77 @@ class ChatServer:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
             self._watchdog_task = None
+
+    @asynccontextmanager
+    async def session(self) -> AsyncIterator[None]:
+        """Async context manager for running this ChatServer alongside a
+        FastAPI app's lifespan.
+
+        Plug this into your FastAPI lifespan:
+
+            @asynccontextmanager
+            async def lifespan(app):
+                async with chat_server.session():
+                    yield
+
+        Calls `start()` on enter and `stop()` on exit. Handles the watchdog
+        task lifecycle transparently so consumers don't need to remember
+        the pair.
+        """
+        await self.start()
+        try:
+            yield
+        finally:
+            await self.stop()
+
+    def serve(
+        self,
+        app: Any,
+        *,
+        router_prefix: str = "/chat",
+        **uvicorn_kwargs: Any,
+    ) -> None:
+        """Run a FastAPI (or other ASGI) app under uvicorn with this
+        ChatServer mounted + lifecycle wired up.
+
+        Internally:
+          1. Wraps `app.router.lifespan_context` with `session()` so
+             `start()` / `stop()` run around the app's existing lifespan.
+          2. Includes `self.router` at `router_prefix` (default "/chat").
+          3. Wraps the app with Socket.IO via `mount_socketio()`.
+          4. Calls `uvicorn.run(asgi_app, **uvicorn_kwargs)`.
+
+        All uvicorn kwargs (host, port, workers, ssl_*, log_config, etc.)
+        pass through to uvicorn.run.
+
+        **Route-override ordering:** Consumer-defined routes registered
+        on `app` BEFORE calling `serve()` will win over the library's
+        router (FastAPI first-match routing). This is the natural
+        ordering when using @app.get/@app.post decorators at module
+        load — `serve()` is called at the bottom of your main script
+        after all decorators have registered.
+
+        Usage:
+
+            if __name__ == "__main__":
+                chat_server.serve(app, host="0.0.0.0", port=8000)
+        """
+        original_lifespan = app.router.lifespan_context
+
+        @asynccontextmanager
+        async def _wrapped_lifespan(inner_app: Any) -> AsyncIterator[Any]:
+            async with self.session():
+                async with original_lifespan(inner_app) as maybe_state:
+                    yield maybe_state
+
+        app.router.lifespan_context = _wrapped_lifespan
+
+        app.include_router(self.router, prefix=router_prefix)
+        asgi = self.mount_socketio(app)
+
+        import uvicorn
+
+        uvicorn.run(asgi, **uvicorn_kwargs)
 
     async def _watchdog_loop(self) -> None:
         while True:
