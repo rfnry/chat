@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const emitWithAck = vi.fn()
 const mockSocket = {
   on: vi.fn(),
   off: vi.fn(),
   once: vi.fn(),
   emit: vi.fn(),
   emitWithAck: vi.fn(),
+  timeout: vi.fn(() => ({ emitWithAck })),
   disconnect: vi.fn(),
 }
 
@@ -27,11 +29,13 @@ const me: AssistantIdentity = {
 
 describe('ChatClient stream + event emission', () => {
   beforeEach(() => {
+    emitWithAck.mockReset()
     mockSocket.on.mockReset()
     mockSocket.off.mockReset()
     mockSocket.once.mockReset()
     mockSocket.emit.mockReset()
     mockSocket.emitWithAck.mockReset()
+    mockSocket.timeout.mockClear()
     mockSocket.disconnect.mockReset()
     mockIo.mockClear()
     mockSocket.once.mockImplementation((event: string, cb: () => void) => {
@@ -41,7 +45,7 @@ describe('ChatClient stream + event emission', () => {
 
   it('emitEvent calls event:send with camelCase→snake_case payload', async () => {
     const now = new Date().toISOString()
-    mockSocket.emitWithAck.mockResolvedValue({
+    emitWithAck.mockResolvedValue({
       event: {
         id: 'evt_out',
         thread_id: 't_1',
@@ -63,7 +67,7 @@ describe('ChatClient stream + event emission', () => {
       content: 'thinking',
     })
 
-    const call = mockSocket.emitWithAck.mock.calls.find((c) => c[0] === 'event:send')!
+    const call = emitWithAck.mock.calls.find((c) => c[0] === 'event:send')!
     expect(call[1].thread_id).toBe('t_1')
     const wire = call[1].event as Record<string, unknown>
     expect(wire.thread_id).toBe('t_1')
@@ -74,7 +78,7 @@ describe('ChatClient stream + event emission', () => {
 
   it('beginRun emits run:begin and resolves via REST getRun', async () => {
     const now = new Date().toISOString()
-    mockSocket.emitWithAck.mockResolvedValueOnce({ run_id: 'run_42', status: 'running' })
+    emitWithAck.mockResolvedValueOnce({ run_id: 'run_42', status: 'running' })
 
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -97,7 +101,7 @@ describe('ChatClient stream + event emission', () => {
     await client.connect()
     const run = await client.beginRun('t_1', { triggeredByEventId: 'evt_0' })
 
-    expect(mockSocket.emitWithAck).toHaveBeenCalledWith('run:begin', {
+    expect(emitWithAck).toHaveBeenCalledWith('run:begin', {
       thread_id: 't_1',
       triggered_by_event_id: 'evt_0',
     })
@@ -105,7 +109,7 @@ describe('ChatClient stream + event emission', () => {
   })
 
   it('streamMessage lifecycle sends start, delta, end frames', async () => {
-    mockSocket.emitWithAck.mockResolvedValue({ ok: true })
+    emitWithAck.mockResolvedValue({ ok: true })
 
     const client = new ChatClient({ url: 'http://localhost:8000' })
     await client.connect()
@@ -120,7 +124,7 @@ describe('ChatClient stream + event emission', () => {
     await stream.write('world')
     const final = await stream.end()
 
-    const callNames = mockSocket.emitWithAck.mock.calls.map((c) => c[0])
+    const callNames = emitWithAck.mock.calls.map((c) => c[0])
     expect(callNames).toContain('stream:start')
     expect(callNames.filter((n) => n === 'stream:delta')).toHaveLength(2)
     expect(callNames).toContain('stream:end')
@@ -132,7 +136,7 @@ describe('ChatClient stream + event emission', () => {
   })
 
   it('stream.end with error does not produce a final event', async () => {
-    mockSocket.emitWithAck.mockResolvedValue({ ok: true })
+    emitWithAck.mockResolvedValue({ ok: true })
 
     const client = new ChatClient({ url: 'http://localhost:8000' })
     await client.connect()
@@ -141,7 +145,7 @@ describe('ChatClient stream + event emission', () => {
     await stream.write('partial')
     const final = await stream.end({ code: 'boom', message: 'failed' })
 
-    const endCall = mockSocket.emitWithAck.mock.calls.find((c) => c[0] === 'stream:end')!
+    const endCall = emitWithAck.mock.calls.find((c) => c[0] === 'stream:end')!
     expect(endCall[1].error).toEqual({ code: 'boom', message: 'failed' })
     expect(final).toBeNull()
   })

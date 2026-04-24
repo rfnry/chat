@@ -12,18 +12,21 @@ export type SocketTransportOptions = {
   baseUrl: string
   socketPath?: string
   authenticate?: () => Promise<SocketAuthPayload>
+  ackTimeoutMs?: number
 }
 
 export class SocketTransport {
   readonly baseUrl: string
   readonly socketPath: string
   private readonly authenticate?: SocketTransportOptions['authenticate']
+  private readonly ackTimeoutMs: number
   private socket: Socket | null = null
 
   constructor(opts: SocketTransportOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, '')
     this.socketPath = opts.socketPath ?? '/chat/ws'
     this.authenticate = opts.authenticate
+    this.ackTimeoutMs = opts.ackTimeoutMs ?? 15_000
   }
 
   async connect(): Promise<void> {
@@ -58,17 +61,16 @@ export class SocketTransport {
     threadId: string,
     since?: { createdAt: string; id: string }
   ): Promise<{ threadId: string; replayed: Event[]; replayTruncated: boolean }> {
-    if (!this.socket) throw new Error('not connected')
     const payload: Record<string, unknown> = { thread_id: threadId }
     if (since) {
       payload.since = { created_at: since.createdAt, id: since.id }
     }
-    const response = (await this.socket.emitWithAck('thread:join', payload)) as {
+    const response = await this._emitWithAck<{
       thread_id?: string
       replayed?: unknown[]
       replay_truncated?: boolean
       error?: { code: string; message: string }
-    }
+    }>('thread:join', payload)
     if (response.error) {
       throw new SocketTransportError(response.error.code, response.error.message)
     }
@@ -80,16 +82,14 @@ export class SocketTransport {
   }
 
   async leaveThread(threadId: string): Promise<void> {
-    if (!this.socket) throw new Error('not connected')
-    await this.socket.emitWithAck('thread:leave', { thread_id: threadId })
+    await this._emitWithAck('thread:leave', { thread_id: threadId })
   }
 
   async sendEvent(threadId: string, event: Record<string, unknown>): Promise<Event> {
-    if (!this.socket) throw new Error('not connected')
-    const reply = (await this.socket.emitWithAck('event:send', {
-      thread_id: threadId,
-      event,
-    })) as { event?: unknown; error?: { code: string; message: string } }
+    const reply = await this._emitWithAck<{
+      event?: unknown
+      error?: { code: string; message: string }
+    }>('event:send', { thread_id: threadId, event })
     if (reply.error) {
       throw new SocketTransportError(reply.error.code, reply.error.message)
     }
@@ -100,15 +100,14 @@ export class SocketTransport {
     threadId: string,
     opts: { triggeredByEventId?: string; idempotencyKey?: string } = {}
   ): Promise<{ runId: string; status: string }> {
-    if (!this.socket) throw new Error('not connected')
     const payload: Record<string, unknown> = { thread_id: threadId }
     if (opts.triggeredByEventId) payload.triggered_by_event_id = opts.triggeredByEventId
     if (opts.idempotencyKey) payload.idempotency_key = opts.idempotencyKey
-    const reply = (await this.socket.emitWithAck('run:begin', payload)) as {
+    const reply = await this._emitWithAck<{
       run_id?: string
       status?: string
       error?: { code: string; message: string }
-    }
+    }>('run:begin', payload)
     if (reply.error) {
       throw new SocketTransportError(reply.error.code, reply.error.message)
     }
@@ -119,14 +118,13 @@ export class SocketTransport {
     runId: string,
     opts: { error?: { code: string; message: string } } = {}
   ): Promise<{ runId: string; status: string }> {
-    if (!this.socket) throw new Error('not connected')
     const payload: Record<string, unknown> = { run_id: runId }
     if (opts.error) payload.error = opts.error
-    const reply = (await this.socket.emitWithAck('run:end', payload)) as {
+    const reply = await this._emitWithAck<{
       run_id?: string
       status?: string
       error?: { code: string; message: string }
-    }
+    }>('run:end', payload)
     if (reply.error) {
       throw new SocketTransportError(reply.error.code, reply.error.message)
     }
@@ -170,12 +168,16 @@ export class SocketTransport {
     await this._sendStreamFrame('stream:end', payload)
   }
 
-  private async _sendStreamFrame(event: string, payload: Record<string, unknown>): Promise<void> {
+  private async _emitWithAck<T>(event: string, payload: Record<string, unknown>): Promise<T> {
     if (!this.socket) throw new Error('not connected')
-    const reply = (await this.socket.emitWithAck(event, payload)) as {
+    return (await this.socket.timeout(this.ackTimeoutMs).emitWithAck(event, payload)) as T
+  }
+
+  private async _sendStreamFrame(event: string, payload: Record<string, unknown>): Promise<void> {
+    const reply = await this._emitWithAck<{
       ok?: boolean
       error?: { code: string; message: string }
-    }
+    }>(event, payload)
     if (reply.error) {
       throw new SocketTransportError(reply.error.code, reply.error.message)
     }

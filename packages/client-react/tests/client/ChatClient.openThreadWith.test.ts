@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const emitWithAck = vi.fn()
 const mockSocket = {
   on: vi.fn(),
   off: vi.fn(),
   once: vi.fn(),
   emit: vi.fn(),
   emitWithAck: vi.fn(),
+  timeout: vi.fn(() => ({ emitWithAck })),
   disconnect: vi.fn(),
 }
 
@@ -62,11 +64,13 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 describe('ChatClient.openThreadWith', () => {
   beforeEach(() => {
+    emitWithAck.mockReset()
     mockSocket.on.mockReset()
     mockSocket.off.mockReset()
     mockSocket.once.mockReset()
     mockSocket.emit.mockReset()
     mockSocket.emitWithAck.mockReset()
+    mockSocket.timeout.mockClear()
     mockSocket.disconnect.mockReset()
     mockIo.mockClear()
     mockSocket.once.mockImplementation((event: string, cb: () => void) => {
@@ -98,7 +102,7 @@ describe('ChatClient.openThreadWith', () => {
     })
 
     // joinThread goes through the socket.
-    mockSocket.emitWithAck.mockImplementation(async (event: string) => {
+    emitWithAck.mockImplementation(async (event: string) => {
       if (event === 'thread:join') {
         order.push('joinThread')
         return { thread_id: 'th_new', replayed: [], replay_truncated: false }
@@ -143,7 +147,7 @@ describe('ChatClient.openThreadWith', () => {
     expect(body.content).toEqual([{ type: 'text', text: 'ping' }])
 
     // joinThread emitted with thread_id: 'th_new'.
-    expect(mockSocket.emitWithAck).toHaveBeenCalledWith('thread:join', {
+    expect(emitWithAck).toHaveBeenCalledWith('thread:join', {
       thread_id: 'th_new',
     })
   })
@@ -166,7 +170,7 @@ describe('ChatClient.openThreadWith', () => {
       throw new Error(`unexpected fetch: ${method} ${url}`)
     })
 
-    mockSocket.emitWithAck.mockResolvedValue({
+    emitWithAck.mockResolvedValue({
       thread_id: 'th_existing',
       replayed: [],
       replay_truncated: false,

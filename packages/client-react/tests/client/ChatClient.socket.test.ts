@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SocketTransportError } from '../../src/errors'
 
+const emitWithAck = vi.fn()
 const mockSocket = {
   on: vi.fn(),
   off: vi.fn(),
   once: vi.fn(),
   emit: vi.fn(),
   emitWithAck: vi.fn(),
+  timeout: vi.fn(() => ({ emitWithAck })),
   disconnect: vi.fn(),
 }
 
@@ -20,11 +22,13 @@ import { ChatClient } from '../../src/client'
 
 describe('ChatClient socket', () => {
   beforeEach(() => {
+    emitWithAck.mockReset()
     mockSocket.on.mockReset()
     mockSocket.off.mockReset()
     mockSocket.once.mockReset()
     mockSocket.emit.mockReset()
     mockSocket.emitWithAck.mockReset()
+    mockSocket.timeout.mockClear()
     mockSocket.disconnect.mockReset()
     mockIo.mockClear()
   })
@@ -47,7 +51,7 @@ describe('ChatClient socket', () => {
     mockSocket.once.mockImplementation((event: string, cb: () => void) => {
       if (event === 'connect') queueMicrotask(() => cb())
     })
-    mockSocket.emitWithAck.mockResolvedValue({
+    emitWithAck.mockResolvedValue({
       thread_id: 'th_1',
       replayed: [
         {
@@ -70,7 +74,7 @@ describe('ChatClient socket', () => {
       id: 'evt_0',
     })
 
-    expect(mockSocket.emitWithAck).toHaveBeenCalledWith('thread:join', {
+    expect(emitWithAck).toHaveBeenCalledWith('thread:join', {
       thread_id: 'th_1',
       since: { created_at: '2026-04-10T00:00:00Z', id: 'evt_0' },
     })
@@ -83,7 +87,7 @@ describe('ChatClient socket', () => {
     mockSocket.once.mockImplementation((event: string, cb: () => void) => {
       if (event === 'connect') queueMicrotask(() => cb())
     })
-    mockSocket.emitWithAck.mockResolvedValue({
+    emitWithAck.mockResolvedValue({
       error: { code: 'forbidden', message: 'not a member' },
     })
 
@@ -96,7 +100,7 @@ describe('ChatClient socket', () => {
     mockSocket.once.mockImplementation((event: string, cb: () => void) => {
       if (event === 'connect') queueMicrotask(() => cb())
     })
-    mockSocket.emitWithAck.mockResolvedValue({
+    emitWithAck.mockResolvedValue({
       error: { code: 'forbidden', message: 'not a member' },
     })
 

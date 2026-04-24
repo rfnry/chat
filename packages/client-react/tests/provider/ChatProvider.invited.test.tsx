@@ -4,12 +4,15 @@ import { useContext } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Hoisted mock so the provider's `import { io } from 'socket.io-client'` sees our fake.
-const { socketOn, socketOnce, socketDisconnect, socketEmitWithAck } = vi.hoisted(() => ({
-  socketOn: vi.fn(),
-  socketOnce: vi.fn(),
-  socketDisconnect: vi.fn(),
-  socketEmitWithAck: vi.fn(),
-}))
+const { socketOn, socketOnce, socketDisconnect, socketEmitWithAck, socketTimeout } = vi.hoisted(
+  () => ({
+    socketOn: vi.fn(),
+    socketOnce: vi.fn(),
+    socketDisconnect: vi.fn(),
+    socketEmitWithAck: vi.fn(),
+    socketTimeout: vi.fn(),
+  })
+)
 
 vi.mock('socket.io-client', () => ({
   io: vi.fn(() => ({
@@ -20,7 +23,8 @@ vi.mock('socket.io-client', () => ({
       if (event === 'connect') queueMicrotask(() => cb())
     },
     disconnect: socketDisconnect,
-    emitWithAck: socketEmitWithAck,
+    emitWithAck: vi.fn(),
+    timeout: socketTimeout,
   })),
 }))
 
@@ -41,12 +45,15 @@ describe('ChatProvider — thread:invited', () => {
     socketOnce.mockClear()
     socketDisconnect.mockClear()
     socketEmitWithAck.mockClear()
+    socketTimeout.mockClear()
     // Default join ack so joinThread resolves cleanly.
+    // timeout() returns an object with emitWithAck; wire it up each reset.
     socketEmitWithAck.mockResolvedValue({
       thread_id: 'th_X',
       replayed: [],
       replay_truncated: false,
     })
+    socketTimeout.mockReturnValue({ emitWithAck: socketEmitWithAck })
   })
 
   it('hydrates thread meta, auto-joins, invalidates threads query, and fires onThreadInvited', async () => {
