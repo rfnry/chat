@@ -588,7 +588,15 @@ class ThreadNamespace(socketio.AsyncNamespace):
 
 
 class ChatSocketIO:
-    def __init__(self, server: ChatServer, replay_cap: int = DEFAULT_REPLAY_CAP) -> None:
+    def __init__(
+        self,
+        server: ChatServer,
+        replay_cap: int = DEFAULT_REPLAY_CAP,
+        *,
+        cors_allowed_origins: str | list[str] = "*",
+        ping_interval: float = 20,
+        ping_timeout: float = 20,
+    ) -> None:
         self._server = server
         self._replay_cap = replay_cap
         # When namespace_keys is set, register under the wildcard "*" so
@@ -597,11 +605,13 @@ class ChatSocketIO:
         wildcard = server.namespace_keys is not None
         self._sio = socketio.AsyncServer(
             async_mode="asgi",
-            cors_allowed_origins="*",
+            cors_allowed_origins=cors_allowed_origins,
             # `namespaces="*"` tells python-socketio's _handle_connect to
             # accept any dynamic namespace path; without it, only paths
             # explicitly listed (default `["/"]`) are allowed.
             namespaces="*" if wildcard else None,
+            ping_interval=ping_interval,
+            ping_timeout=ping_timeout,
         )
         self._socketio_path = "/chat/ws"
         ns_path = "*" if wildcard else "/"

@@ -478,11 +478,24 @@ class ChatServer:
             tenant = {k: v for k, v in tenant_raw.items() if isinstance(v, str)}
         derive_namespace_path(tenant, namespace_keys=self.namespace_keys)
 
-    def mount_socketio(self, fastapi_app: Any) -> Any:
+    def mount_socketio(
+        self,
+        fastapi_app: Any,
+        *,
+        cors_allowed_origins: str | list[str] = "*",
+        ping_interval: float = 20,
+        ping_timeout: float = 20,
+    ) -> Any:
         from rfnry_chat_server.broadcast.socketio import SocketIOBroadcaster
         from rfnry_chat_server.socketio.server import ChatSocketIO
 
-        sio_server = ChatSocketIO(self, replay_cap=self.replay_cap)
+        sio_server = ChatSocketIO(
+            self,
+            replay_cap=self.replay_cap,
+            cors_allowed_origins=cors_allowed_origins,
+            ping_interval=ping_interval,
+            ping_timeout=ping_timeout,
+        )
         self.broadcaster = SocketIOBroadcaster(sio_server.sio)
         self._socketio = sio_server
         return sio_server.asgi_app(fastapi_app)
