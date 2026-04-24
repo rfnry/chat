@@ -16,9 +16,9 @@ from rfnry_chat_protocol import (
     UserIdentity,
 )
 
+from rfnry_chat_server.auth import HandshakeData
 from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
-from rfnry_chat_server.server.auth import HandshakeData
-from rfnry_chat_server.server.chat_server import ChatServer
+from rfnry_chat_server.server import ChatServer
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 
 

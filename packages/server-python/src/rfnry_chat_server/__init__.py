@@ -53,6 +53,8 @@ from rfnry_chat_server.analytics.collector import (
     AssistantAnalytics,
     OnAnalyticsCallback,
 )
+from rfnry_chat_server.auth import AuthenticateCallback, AuthorizeCallback, HandshakeData
+from rfnry_chat_server.auth_cache import cached_authenticate
 from rfnry_chat_server.broadcast.protocol import Broadcaster
 from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
 from rfnry_chat_server.broadcast.socketio import SocketIOBroadcaster
@@ -61,17 +63,15 @@ from rfnry_chat_server.handler.dispatcher import MAX_HANDLER_CHAIN_DEPTH, Handle
 from rfnry_chat_server.handler.registry import HandlerRegistration, HandlerRegistry
 from rfnry_chat_server.handler.send import HandlerSend
 from rfnry_chat_server.handler.types import HandlerCallable
-from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
-from rfnry_chat_server.server.auth import AuthenticateCallback, AuthorizeCallback, HandshakeData
-from rfnry_chat_server.server.auth_cache import cached_authenticate
-from rfnry_chat_server.server.chat_server import ChatServer
-from rfnry_chat_server.server.namespace import (
+from rfnry_chat_server.namespace import (
     NamespaceViolation,
     derive_namespace_path,
     parse_namespace_path,
     validate_namespace_value,
 )
-from rfnry_chat_server.server.presence import PresenceRegistry
+from rfnry_chat_server.presence import PresenceRegistry
+from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
+from rfnry_chat_server.server import ChatServer
 from rfnry_chat_server.store.memory.store import InMemoryChatStore
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 from rfnry_chat_server.store.protocol import ChatStore

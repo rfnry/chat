@@ -8,7 +8,7 @@ import asyncpg
 import pytest
 from rfnry_chat_protocol import AssistantIdentity, Run, Thread, UserIdentity
 
-from rfnry_chat_server.server.chat_server import ChatServer
+from rfnry_chat_server.server import ChatServer
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 
 

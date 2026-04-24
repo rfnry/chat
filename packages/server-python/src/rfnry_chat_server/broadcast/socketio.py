@@ -14,7 +14,7 @@ from rfnry_chat_protocol import (
     ThreadInvitedFrame,
 )
 
-from rfnry_chat_server.server.namespace import derive_namespace_path
+from rfnry_chat_server.namespace import derive_namespace_path
 
 
 def _thread_room(thread_id: str) -> str:

@@ -8,7 +8,7 @@ from rfnry_chat_protocol import Event, Thread
 from rfnry_chat_server.store.protocol import ChatStore
 
 if TYPE_CHECKING:
-    from rfnry_chat_server.server.chat_server import ChatServer
+    from rfnry_chat_server.server import ChatServer
 
 
 @dataclass(frozen=True)

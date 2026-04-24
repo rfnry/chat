@@ -8,7 +8,7 @@ from rfnry_chat_protocol import MessageEvent, TextPart, Thread, UserIdentity
 from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
 from rfnry_chat_server.handler.context import HandlerContext
 from rfnry_chat_server.handler.send import HandlerSend
-from rfnry_chat_server.server.chat_server import ChatServer
+from rfnry_chat_server.server import ChatServer
 from rfnry_chat_server.store.memory.store import InMemoryChatStore
 
 

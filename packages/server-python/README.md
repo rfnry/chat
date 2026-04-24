@@ -35,7 +35,7 @@ async def main() -> None:
 
     app = FastAPI()
     app.include_router(server.router, prefix="/chat")
-    asgi = server.mount_socketio(app)
+    asgi = server.mount(app)
 
     import uvicorn
     await uvicorn.Server(uvicorn.Config(asgi, host="0.0.0.0", port=8000)).serve()

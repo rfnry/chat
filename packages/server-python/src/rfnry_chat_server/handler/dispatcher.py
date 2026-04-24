@@ -12,7 +12,7 @@ from rfnry_chat_server.handler.send import HandlerSend
 from rfnry_chat_server.handler.types import HandlerCallable
 
 if TYPE_CHECKING:
-    from rfnry_chat_server.server.chat_server import ChatServer
+    from rfnry_chat_server.server import ChatServer
 
 MAX_HANDLER_CHAIN_DEPTH = 8
 
