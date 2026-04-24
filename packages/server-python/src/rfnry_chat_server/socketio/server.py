@@ -440,6 +440,11 @@ class ThreadNamespace(socketio.AsyncNamespace):
         if event.type in _SERVER_LIFECYCLE_TYPES:
             return _error("forbidden", f"clients cannot emit {event.type} events")
 
+        if event.run_id is not None:
+            run = await self._server.store.get_run(event.run_id)
+            if run is None or run.thread_id != thread_id:
+                return _error("invalid_request", "run_id does not belong to this thread")
+
         access = await self._access_check(sid, identity, thread_id, action=f"{event.type}.send")
         if isinstance(access, dict):
             return access
