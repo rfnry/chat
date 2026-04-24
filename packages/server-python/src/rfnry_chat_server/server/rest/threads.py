@@ -78,6 +78,7 @@ def build_router() -> APIRouter:
             tenant_filter=identity_tenant(identity),
             cursor=cursor,
             limit=limit,
+            member_identity_id=identity.id,
         )
 
     @router.get("/{thread_id}", response_model=Thread)

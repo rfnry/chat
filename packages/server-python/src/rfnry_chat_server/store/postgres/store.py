@@ -97,19 +97,33 @@ class PostgresChatStore:
         tenant_filter: TenantScope,
         cursor: ThreadCursor | None = None,
         limit: int = 50,
+        *,
+        member_identity_id: str | None = None,
     ) -> Page[Thread]:
         args: list[Any] = [json.dumps(tenant_filter)]
         where = ["$1::jsonb @> threads.tenant"]
+        if member_identity_id is not None:
+            args.append(member_identity_id)
+            where.append(f"m.identity_id = ${len(args)}")
         if cursor is not None:
             args.append(cursor.created_at)
             args.append(cursor.id)
             where.append(f"(threads.created_at, threads.id) < (${len(args) - 1}, ${len(args)})")
         args.append(limit + 1)
-        sql = (
-            "SELECT id, tenant, metadata, created_at, updated_at FROM threads WHERE "
-            + " AND ".join(where)
-            + f" ORDER BY created_at DESC, id DESC LIMIT ${len(args)}"
-        )
+        if member_identity_id is not None:
+            sql = (
+                "SELECT threads.id, threads.tenant, threads.metadata, threads.created_at, threads.updated_at"
+                " FROM threads"
+                " JOIN thread_members m ON m.thread_id = threads.id"
+                " WHERE " + " AND ".join(where)
+                + f" ORDER BY threads.created_at DESC, threads.id DESC LIMIT ${len(args)}"
+            )
+        else:
+            sql = (
+                "SELECT id, tenant, metadata, created_at, updated_at FROM threads WHERE "
+                + " AND ".join(where)
+                + f" ORDER BY created_at DESC, id DESC LIMIT ${len(args)}"
+            )
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(sql, *args)
         items = [_row_to_thread(r) for r in rows[:limit]]
