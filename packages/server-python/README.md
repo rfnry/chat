@@ -101,6 +101,12 @@ A few additional knobs:
   go straight to the Socket.IO room with no DB hit (the authorized thread
   is cached in the socket session at `stream:start`). High token rates
   don't translate to high pool demand.
+- **`max_inactive_connection_lifetime`**: set this (e.g. `300` seconds) so
+  asyncpg rotates idle connections before Postgres' `idle_in_transaction_session_timeout`
+  or upstream NAT/load-balancer tables silently kill them. Without it,
+  the first acquire after a long idle period surfaces the dropped
+  connection as a confusing `InterfaceError` instead of transparently
+  reconnecting.
 
 Example pool construction:
 
@@ -112,6 +118,7 @@ pool = await asyncpg.create_pool(
     min_size=2,
     max_size=20,  # sized for medium workload
     command_timeout=30,  # circuit-break long-running queries
+    max_inactive_connection_lifetime=300,  # rotate idle conns every 5 min
 )
 store = PostgresChatStore(pool=pool)
 ```
