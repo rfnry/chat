@@ -104,6 +104,7 @@ class ChatServer:
         system_identity: SystemIdentity | None = None,
         run_timeout_seconds: int = 120,
         watchdog_interval_seconds: float = 30.0,
+        watchdog_batch_size: int = 100,
     ) -> None:
         self.store = store
         self._authenticate_is_default = authenticate is None
@@ -115,6 +116,7 @@ class ChatServer:
         self.namespace_keys = _validate_namespace_keys(namespace_keys)
         self.run_timeout_seconds = run_timeout_seconds
         self.watchdog_interval_seconds = watchdog_interval_seconds
+        self.watchdog_batch_size = watchdog_batch_size
         self._socketio: Any = None
         self._system_identity = system_identity or SystemIdentity(id="system", name="system")
         self._handlers = HandlerRegistry()
@@ -174,11 +176,6 @@ class ChatServer:
                 _log.exception("watchdog sweep failed; continuing")
 
     async def _sweep_stale_runs(self) -> None:
-        threshold = datetime.now(UTC) - timedelta(seconds=self.run_timeout_seconds)
-        stale = await self.store.find_runs_started_before(threshold=threshold)
-        if not stale:
-            return
-
         async def _timeout_one(run_id: str) -> None:
             try:
                 await self.end_run(
@@ -191,7 +188,18 @@ class ChatServer:
             except Exception:
                 _log.exception("watchdog failed to timeout run %s", run_id)
 
-        await asyncio.gather(*(_timeout_one(run.id) for run in stale))
+        while True:
+            threshold = datetime.now(UTC) - timedelta(seconds=self.run_timeout_seconds)
+            stale = await self.store.find_runs_started_before(
+                threshold=threshold,
+                limit=self.watchdog_batch_size,
+            )
+            if not stale:
+                return
+
+            await asyncio.gather(*(_timeout_one(run.id) for run in stale))
+            if len(stale) < self.watchdog_batch_size:
+                return
 
     def on(
         self,
