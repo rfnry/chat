@@ -1,3 +1,8 @@
+import type {
+  StreamDeltaFrameWire,
+  StreamEndFrameWire,
+  StreamStartFrameWire,
+} from '@rfnry/chat-protocol'
 import {
   type Identity,
   parsePresenceJoinedFrame,
@@ -186,6 +191,30 @@ export function ChatProvider(props: ChatProviderProps) {
               store.getState().actions.clearThreadEvents(payload.thread_id)
               qcRef.current.invalidateQueries({ queryKey: ['chat', 'threads'] })
             }
+          })
+        )
+        disposers.push(
+          client.on('stream:start', (data) => {
+            const frame = data as StreamStartFrameWire
+            store.getState().actions.beginStream({
+              eventId: frame.event_id,
+              threadId: frame.thread_id,
+              runId: frame.run_id,
+              author: toIdentity(frame.author),
+              targetType: frame.target_type,
+            })
+          })
+        )
+        disposers.push(
+          client.on('stream:delta', (data) => {
+            const frame = data as StreamDeltaFrameWire
+            store.getState().actions.appendStreamDelta(frame.event_id, frame.text)
+          })
+        )
+        disposers.push(
+          client.on('stream:end', (data) => {
+            const frame = data as StreamEndFrameWire
+            store.getState().actions.endStream(frame.event_id)
           })
         )
 

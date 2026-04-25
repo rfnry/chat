@@ -3,11 +3,22 @@ import { createStore } from 'zustand/vanilla'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
+export type StreamingEntry = {
+  eventId: string
+  threadId: string
+  runId: string
+  author: Identity
+  targetType: 'message' | 'reasoning'
+  text: string
+  createdAt: string
+}
+
 export type ChatStoreState = {
   events: Record<string, Event[]>
   members: Record<string, Identity[]>
   threadMeta: Record<string, Thread>
   activeRuns: Record<string, Record<string, Run>>
+  streams: Record<string, StreamingEntry>
   joinedThreads: Set<string>
   connectionStatus: ConnectionStatus
   actions: {
@@ -17,6 +28,9 @@ export type ChatStoreState = {
     setMembers(threadId: string, members: Identity[]): void
     setThreadMeta(thread: Thread): void
     upsertRun(run: Run): void
+    beginStream(entry: Omit<StreamingEntry, 'text' | 'createdAt'>): void
+    appendStreamDelta(eventId: string, text: string): void
+    endStream(eventId: string): void
     addJoinedThread(threadId: string): void
     removeJoinedThread(threadId: string): void
     setConnectionStatus(status: ConnectionStatus): void
@@ -50,6 +64,7 @@ const initialState = (): Omit<ChatStoreState, 'actions'> => ({
   members: {},
   threadMeta: {},
   activeRuns: {},
+  streams: {},
   joinedThreads: new Set(),
   connectionStatus: 'disconnected',
 })
@@ -74,9 +89,18 @@ export function createChatStore() {
             delete threadRuns[event.runId]
             activeRuns = { ...activeRuns, [event.threadId]: threadRuns }
           }
+          // Remove streaming entry in the same update so React sees one
+          // consistent snapshot — no flicker between stream:end and the
+          // finalized event arriving.
+          let streams = state.streams
+          if (Object.hasOwn(streams, event.id)) {
+            streams = { ...streams }
+            delete streams[event.id]
+          }
           return {
             events: { ...state.events, [event.threadId]: next },
             activeRuns,
+            streams,
           }
         }),
       setEventsBulk: (threadId, events) =>
@@ -115,6 +139,33 @@ export function createChatStore() {
             activeRuns: { ...state.activeRuns, [run.threadId]: threadRuns },
           }
         }),
+      beginStream: (entry) =>
+        set((state) => ({
+          streams: {
+            ...state.streams,
+            [entry.eventId]: {
+              ...entry,
+              text: '',
+              createdAt: new Date().toISOString(),
+            },
+          },
+        })),
+      appendStreamDelta: (eventId, text) =>
+        set((state) => {
+          const existing = state.streams[eventId]
+          if (!existing) return state
+          return {
+            streams: {
+              ...state.streams,
+              [eventId]: { ...existing, text: existing.text + text },
+            },
+          }
+        }),
+      endStream: (_eventId) => {
+        // Intentionally a no-op: the streaming entry persists until the
+        // finalized event with the same id arrives via addEvent, which
+        // removes it in the same store update to prevent flicker.
+      },
       addJoinedThread: (threadId) =>
         set((state) => {
           const next = new Set(state.joinedThreads)

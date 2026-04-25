@@ -66,6 +66,7 @@ export { useSuspenseThread } from './hooks/useSuspenseThread'
 export { type UseThreadActions, useThreadActions } from './hooks/useThreadActions'
 export { useThreadActiveRuns } from './hooks/useThreadActiveRuns'
 export { useThreadEvents } from './hooks/useThreadEvents'
+export { type FeedItem, useThreadFeed } from './hooks/useThreadFeed'
 export { useThreadIsWorking } from './hooks/useThreadIsWorking'
 export { useThreadMembers } from './hooks/useThreadMembers'
 export { useThreadMetadata } from './hooks/useThreadMetadata'
@@ -83,6 +84,7 @@ export {
   type ChatStoreState,
   type ConnectionStatus,
   createChatStore,
+  type StreamingEntry,
 } from './store/chatStore'
 export { Stream, type StreamOptions } from './stream'
 export {
