@@ -1,8 +1,9 @@
-"""End-to-end smoke test for the run lifecycle fix.
+"""End-to-end smoke test for the run lifecycle with guarded handlers.
 
 Scenario: one user + three assistant clients all joined to the same thread.
-Every assistant registers a role-filtering `on_message` emitter that only
-yields when the author.role is "user". The user sends a single message.
+Every assistant registers a role-filtering `on_message` emitter (with
+lazy_run=True) that only yields when the author.role is "user". The user
+sends a single message.
 
 Expected event counts observed on the thread's event log:
 
@@ -11,12 +12,11 @@ Expected event counts observed on the thread's event log:
   - 3 `run.completed` (one per agent)
   - 3 assistant `message` events (the actual replies)
 
-Before the fix: the dispatcher called begin_run/end_run unconditionally,
-so the "other two" agents in each fanout also produced empty runs. With
-three agents, each user message caused 3 handlers to fire * (1 real yield
-+ 2 early returns) — but the structure of the bug report observed 4
-run.started + 9 run.completed due to interaction with the server-side
-find_active_run reuse and the non-idempotent end_run.
+lazy_run=True: handlers with application-level early-return guards opt in
+to defer begin_run to first yield, preserving the no-phantom-run behavior
+in fan-out channels. Without lazy_run=True the eager default would produce
+6 extra phantom runs (each of the 3 agents fires for the 2 messages emitted
+by its sibling agents).
 
 This test is the regression pin. It uses the real socket + REST stack
 against a Postgres-backed ChatServer in the same process.
@@ -173,11 +173,12 @@ async def test_three_agent_channel_user_message_produces_3_runs(
         received.append({"type": ctx.event.type, "author": ctx.event.author.id})
         last_event.set()
 
-    # Each agent registers a classic role-filter emitter: it early-returns on
-    # non-user messages, which is the code path that used to spuriously
-    # trigger begin_run / end_run under the old dispatcher.
+    # Each agent registers a classic role-filter emitter with lazy_run=True:
+    # it early-returns on non-user messages without opening a run. Without
+    # lazy_run=True the eager default would open a phantom run for every
+    # sibling-agent message that triggers the guard.
     def _register_agent(client: ChatClient, reply_text: str) -> None:
-        @client.on_message()
+        @client.on_message(lazy_run=True)
         async def respond(ctx: HandlerContext, send: HandlerSend):
             if ctx.event.author.role != "user":
                 return

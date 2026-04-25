@@ -27,6 +27,7 @@ class _Registration:
     handler: HandlerCallable
     all_events: bool
     tool_name: str | None
+    lazy_run: bool
 
 
 class HandlerDispatcher:
@@ -42,6 +43,7 @@ class HandlerDispatcher:
         *,
         all_events: bool = False,
         tool_name: str | None = None,
+        lazy_run: bool = False,
     ) -> None:
         self._registrations.append(
             _Registration(
@@ -49,6 +51,7 @@ class HandlerDispatcher:
                 handler=handler,
                 all_events=all_events,
                 tool_name=tool_name,
+                lazy_run=lazy_run,
             )
         )
 
@@ -73,21 +76,17 @@ class HandlerDispatcher:
 
     async def _run_one(self, reg: _Registration, event: Event) -> None:
         if inspect.isasyncgenfunction(reg.handler):
-            await self._run_emitter(reg.handler, event)
+            await self._run_emitter(reg.handler, event, lazy_run=reg.lazy_run)
             return
         await self._run_observer(reg.handler, event)
 
-    async def _run_emitter(self, handler: HandlerCallable, event: Event) -> None:
-        # Lazy run creation. Previously we called begin_run unconditionally
-        # on every dispatch — so a handler that early-returned (e.g. a role
-        # filter guard `if event.author.role != "user": return`) still
-        # produced an empty run and one run.started + run.completed frame.
-        # In a multi-agent channel that fans out to N-1 other agents, this
-        # caused N phantom runs per user message.
-        #
-        # Now: build a `run_starter` closure. We only call begin_run on the
-        # handler's first yield (or first stream open). Handlers that yield
-        # nothing skip begin_run AND end_run entirely.
+    async def _run_emitter(
+        self,
+        handler: HandlerCallable,
+        event: Event,
+        *,
+        lazy_run: bool,
+    ) -> None:
         began_run_id: str | None = None
 
         async def _start_run() -> str:
@@ -110,31 +109,26 @@ class HandlerDispatcher:
             run_starter=_start_run,
         )
 
+        # Eager mode (default): begin_run BEFORE the handler body runs, so the
+        # client sees run.started immediately after sending the triggering event.
+        # Lazy mode: defer to first yield (preserves no-phantom-run behavior for
+        # handlers with application-level early-return guards).
+        if not lazy_run:
+            run_id = await _start_run()
+            send.set_run_id(run_id)
+
         try:
             async for emitted in handler(ctx, send):  # type: ignore[union-attr]
-                # Trigger begin_run on the first emission and stamp the
-                # run_id onto the emitted event. Events are frozen Pydantic
-                # models, so we use model_copy to produce a patched copy.
-                #
-                # We also re-stamp `created_at` here — right before the socket
-                # RPC that publishes the event — so the server's event log
-                # orders correctly. The HandlerSend.message()/.reasoning()/
-                # .tool_call()/.tool_result() constructors stamp `created_at`
-                # at the moment the handler calls them, which is BEFORE
-                # begin_run has run (lazy-run on first yield). Without this
-                # re-stamp, a handler that does `yield send.message(...)` can
-                # emit an event whose `created_at` precedes the run.started
-                # frame's `created_at`, and an event log sorted by `created_at`
-                # shows the message arriving before its own run started.
                 updates: dict[str, Any] = {}
                 if began_run_id is None:
+                    # Lazy path: open the run on first yield.
                     run_id = await _start_run()
                     send.set_run_id(run_id)
                     if emitted.run_id is None:
                         updates["run_id"] = run_id
-                # Sample created_at AFTER any lazy begin_run call so the
-                # timestamp is strictly greater than the run.started frame
-                # the server published inside begin_run.
+                elif emitted.run_id is None:
+                    updates["run_id"] = began_run_id
+
                 updates["created_at"] = datetime.now(UTC)
                 emitted = emitted.model_copy(update=updates)
                 await self._client.emit_event(emitted)

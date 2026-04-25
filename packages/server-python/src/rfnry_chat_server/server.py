@@ -334,23 +334,24 @@ class ChatServer:
         event_type: str,
         *,
         tool: str | None = None,
+        lazy_run: bool = False,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator(event_type, tool=tool)
+        return self._handlers.decorator(event_type, tool=tool, lazy_run=lazy_run)
 
-    def on_message(self) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("message")
+    def on_message(self, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("message", lazy_run=lazy_run)
 
-    def on_reasoning(self) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("reasoning")
+    def on_reasoning(self, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("reasoning", lazy_run=lazy_run)
 
-    def on_tool_call(self, name: str) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("tool.call", tool=name)
+    def on_tool_call(self, name: str, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("tool.call", tool=name, lazy_run=lazy_run)
 
-    def on_tool_result(self) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("tool.result")
+    def on_tool_result(self, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("tool.result", lazy_run=lazy_run)
 
-    def on_any_event(self) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("*")
+    def on_any_event(self, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("*", lazy_run=lazy_run)
 
     async def check_authorize(
         self,

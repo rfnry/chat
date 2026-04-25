@@ -48,13 +48,18 @@ class HandlerDispatcher:
 
     async def _run_one(self, entry: HandlerRegistration, event: Event, thread: Thread) -> None:
         if inspect.isasyncgenfunction(entry.handler):
-            await self._run_emitter(entry.handler, event, thread)
+            await self._run_emitter(entry.handler, event, thread, lazy_run=entry.lazy_run)
             return
         await self._run_observer(entry.handler, event, thread)
 
-    async def _run_emitter(self, handler: HandlerCallable, event: Event, thread: Thread) -> None:
-        # Lazy run creation — handlers that early-return without yielding open
-        # no run, no run.started / run.completed frames.
+    async def _run_emitter(
+        self,
+        handler: HandlerCallable,
+        event: Event,
+        thread: Thread,
+        *,
+        lazy_run: bool,
+    ) -> None:
         began_run_id: str | None = None
 
         async def _start_run() -> str:
@@ -77,13 +82,25 @@ class HandlerDispatcher:
             run_id=None,
             run_starter=_start_run,
         )
+
+        # Eager mode (default): begin_run BEFORE the handler body runs, so the
+        # client sees run.started immediately after sending the triggering event.
+        # Lazy mode: defer to first yield (preserves no-phantom-run behavior for
+        # handlers with application-level early-return guards).
+        if not lazy_run:
+            run_id = await _start_run()
+            send.set_run_id(run_id)
+
         try:
             async for emitted in handler(ctx, send):  # type: ignore[union-attr]
                 if began_run_id is None:
+                    # Lazy path: open the run on first yield.
                     run_id = await _start_run()
                     send.set_run_id(run_id)
                     if emitted.run_id is None:
                         emitted = emitted.model_copy(update={"run_id": run_id})
+                elif emitted.run_id is None:
+                    emitted = emitted.model_copy(update={"run_id": began_run_id})
                 await self._server.publish_event(emitted, thread=ctx.thread)
         except Exception as exc:
             if began_run_id is not None:

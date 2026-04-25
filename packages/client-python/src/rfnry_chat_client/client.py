@@ -443,6 +443,7 @@ class ChatClient:
         *,
         tool: str | None = None,
         all_events: bool = False,
+        lazy_run: bool = False,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
         def decorator(handler: HandlerCallable) -> HandlerCallable:
             self._dispatcher.register(
@@ -450,30 +451,40 @@ class ChatClient:
                 handler,
                 all_events=all_events,
                 tool_name=tool,
+                lazy_run=lazy_run,
             )
             return handler
 
         return decorator
 
-    def on_message(self, *, all_events: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("message", all_events=all_events)
+    def on_message(
+        self, *, all_events: bool = False, lazy_run: bool = False
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self.on("message", all_events=all_events, lazy_run=lazy_run)
 
-    def on_reasoning(self, *, all_events: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("reasoning", all_events=all_events)
+    def on_reasoning(
+        self, *, all_events: bool = False, lazy_run: bool = False
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self.on("reasoning", all_events=all_events, lazy_run=lazy_run)
 
     def on_tool_call(
         self,
         name: str | None = None,
         *,
         all_events: bool = False,
+        lazy_run: bool = False,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("tool.call", tool=name, all_events=all_events)
+        return self.on("tool.call", tool=name, all_events=all_events, lazy_run=lazy_run)
 
-    def on_tool_result(self, *, all_events: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("tool.result", all_events=all_events)
+    def on_tool_result(
+        self, *, all_events: bool = False, lazy_run: bool = False
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self.on("tool.result", all_events=all_events, lazy_run=lazy_run)
 
-    def on_any_event(self, *, all_events: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("*", all_events=all_events)
+    def on_any_event(
+        self, *, all_events: bool = False, lazy_run: bool = False
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self.on("*", all_events=all_events, lazy_run=lazy_run)
 
     def on_invited(self) -> Callable[[InviteHandler], InviteHandler]:
         def decorator(handler: InviteHandler) -> InviteHandler:
