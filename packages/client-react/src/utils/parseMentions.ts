@@ -1,6 +1,26 @@
 import type { Identity, IdentityRole } from '@rfnry/chat-protocol'
 
-const MENTION_RE = /@([\w-]+)/g
+/**
+ * Characters that count as a word boundary after a mention token.
+ * Letters, digits, hyphen, and underscore are NOT boundaries (to prevent
+ * partial matches like @Alice matching inside @AliceBoo).
+ */
+const BOUNDARY_CHARS = new Set([' ', '\t', '\n', '\r', ',', '.', '!', '?', ';', ':', ')', ']', '}'])
+
+function isBoundary(ch: string | undefined): boolean {
+  return ch === undefined || BOUNDARY_CHARS.has(ch)
+}
+
+/**
+ * True when text[pos : pos + candidate.length] equals candidate
+ * (case-insensitive) AND the character immediately after is a word boundary.
+ */
+function matchesAt(text: string, pos: number, candidate: string): boolean {
+  const n = candidate.length
+  if (pos + n > text.length) return false
+  if (text.slice(pos, pos + n).toLowerCase() !== candidate.toLowerCase()) return false
+  return isBoundary(text[pos + n])
+}
 
 export type MentionSpan = {
   identityId: string
@@ -32,18 +52,24 @@ export type ParseMemberMentionsOptions = {
 }
 
 /**
- * Extract `@name` mentions from text, resolve them against `members`, and
- * return both the deduped recipient ids (for the wire) and the positional
+ * Extract `@name` or `@id` mentions from text, resolve them against `members`,
+ * and return both the deduped recipient ids (for the wire) and the positional
  * spans (for local render highlighting).
+ *
+ * Uses a member-aware longest-prefix scanner (no regex) so names with spaces
+ * (e.g. "Agent A") are matched correctly. Ambiguity is resolved by longest
+ * match — "Agent A" wins over a shorter "Agent" member.
  *
  * Role-neutral by default. Narrow with `opts.roles` when a UI needs
  * role-specific semantics (e.g. assistants-only for a "summon agent" bar).
  *
- * - Matches `@name` tokens (word characters + hyphen) against member names,
- *   case-insensitively.
- * - `@here` expansion does not emit a span (it resolves to multiple identities).
+ * - `@<name>` — matched case-insensitively against member display names.
+ * - `@<id>` — fallback when no name matches.
+ * - `@here` — expands to all role-filtered members (when hereExpansion !== 'none').
  * - Unknown mentions are silently ignored.
  * - Recipients are deduped, preserving first-seen order.
+ * - The `@` must be preceded by a word boundary (or start-of-string) to
+ *   prevent false positives in email addresses (foo@Alice → no match).
  */
 export function parseMemberMentions(
   text: string,
@@ -52,11 +78,15 @@ export function parseMemberMentions(
 ): ParseMentionsResult {
   const roles = opts.roles
   const hereExpansion = opts.hereExpansion ?? 'matched'
+
   const matched = roles ? members.filter((m) => roles.includes(m.role)) : members
-  const byLowercaseName = new Map<string, Identity>()
-  for (const m of matched) {
-    byLowercaseName.set(m.name.toLowerCase(), m)
-  }
+
+  // Sort longest name first; tiebreak by id length DESC so longer matches win.
+  const sorted = [...matched].sort((a, b) => {
+    const nameDiff = b.name.length - a.name.length
+    if (nameDiff !== 0) return nameDiff
+    return b.id.length - a.id.length
+  })
 
   const seen = new Set<string>()
   const recipients: string[] = []
@@ -69,22 +99,53 @@ export function parseMemberMentions(
     }
   }
 
-  for (const match of text.matchAll(MENTION_RE)) {
-    const raw = match[1]!
-    const token = raw.toLowerCase()
-    if (token === 'here' && hereExpansion === 'matched') {
-      for (const m of matched) add(m.id)
+  let i = 0
+  while (i < text.length) {
+    if (text[i] !== '@') {
+      i++
       continue
     }
-    const hit = byLowercaseName.get(token)
-    if (!hit) continue
-    add(hit.id)
-    spans.push({
-      identityId: hit.id,
-      text: raw,
-      start: match.index ?? 0,
-      length: match[0].length,
-    })
+
+    // The character before '@' must be a boundary (or start-of-string) so that
+    // email addresses like foo@Alice are not matched.
+    const prevCh = i > 0 ? text[i - 1] : undefined
+    if (!isBoundary(prevCh)) {
+      i++
+      continue
+    }
+
+    const cursor = i + 1
+    let didMatch = false
+
+    // Try each member in longest-first order.
+    for (const m of sorted) {
+      if (matchesAt(text, cursor, m.name)) {
+        spans.push({ identityId: m.id, text: m.name, start: i, length: 1 + m.name.length })
+        add(m.id)
+        i = cursor + m.name.length
+        didMatch = true
+        break
+      }
+      if (matchesAt(text, cursor, m.id)) {
+        spans.push({ identityId: m.id, text: m.id, start: i, length: 1 + m.id.length })
+        add(m.id)
+        i = cursor + m.id.length
+        didMatch = true
+        break
+      }
+    }
+
+    if (didMatch) continue
+
+    // Fall back to @here expansion.
+    if (hereExpansion === 'matched' && matchesAt(text, cursor, 'here')) {
+      for (const m of matched) add(m.id)
+      i = cursor + 'here'.length
+      continue
+    }
+
+    // No match — skip past this '@'.
+    i++
   }
 
   return { recipients, spans }
