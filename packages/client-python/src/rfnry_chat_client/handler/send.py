@@ -139,23 +139,26 @@ class HandlerSend:
     def message_stream(
         self,
         *,
+        recipients: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         run_id: str | None = None,
     ) -> Stream:
-        return self._make_stream("message", metadata=metadata, run_id=run_id)
+        return self._make_stream("message", recipients=recipients, metadata=metadata, run_id=run_id)
 
     def reasoning_stream(
         self,
         *,
+        recipients: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         run_id: str | None = None,
     ) -> Stream:
-        return self._make_stream("reasoning", metadata=metadata, run_id=run_id)
+        return self._make_stream("reasoning", recipients=recipients, metadata=metadata, run_id=run_id)
 
     def _make_stream(
         self,
         target_type: str,
         *,
+        recipients: list[str] | None,
         metadata: dict[str, Any] | None,
         run_id: str | None,
     ) -> Stream:
@@ -175,6 +178,7 @@ class HandlerSend:
             author=self._author,
             target_type=target_type,  # type: ignore[arg-type]
             metadata=metadata,
+            recipients=recipients,
             run_resolver=(self.ensure_run_id if effective_run_id is None else None),
         )
 

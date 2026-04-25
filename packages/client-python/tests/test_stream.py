@@ -190,3 +190,35 @@ async def test_handler_send_message_stream_requires_client() -> None:
     send = HandlerSend(thread_id="t_1", author=me, run_id="run_1", client=None)
     with pytest.raises(RuntimeError, match="ChatClient"):
         send.message_stream()
+
+
+async def test_message_stream_recipients_forwarded_to_final_event() -> None:
+    """message_stream(recipients=[...]) sets recipients on the finalized MessageEvent."""
+    from rfnry_chat_client.handler.send import HandlerSend
+
+    client, sio = _build_client()
+    me = client.identity
+    assert isinstance(me, AssistantIdentity)
+
+    now = datetime.now(UTC).isoformat()
+    sio.ack_replies["event:send"] = {
+        "event": {
+            "id": "evt_stream",
+            "thread_id": "t_1",
+            "run_id": "run_1",
+            "author": me.model_dump(mode="json"),
+            "created_at": now,
+            "metadata": {},
+            "client_id": None,
+            "recipients": ["u_x"],
+            "type": "message",
+            "content": [{"type": "text", "text": "hello"}],
+        }
+    }
+
+    send = HandlerSend(thread_id="t_1", author=me, run_id="run_1", client=client)
+    async with send.message_stream(recipients=["u_x"]) as stream:
+        await stream.write("hello")
+
+    assert stream.finalized_event is not None
+    assert stream.finalized_event.recipients == ["u_x"]
