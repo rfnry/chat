@@ -12,6 +12,7 @@ from rfnry_chat_client.handler.send import HandlerSend
 from rfnry_chat_client.handler.stream import Stream
 from rfnry_chat_client.handler.types import HandlerCallable
 from rfnry_chat_client.inbox import InboxDispatcher, InviteHandler
+from rfnry_chat_client.mentions import MentionSpan, ParsedMentions, parse_member_mentions
 from rfnry_chat_client.pool import ChatClientPool, ClientFactory
 from rfnry_chat_client.transport.rest import RestTransport
 from rfnry_chat_client.transport.socket import SocketTransport, SocketTransportError
@@ -30,10 +31,13 @@ __all__ = [
     "HandlerSend",
     "InboxDispatcher",
     "InviteHandler",
+    "MentionSpan",
+    "ParsedMentions",
     "RestTransport",
     "Stream",
     "SocketTransport",
     "SocketTransportError",
     "ThreadConflictError",
     "ThreadNotFoundError",
+    "parse_member_mentions",
 ]
