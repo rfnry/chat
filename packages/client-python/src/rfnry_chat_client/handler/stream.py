@@ -34,9 +34,6 @@ class Stream:
         metadata: dict[str, Any] | None = None,
         run_resolver: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
-        # run_id is allowed to be None at construction time as long as
-        # run_resolver is provided — __aenter__ awaits the resolver to get
-        # the real id. This supports lazy run creation in the dispatcher.
         if run_id is None and run_resolver is None:
             raise RuntimeError("Stream requires either a run_id or a run_resolver")
         self._client = client

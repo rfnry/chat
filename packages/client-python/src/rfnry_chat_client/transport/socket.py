@@ -141,10 +141,6 @@ class SocketTransport:
         return reply
 
     async def send_stream_delta(self, frame: dict[str, Any]) -> None:
-        # Fire-and-forget: token streams must not block on per-frame RTT.
-        # Awaiting an ack for every delta caps throughput at ~1/RTT tokens/sec
-        # (~200 tok/s at 5ms RTT). stream:start and stream:end keep using call
-        # because they need ordering/error signaling.
         await self._sio.emit("stream:delta", frame)
 
     async def send_stream_end(self, frame: dict[str, Any]) -> dict[str, Any]:

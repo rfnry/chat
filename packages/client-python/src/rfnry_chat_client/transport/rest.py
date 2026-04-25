@@ -149,11 +149,6 @@ class RestTransport:
         await self._request("DELETE", f"/threads/{thread_id}/members/{identity_id}")
 
     async def list_presence(self) -> PresenceSnapshot:
-        """GET /chat/presence - snapshot of identities currently online in the
-        caller's tenant scope. Caller is excluded by the server; merge this
-        snapshot with live `presence:joined` / `presence:left` frames to keep
-        a consistent view.
-        """
         payload = await self._request("GET", "/presence")
         return PresenceSnapshot.model_validate(payload)
 

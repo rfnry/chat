@@ -32,12 +32,6 @@ class HandlerSend:
         client: ChatClient | None = None,
         run_starter: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
-        # `run_starter` enables lazy run creation: the dispatcher passes a
-        # closure that calls socket.begin_run(...) on first need, caches the
-        # returned run_id on this HandlerSend (via set_run_id), and the
-        # dispatcher uses the same id to call end_run later. This lets
-        # early-returning handlers (e.g. role-filter guards) skip begin_run
-        # entirely — no phantom run.started / run.completed fan-out.
         self._thread_id = thread_id
         self._author = author
         self._run_id = run_id
@@ -49,16 +43,9 @@ class HandlerSend:
         return self._run_id
 
     def set_run_id(self, run_id: str) -> None:
-        """Late-bind the run id. Called by the dispatcher after lazy
-        begin_run so subsequent send.message() / send.reasoning() calls carry
-        the run_id directly."""
         self._run_id = run_id
 
     async def ensure_run_id(self) -> str:
-        """Return the current run_id, starting a run via `run_starter` if
-        needed. Used by streaming (which requires a real run_id at
-        stream-open time) and by the dispatcher to patch the first yielded
-        event's run_id."""
         if self._run_id is not None:
             return self._run_id
         if self._run_starter is None:
@@ -175,12 +162,6 @@ class HandlerSend:
         if self._client is None:
             raise RuntimeError("streaming requires a ChatClient; HandlerSend was constructed without one")
         effective_run_id = run_id or self._run_id
-        # If neither an explicit run_id nor a cached one is available, fall
-        # back to the HandlerSend's run_starter (if any). The Stream resolves
-        # it inside __aenter__ via ensure_run_id(), so a handler that only
-        # emits via streams still gets a real run under the hood — and,
-        # crucially, handlers that never open a stream skip begin_run
-        # entirely.
         if effective_run_id is None and self._run_starter is None:
             raise RuntimeError(
                 "streaming requires a run_id. Either write the handler as an async generator "
