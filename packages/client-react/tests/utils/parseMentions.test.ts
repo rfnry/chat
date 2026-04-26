@@ -2,251 +2,134 @@ import type { Identity } from '@rfnry/chat-protocol'
 import { describe, expect, it } from 'vitest'
 import { parseMemberMentions } from '../../src/utils/parseMentions'
 
-// ---------------------------------------------------------------------------
-// Shared fixtures (original suite)
-// ---------------------------------------------------------------------------
-const alice: Identity = { role: 'user', id: 'u_alice', name: 'Alice', metadata: {} }
-const bob: Identity = { role: 'user', id: 'u_bob', name: 'Bob', metadata: {} }
-const helper: Identity = { role: 'assistant', id: 'a_helper', name: 'Helper', metadata: {} }
-const codex: Identity = { role: 'assistant', id: 'a_codex', name: 'Codex', metadata: {} }
-const system: Identity = { role: 'system', id: 's_1', name: 'System', metadata: {} }
-
-// ---------------------------------------------------------------------------
-// Plan test fixture (task-1 cases from the implementation plan)
-// ---------------------------------------------------------------------------
-const planMembers: Identity[] = [
-  { id: 'agent-a', role: 'assistant', name: 'Agent A', metadata: {} },
-  { id: 'agent-b', role: 'assistant', name: 'Agent B', metadata: {} },
+const members: Identity[] = [
+  { id: 'engineer', role: 'assistant', name: 'Engineer', metadata: {} },
+  { id: 'coordinator', role: 'assistant', name: 'Coordinator', metadata: {} },
+  { id: 'liaison', role: 'assistant', name: 'Liaison', metadata: {} },
   { id: 'u_alice', role: 'user', name: 'Alice', metadata: {} },
-  { id: 'u_bob', role: 'user', name: 'Bobby Smith', metadata: {} },
+  { id: 'u_bob', role: 'user', name: 'Bob', metadata: {} },
 ]
 
-// ---------------------------------------------------------------------------
-// Task-1 plan test cases (12 cases verbatim from the implementation plan)
-// ---------------------------------------------------------------------------
-describe('parseMemberMentions (plan test cases)', () => {
-  // 1. Single-word name
-  it('1. single-word name', () => {
-    const result = parseMemberMentions('@Alice hi', planMembers)
-    expect(result.recipients).toEqual(['u_alice'])
-    expect(result.spans).toEqual([{ identityId: 'u_alice', text: 'Alice', start: 0, length: 6 }])
+describe('parseMemberMentions (id-only)', () => {
+  it('single mention at start', () => {
+    const r = parseMemberMentions('@engineer hello', members)
+    expect(r.recipients).toEqual(['engineer'])
+    expect(r.spans).toHaveLength(1)
+    expect(r.spans[0]).toMatchObject({ identityId: 'engineer', start: 0, length: 9 })
   })
 
-  // 2. Multi-word name
-  it('2. multi-word name', () => {
-    const result = parseMemberMentions('@Agent A what is up?', planMembers)
-    expect(result.recipients).toEqual(['agent-a'])
-    expect(result.spans).toEqual([{ identityId: 'agent-a', text: 'Agent A', start: 0, length: 8 }])
+  it('single mention at end', () => {
+    expect(parseMemberMentions('hello @coordinator', members).recipients).toEqual(['coordinator'])
   })
 
-  // 3. ID form
-  it('3. @id fallback form', () => {
-    const result = parseMemberMentions('@agent-b can you handle this?', planMembers)
-    expect(result.recipients).toEqual(['agent-b'])
-    expect(result.spans).toEqual([{ identityId: 'agent-b', text: 'agent-b', start: 0, length: 8 }])
+  it('two distinct mentions in first-seen order', () => {
+    expect(parseMemberMentions('@engineer and @coordinator', members).recipients).toEqual([
+      'engineer',
+      'coordinator',
+    ])
   })
 
-  // 4. Multi-word with trailing punctuation
-  it('4. multi-word name with trailing punctuation', () => {
-    const result = parseMemberMentions('@Bobby Smith, please review', planMembers)
-    expect(result.recipients).toEqual(['u_bob'])
+  it('dedupes on recipients but spans are kept per occurrence', () => {
+    const r = parseMemberMentions('@engineer and @engineer again', members)
+    expect(r.recipients).toEqual(['engineer'])
+    expect(r.spans).toHaveLength(2)
   })
 
-  // 5. Two distinct mentions
-  it('5. two distinct mentions', () => {
-    const result = parseMemberMentions('@Agent A and @Agent B', planMembers)
-    expect(result.recipients).toEqual(['agent-a', 'agent-b'])
+  it('trims trailing comma', () => {
+    expect(parseMemberMentions('@engineer, hi', members).recipients).toEqual(['engineer'])
   })
 
-  // 6. Same mention twice — deduped recipients, both spans recorded
-  it('6. same mention twice — deduped recipients, both spans kept', () => {
-    const result = parseMemberMentions('@Agent A and @Agent A again', planMembers)
-    expect(result.recipients).toHaveLength(1)
-    expect(result.recipients).toEqual(['agent-a'])
-    expect(result.spans).toHaveLength(2)
+  it('trims trailing period', () => {
+    expect(parseMemberMentions('ping @engineer.', members).recipients).toEqual(['engineer'])
   })
 
-  // 7. Unknown mention — silently dropped
-  it('7. unknown mention silently dropped', () => {
-    const result = parseMemberMentions('@Nobody hi', planMembers)
-    expect(result.recipients).toEqual([])
-    expect(result.spans).toEqual([])
+  it('trims trailing question mark', () => {
+    expect(parseMemberMentions('@engineer?', members).recipients).toEqual(['engineer'])
   })
 
-  // 8. Ambiguity — longest match wins
-  it('8. longest match wins over shorter prefix member', () => {
-    const m2: Identity[] = [
-      { id: 'agent', role: 'assistant', name: 'Agent', metadata: {} },
-      { id: 'agent-a', role: 'assistant', name: 'Agent A', metadata: {} },
-    ]
-    const result = parseMemberMentions('@Agent A hi', m2)
-    expect(result.recipients).toEqual(['agent-a'])
+  it('trims multiple trailing punctuation chars', () => {
+    expect(parseMemberMentions('@engineer!!!', members).recipients).toEqual(['engineer'])
   })
 
-  // 9. @here expansion with role filter
-  it('9. @here expands to role-filtered members only', () => {
-    const result = parseMemberMentions('@here ping', planMembers, { roles: ['assistant'] })
-    expect(result.recipients).toEqual(['agent-a', 'agent-b'])
+  it('does not match unknown ids', () => {
+    expect(parseMemberMentions('@nobody hi', members).recipients).toEqual([])
   })
 
-  // 10. Boundary respected — no partial match inside a longer token
-  it('10. no match when boundary is absent after name (@AliceBoo)', () => {
-    const result = parseMemberMentions('@AliceBoo', planMembers)
-    expect(result.recipients).toEqual([])
+  it('case sensitive on id', () => {
+    expect(parseMemberMentions('@Engineer hi', members).recipients).toEqual([])
   })
 
-  // 11. Case-insensitive name match
-  it('11. case-insensitive match', () => {
-    const result = parseMemberMentions('@agent a hi', planMembers)
-    expect(result.recipients).toEqual(['agent-a'])
+  it('respects optional roles filter', () => {
+    expect(
+      parseMemberMentions('@engineer @u_alice', members, { roles: ['user'] }).recipients
+    ).toEqual(['u_alice'])
   })
 
-  // 12. Mention in mid-text — span.start is correct
-  it('12. mention mid-text — span.start reflects offset', () => {
-    const result = parseMemberMentions('hey @Agent A check this', planMembers)
-    expect(result.recipients).toEqual(['agent-a'])
-    expect(result.spans[0]!.start).toBe(4)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Email-address guard (pre-@ boundary check)
-// ---------------------------------------------------------------------------
-describe('parseMemberMentions (email guard)', () => {
-  it('does not match @name when preceded by a non-boundary character (email address)', () => {
-    const result = parseMemberMentions('foo@Alice', [alice])
-    expect(result.recipients).toEqual([])
-    expect(result.spans).toEqual([])
+  it('id with underscore matches', () => {
+    expect(parseMemberMentions('@u_alice', members).recipients).toEqual(['u_alice'])
   })
 
-  it('matches @name when @ is at start-of-string', () => {
-    const result = parseMemberMentions('@Alice hi', [alice])
-    expect(result.recipients).toEqual(['u_alice'])
+  it('email-like input does not match (engineer.com is unknown id)', () => {
+    expect(parseMemberMentions('contact @engineer.com', members).recipients).toEqual([])
   })
 
-  it('matches @name when @ is preceded by whitespace', () => {
-    const result = parseMemberMentions('hi @Alice', [alice])
-    expect(result.recipients).toEqual(['u_alice'])
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Original suite — preserved and updated for new span.text contract
-// (text is now the canonical member name, not the raw input token)
-// ---------------------------------------------------------------------------
-describe('parseMemberMentions (original suite)', () => {
-  describe('default (role-neutral)', () => {
-    it('matches any member by name, regardless of role', () => {
-      expect(parseMemberMentions('hey @alice and @helper', [alice, helper]).recipients).toEqual([
-        'u_alice',
-        'a_helper',
-      ])
-    })
-
-    it('case-insensitive', () => {
-      expect(parseMemberMentions('@ALICE @HELPER', [alice, helper]).recipients).toEqual([
-        'u_alice',
-        'a_helper',
-      ])
-    })
-
-    it('@here expands to all members in first-seen thread order', () => {
-      expect(parseMemberMentions('ping @here', [helper, alice, codex]).recipients).toEqual([
-        'a_helper',
-        'u_alice',
-        'a_codex',
-      ])
-    })
-
-    it('silently drops unknown mentions', () => {
-      expect(parseMemberMentions('@nobody @alice', [alice]).recipients).toEqual(['u_alice'])
-    })
-
-    it('dedupes repeated mentions, preserving first-seen order', () => {
-      expect(parseMemberMentions('@alice @helper @alice', [alice, helper]).recipients).toEqual([
-        'u_alice',
-        'a_helper',
-      ])
-    })
-
-    it('returns empty recipients and spans for plain text', () => {
-      const result = parseMemberMentions('hello world', [alice, helper])
-      expect(result.recipients).toEqual([])
-      expect(result.spans).toEqual([])
-    })
-
-    it('merges @here with explicit mentions, still deduped', () => {
-      expect(parseMemberMentions('@alice @here', [alice, helper]).recipients).toEqual([
-        'u_alice',
-        'a_helper',
-      ])
-    })
-
-    it('spans report the positional range of each named mention', () => {
-      const result = parseMemberMentions('hey @alice look', [alice])
-      expect(result.spans).toHaveLength(1)
-      expect(result.spans[0]).toMatchObject({
-        identityId: 'u_alice',
-        // text is the canonical member name (not the raw input token)
-        text: 'Alice',
-        start: 4,
-        length: 6,
-      })
-    })
-
-    it('spans are not emitted for @here', () => {
-      const result = parseMemberMentions('ping @here', [alice, helper])
-      expect(result.spans).toEqual([])
-    })
+  it('span length covers @ + id (excludes trimmed punct)', () => {
+    const r = parseMemberMentions('@engineer, hello', members)
+    expect(r.spans[0]?.length).toBe(9)
   })
 
-  describe('roles filter', () => {
-    it("roles: ['assistant'] matches the classic summon-agent UX", () => {
-      expect(
-        parseMemberMentions('@alice @helper', [alice, helper], { roles: ['assistant'] }).recipients
-      ).toEqual(['a_helper'])
-    })
-
-    it("roles: ['user'] supports user-to-user mentions", () => {
-      expect(
-        parseMemberMentions('@alice @helper @bob', [alice, bob, helper], { roles: ['user'] })
-          .recipients
-      ).toEqual(['u_alice', 'u_bob'])
-    })
-
-    it('roles narrows @here to matching roles only', () => {
-      expect(
-        parseMemberMentions('@here', [alice, bob, helper, system], { roles: ['user'] }).recipients
-      ).toEqual(['u_alice', 'u_bob'])
-    })
-
-    it('empty roles list matches nothing', () => {
-      expect(
-        parseMemberMentions('@alice @helper', [alice, helper], { roles: [] }).recipients
-      ).toEqual([])
-    })
+  it('span start reflects mid-text offset', () => {
+    const r = parseMemberMentions('hey @engineer check', members)
+    expect(r.spans[0]?.start).toBe(4)
   })
 
-  describe('hereExpansion', () => {
-    it("'matched' is the default and expands @here", () => {
-      expect(parseMemberMentions('@here', [alice, helper]).recipients).toEqual([
-        'u_alice',
-        'a_helper',
-      ])
-    })
+  it('mid-word @ still matches (permissive)', () => {
+    expect(parseMemberMentions('foo@engineer', members).recipients).toEqual(['engineer'])
+  })
 
-    it("'none' skips @here expansion (falls through to name lookup)", () => {
-      // No member named "here" — unknown, dropped.
-      expect(
-        parseMemberMentions('@here', [alice, helper], { hereExpansion: 'none' }).recipients
-      ).toEqual([])
-    })
+  it('empty text yields empty result', () => {
+    const r = parseMemberMentions('', members)
+    expect(r.recipients).toEqual([])
+    expect(r.spans).toEqual([])
+  })
 
-    it("'none' still resolves @here if a member happens to be named 'here'", () => {
-      const namedHere: Identity = { role: 'user', id: 'u_here', name: 'here', metadata: {} }
-      expect(
-        parseMemberMentions('@here', [alice, namedHere], { hereExpansion: 'none' }).recipients
-      ).toEqual(['u_here'])
-    })
+  it('text with no @ yields empty result', () => {
+    expect(parseMemberMentions('hello world', members).recipients).toEqual([])
+  })
+
+  it('@ followed by whitespace is not a mention', () => {
+    expect(parseMemberMentions('hello @ world', members).recipients).toEqual([])
+  })
+
+  it('three distinct mentions in first-seen order', () => {
+    const r = parseMemberMentions('@engineer @coordinator @liaison go', members)
+    expect(r.recipients).toEqual(['engineer', 'coordinator', 'liaison'])
+  })
+
+  it('preserves insertion order even with intermixed unknown tokens', () => {
+    const r = parseMemberMentions('@engineer @nobody @liaison', members)
+    expect(r.recipients).toEqual(['engineer', 'liaison'])
+  })
+
+  it('is mutation-safe on the members input', () => {
+    const snapshot = members.map((m) => ({ ...m }))
+    parseMemberMentions('@engineer @coordinator', members)
+    expect(members).toEqual(snapshot)
+  })
+
+  it('returns a fresh result each call', () => {
+    const a = parseMemberMentions('@engineer', members)
+    a.recipients.push('mutated')
+    const b = parseMemberMentions('@engineer', members)
+    expect(b.recipients).toEqual(['engineer'])
+  })
+
+  it('empty members list matches nothing', () => {
+    expect(parseMemberMentions('@engineer hi', []).recipients).toEqual([])
+  })
+
+  it('multiple text parts: the parser is text-agnostic, no boundary handling', () => {
+    // Trailing apostrophe-only is a trim-set member → 'engineer' resolves.
+    expect(parseMemberMentions("@engineer'", members).recipients).toEqual(['engineer'])
   })
 })
