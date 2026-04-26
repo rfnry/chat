@@ -204,6 +204,14 @@ Every authenticated socket is auto-joined to a room named `inbox:<identity_id>` 
 
 The frame carries `{thread, added_member, added_by}`. Self-adds (`added_member.id == added_by.id`, e.g. the creator auto-joining their own new thread) are suppressed.
 
+## `@<id>` mention routing
+
+When a `MessageEvent` arrives with `recipients = None` and prose containing `@<token>` patterns, the server extracts every token whose value matches a member id and sets `recipients` to those ids before broadcasting. Tokens are `@` followed by a non-whitespace run; trailing punctuation (`,.!?;:)]}'"`) is trimmed before lookup. Sender-set `recipients` are never overwritten — explicit routing always wins. Multiple matched ids produce ONE event with all ids in `recipients` (first-seen order, deduped).
+
+This is the single piece of content interpretation the server performs. Everything else (type validation, recipient delivery, run lifecycle) is behavior-preserving routing. Names are not consulted; lookups are case-sensitive on `Identity.id`. Whitespace immediately after `@` does not start a mention. The server never edits `event.content` text.
+
+The `parse_mention_ids(text, member_ids) -> list[str]` helper is exported for tests and scripts that want to mirror the server's parse rule.
+
 ## Scope
 
 The server does:
