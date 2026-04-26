@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from rfnry_chat_protocol import (
     Event,
     Identity,
+    MessageEvent,
     Run,
     RunError,
     RunStatus,
@@ -32,6 +33,7 @@ from rfnry_chat_server.broadcast.protocol import Broadcaster
 from rfnry_chat_server.handler.dispatcher import HandlerDispatcher
 from rfnry_chat_server.handler.registry import HandlerRegistry
 from rfnry_chat_server.handler.types import HandlerCallable
+from rfnry_chat_server.mentions import extract_text, parse_mention_ids
 from rfnry_chat_server.namespace import NamespaceViolation, derive_namespace_path
 from rfnry_chat_server.presence import PresenceRegistry
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
@@ -372,12 +374,22 @@ class ChatServer:
 
     async def publish_event(self, event: Event, *, thread: Thread | None = None) -> Event:
         members: list[ThreadMember] | None = None
+        if isinstance(event, MessageEvent) and event.recipients is None:
+            text = extract_text(event.content)
+            if text and "@" in text:
+                members = await self.store.list_members(event.thread_id)
+                member_ids = {m.identity_id for m in members}
+                ids = parse_mention_ids(text, member_ids)
+                if ids:
+                    event = event.model_copy(update={"recipients": ids})
+
         if event.recipients is not None:
             normalized = normalize_recipients(event.recipients, author_id=event.author.id)
             if normalized != event.recipients:
                 event = event.model_copy(update={"recipients": normalized})
             if normalized:
-                members = await self.store.list_members(event.thread_id)
+                if members is None:
+                    members = await self.store.list_members(event.thread_id)
                 member_ids = {m.identity_id for m in members}
                 for rid in normalized:
                     if rid not in member_ids:

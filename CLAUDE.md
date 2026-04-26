@@ -70,6 +70,8 @@ GitHub workflows under `.github/workflows/` only handle publishing (`publish-ser
 
 **The server is a pure routing hub.** It does not run AI agents, does not own assistant logic, does not auto-invoke anyone. Humans, AI assistants, and system identities are all "participants" with an `Identity` (`UserIdentity` | `AssistantIdentity` | `SystemIdentity`). They all connect via a `ChatClient` — the React one in a browser, the Python one in an agent service.
 
+The server resolves `@<identity_id>` tokens in `MessageEvent` prose into the `recipients` field when the sender hasn't set one explicitly. This is the ONLY interpretation the server performs on event content — everything else is passed through unchanged.
+
 ### Symmetric `(ctx, send)` handler API
 
 `ChatServer` and Python `ChatClient` expose the same decorator pattern:

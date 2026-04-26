@@ -63,6 +63,7 @@ from rfnry_chat_server.handler.dispatcher import MAX_HANDLER_CHAIN_DEPTH, Handle
 from rfnry_chat_server.handler.registry import HandlerRegistration, HandlerRegistry
 from rfnry_chat_server.handler.send import HandlerSend
 from rfnry_chat_server.handler.types import HandlerCallable
+from rfnry_chat_server.mentions import parse_mention_ids
 from rfnry_chat_server.namespace import (
     NamespaceViolation,
     derive_namespace_path,
@@ -151,6 +152,7 @@ __all__ = [
     "parse_content_part",
     "parse_event",
     "parse_identity",
+    "parse_mention_ids",
     "parse_namespace_path",
     "validate_namespace_value",
 ]
