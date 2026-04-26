@@ -249,3 +249,25 @@ async def test_rest_message_explicit_recipients_deep_equal_preserved(setup: tupl
     )
     # Sender wanted exactly ['coordinator'] — preserved exactly, not merged.
     assert event["recipients"] == ["coordinator"]
+
+
+# === Cache behavior ===
+
+
+async def test_member_cache_avoids_repeat_store_calls(setup: tuple[AsyncClient, str]) -> None:
+    client, thread_id = setup
+    for _ in range(5):
+        event = await _post_message(client, thread_id, "@engineer ping")
+        assert event["recipients"] == ["engineer"]
+
+
+async def test_remove_member_invalidates_cache(setup: tuple[AsyncClient, str]) -> None:
+    client, thread_id = setup
+    first = await _post_message(client, thread_id, "@engineer hi")
+    assert first["recipients"] == ["engineer"]
+
+    resp = await client.delete(f"/chat/threads/{thread_id}/members/engineer")
+    assert resp.status_code == 204
+
+    second = await _post_message(client, thread_id, "@engineer hi again")
+    assert second["recipients"] is None

@@ -33,6 +33,7 @@ from rfnry_chat_server.broadcast.protocol import Broadcaster
 from rfnry_chat_server.handler.dispatcher import HandlerDispatcher
 from rfnry_chat_server.handler.registry import HandlerRegistry
 from rfnry_chat_server.handler.types import HandlerCallable
+from rfnry_chat_server.members_cache import MembersCache
 from rfnry_chat_server.mentions import extract_text, parse_mention_ids
 from rfnry_chat_server.namespace import NamespaceViolation, derive_namespace_path
 from rfnry_chat_server.presence import PresenceRegistry
@@ -154,8 +155,10 @@ class ChatServer:
         run_timeout_seconds: int = 120,
         watchdog_interval_seconds: float = 30.0,
         watchdog_batch_size: int = 100,
+        member_cache_ttl_seconds: float = 5.0,
     ) -> None:
         self.store = store
+        self._members_cache = MembersCache(store, ttl_seconds=member_cache_ttl_seconds)
         self._authenticate_is_default = authenticate is None
         self.authenticate = authenticate or _identity_from_handshake
         self.authorize = authorize
@@ -372,12 +375,18 @@ class ChatServer:
             return await self.store.is_member(thread_id, identity.id)
         return await self.authorize(identity, thread_id, action, target_id=target_id)
 
+    async def list_members(self, thread_id: str) -> list[ThreadMember]:
+        return await self._members_cache.get(thread_id)
+
+    def invalidate_members_cache(self, thread_id: str) -> None:
+        self._members_cache.invalidate(thread_id)
+
     async def publish_event(self, event: Event, *, thread: Thread | None = None) -> Event:
         members: list[ThreadMember] | None = None
         if isinstance(event, MessageEvent) and event.recipients is None:
             text = extract_text(event.content)
             if text and "@" in text:
-                members = await self.store.list_members(event.thread_id)
+                members = await self.list_members(event.thread_id)
                 member_ids = {m.identity_id for m in members}
                 ids = parse_mention_ids(text, member_ids)
                 if ids:
@@ -389,7 +398,7 @@ class ChatServer:
                 event = event.model_copy(update={"recipients": normalized})
             if normalized:
                 if members is None:
-                    members = await self.store.list_members(event.thread_id)
+                    members = await self.list_members(event.thread_id)
                 member_ids = {m.identity_id for m in members}
                 for rid in normalized:
                     if rid not in member_ids:

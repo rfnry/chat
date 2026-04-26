@@ -56,6 +56,7 @@ def build_router() -> APIRouter:
             client_id=body.client_id,
         )
         await server.store.add_member(created.id, identity, added_by=identity)
+        server.invalidate_members_cache(created.id)
         members = await server.store.list_members(created.id)
         await server.publish_members_updated(created.id, [m.identity for m in members], thread=created)
         await server.publish_thread_created(created)
