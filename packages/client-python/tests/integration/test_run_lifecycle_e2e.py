@@ -42,7 +42,7 @@ from rfnry_chat_server.store.postgres.store import PostgresChatStore
 
 from rfnry_chat_client.client import ChatClient
 from rfnry_chat_client.handler.context import HandlerContext
-from rfnry_chat_client.handler.send import HandlerSend
+from rfnry_chat_client.send import Send
 
 DEFAULT_DATABASE_URL = "postgresql://rfnry_chat:rfnry_chat@localhost:55432/rfnry_chat_test"
 
@@ -169,7 +169,7 @@ async def test_three_agent_channel_user_message_produces_3_runs(
     last_event = asyncio.Event()
 
     @user_client.on("*", all_events=True)
-    async def observe(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def observe(ctx: HandlerContext, _send: Send) -> None:
         received.append({"type": ctx.event.type, "author": ctx.event.author.id})
         last_event.set()
 
@@ -179,7 +179,7 @@ async def test_three_agent_channel_user_message_produces_3_runs(
     # sibling-agent message that triggers the guard.
     def _register_agent(client: ChatClient, reply_text: str) -> None:
         @client.on_message(lazy_run=True)
-        async def respond(ctx: HandlerContext, send: HandlerSend):
+        async def respond(ctx: HandlerContext, send: Send):
             if ctx.event.author.role != "user":
                 return
             yield send.message(content=[TextPart(text=reply_text)])

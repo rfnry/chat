@@ -7,9 +7,9 @@ if TYPE_CHECKING:
     from rfnry_chat_protocol import Event
 
     from rfnry_chat_client.handler.context import HandlerContext
-    from rfnry_chat_client.handler.send import HandlerSend
+    from rfnry_chat_client.send import Send
 
 HandlerCallable = (
-    Callable[["HandlerContext", "HandlerSend"], Awaitable[None]]
-    | Callable[["HandlerContext", "HandlerSend"], AsyncGenerator["Event", None]]
+    Callable[["HandlerContext", "Send"], Awaitable[None]]
+    | Callable[["HandlerContext", "Send"], AsyncGenerator["Event", None]]
 )

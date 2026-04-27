@@ -16,13 +16,13 @@ from rfnry_chat_protocol import (
     ToolResultEvent,
 )
 
-from rfnry_chat_client.handler.stream import Stream
+from rfnry_chat_client.stream import Stream
 
 if TYPE_CHECKING:
     from rfnry_chat_client.client import ChatClient
 
 
-class HandlerSend:
+class Send:
     def __init__(
         self,
         *,
@@ -49,7 +49,7 @@ class HandlerSend:
         if self._run_id is not None:
             return self._run_id
         if self._run_starter is None:
-            raise RuntimeError("HandlerSend has no run_id and no run_starter; cannot lazily start a run")
+            raise RuntimeError("Send has no run_id and no run_starter; cannot lazily start a run")
         run_id = await self._run_starter()
         self._run_id = run_id
         return run_id
@@ -163,7 +163,7 @@ class HandlerSend:
         run_id: str | None,
     ) -> Stream:
         if self._client is None:
-            raise RuntimeError("streaming requires a ChatClient; HandlerSend was constructed without one")
+            raise RuntimeError("streaming requires a ChatClient; Send was constructed without one")
         effective_run_id = run_id or self._run_id
         if effective_run_id is None and self._run_starter is None:
             raise RuntimeError(

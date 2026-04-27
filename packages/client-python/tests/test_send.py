@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from rfnry_chat_protocol import AssistantIdentity, TextPart
 
-from rfnry_chat_client.handler.send import HandlerSend
+from rfnry_chat_client.send import Send
 
 _ME = AssistantIdentity(id="a_me", name="Me")
 
 
-def _send(run_id: str | None = None) -> HandlerSend:
-    return HandlerSend(thread_id="t_1", author=_ME, run_id=run_id)
+def _send(run_id: str | None = None) -> Send:
+    return Send(thread_id="t_1", author=_ME, run_id=run_id)
 
 
 def test_message_uses_supplied_author_and_thread() -> None:

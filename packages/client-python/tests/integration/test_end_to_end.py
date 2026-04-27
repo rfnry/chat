@@ -8,7 +8,7 @@ from rfnry_chat_protocol import AssistantIdentity, TextPart, UserIdentity
 
 from rfnry_chat_client.client import ChatClient
 from rfnry_chat_client.handler.context import HandlerContext
-from rfnry_chat_client.handler.send import HandlerSend
+from rfnry_chat_client.send import Send
 
 DEFAULT_USER = UserIdentity(id="u_alice", name="Alice")
 DEFAULT_ASSISTANT = AssistantIdentity(id="a_helper", name="Helper")
@@ -50,7 +50,7 @@ async def test_client_joins_thread_and_receives_events(
     received: list[Any] = []
 
     @client.on_message()
-    async def observe(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def observe(ctx: HandlerContext, _send: Send) -> None:
         received.append(ctx.event)
 
     try:
@@ -87,11 +87,11 @@ async def test_client_emits_reply_through_handler(
     seen: list[Any] = []
 
     @client.on_message()
-    async def reply(_ctx: HandlerContext, send: HandlerSend):
+    async def reply(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="pong")])
 
     @client.on("message", all_events=True)
-    async def audit(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def audit(ctx: HandlerContext, _send: Send) -> None:
         seen.append(ctx.event)
 
     try:
@@ -129,11 +129,11 @@ async def test_client_run_wrap_emits_run_started_and_completed(
     seen_types: list[str] = []
 
     @client.on_message()
-    async def reply(_ctx: HandlerContext, send: HandlerSend):
+    async def reply(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="ack")])
 
     @client.on("*", all_events=True)
-    async def audit(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def audit(ctx: HandlerContext, _send: Send) -> None:
         seen_types.append(ctx.event.type)
 
     try:
@@ -171,7 +171,7 @@ async def test_client_streams_message(live_server: tuple[str, Any]) -> None:
     message_events: list[Any] = []
 
     @client.on_message()
-    async def reply(ctx: HandlerContext, send: HandlerSend) -> None:
+    async def reply(ctx: HandlerContext, send: Send) -> None:
         run_id = await client.begin_run(ctx.event.thread_id, triggered_by_event_id=ctx.event.id)
         try:
             async with send.message_stream(run_id=run_id) as stream:
@@ -199,7 +199,7 @@ async def test_client_streams_message(live_server: tuple[str, Any]) -> None:
         )
 
         @client.on_message(all_events=True)
-        async def collect(ctx: HandlerContext, _send: HandlerSend) -> None:
+        async def collect(ctx: HandlerContext, _send: Send) -> None:
             if ctx.event.author.id == DEFAULT_ASSISTANT.id:
                 message_events.append(ctx.event)
 
@@ -228,7 +228,7 @@ async def test_event_log_ordering_run_started_before_message(
 ) -> None:
     """Regression for event-ordering bug: the server's event log, sorted by
     `created_at`, must show run.started BEFORE the handler's message and
-    run.completed AFTER it. Before the fix, HandlerSend stamped created_at
+    run.completed AFTER it. Before the fix, Send stamped created_at
     at handler-yield time (before lazy begin_run), so the published message
     carried a timestamp earlier than the run.started frame's timestamp —
     making the log read as "message, then run.started", which is visually
@@ -246,7 +246,7 @@ async def test_event_log_ordering_run_started_before_message(
     )
 
     @client.on_message()
-    async def reply(ctx: HandlerContext, send: HandlerSend):
+    async def reply(ctx: HandlerContext, send: Send):
         if ctx.event.author.role != "user":
             return
         yield send.message(content=[TextPart(text="ack")])
@@ -325,7 +325,7 @@ async def test_server_tool_handler_responds_to_client_tool_call(
     results: list[Any] = []
 
     @client.on_tool_result(all_events=True)
-    async def on_result(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def on_result(ctx: HandlerContext, _send: Send) -> None:
         results.append(ctx.event)
 
     try:

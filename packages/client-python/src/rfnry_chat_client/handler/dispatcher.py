@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 from rfnry_chat_protocol import Event, Identity, RunError, parse_event
 
 from rfnry_chat_client.handler.context import HandlerContext
-from rfnry_chat_client.handler.send import HandlerSend
 from rfnry_chat_client.handler.types import HandlerCallable
+from rfnry_chat_client.send import Send
 
 if TYPE_CHECKING:
     from rfnry_chat_client.client import ChatClient
@@ -101,7 +101,7 @@ class HandlerDispatcher:
             return began_run_id
 
         ctx = HandlerContext(event=event, identity=self._identity, client=self._client)
-        send = HandlerSend(
+        send = Send(
             thread_id=event.thread_id,
             author=self._identity,
             run_id=None,
@@ -144,7 +144,7 @@ class HandlerDispatcher:
 
     async def _run_observer(self, handler: HandlerCallable, event: Event) -> None:
         ctx = HandlerContext(event=event, identity=self._identity, client=self._client)
-        send = HandlerSend(
+        send = Send(
             thread_id=event.thread_id,
             author=self._identity,
             run_id=None,

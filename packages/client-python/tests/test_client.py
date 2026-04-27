@@ -10,7 +10,7 @@ from rfnry_chat_protocol import AssistantIdentity, TextPart, UserIdentity
 
 from rfnry_chat_client.client import ChatClient
 from rfnry_chat_client.handler.context import HandlerContext
-from rfnry_chat_client.handler.send import HandlerSend
+from rfnry_chat_client.send import Send
 from rfnry_chat_client.transport.socket import SocketTransport
 
 
@@ -62,7 +62,7 @@ async def test_on_message_decorator_fires_on_matching_event() -> None:
     received: list[Any] = []
 
     @client.on_message()
-    async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handle(ctx: HandlerContext, _send: Send) -> None:
         received.append(ctx.event)
 
     await client.connect()
@@ -83,7 +83,7 @@ async def test_on_message_decorator_respects_recipient_filter() -> None:
     received: list[Any] = []
 
     @client.on_message()
-    async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handle(ctx: HandlerContext, _send: Send) -> None:
         received.append(ctx.event)
 
     await client.connect()
@@ -104,7 +104,7 @@ async def test_on_tool_call_with_name_filter() -> None:
     hits: list[Any] = []
 
     @client.on_tool_call("get_stock")
-    async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handle(ctx: HandlerContext, _send: Send) -> None:
         hits.append(ctx.event)
 
     await client.connect()
@@ -126,7 +126,7 @@ async def test_on_tool_call_without_name_matches_any_tool() -> None:
     hits: list[Any] = []
 
     @client.on_tool_call()
-    async def any_tool(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def any_tool(ctx: HandlerContext, _send: Send) -> None:
         hits.append(ctx.event)
 
     await client.connect()
@@ -163,7 +163,7 @@ async def test_emitter_handler_routes_through_event_send() -> None:
     )
 
     @client.on_message()
-    async def reply(_ctx: HandlerContext, send: HandlerSend):
+    async def reply(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="pong")])
 
     await client.connect()
@@ -236,7 +236,7 @@ async def test_reconnect_switches_url_and_preserves_handlers() -> None:
     received: list[Any] = []
 
     @client.on_message()
-    async def handle(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handle(ctx: HandlerContext, _send: Send) -> None:
         received.append(ctx.event)
 
     await client.connect()

@@ -14,7 +14,7 @@ from rfnry_chat_protocol import (
 
 from rfnry_chat_client.client import ChatClient
 from rfnry_chat_client.handler.context import HandlerContext
-from rfnry_chat_client.handler.send import HandlerSend
+from rfnry_chat_client.send import Send
 
 # The live_server fixture's auth reads identity_id from the Socket.IO
 # handshake `auth` payload or — for REST — from the `x-identity-id` header.
@@ -60,7 +60,7 @@ async def test_bot_open_thread_with_triggers_on_invited_and_delivers_message(
         invited_event.set()
 
     @alice.on_message()
-    async def on_msg(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def on_msg(ctx: HandlerContext, _send: Send) -> None:
         if isinstance(ctx.event, MessageEvent) and ctx.event.author.id == BOT.id:
             message_received.append(ctx.event)
             message_event.set()

@@ -9,7 +9,7 @@ def test_public_exports() -> None:
         "HandlerDispatcher",
         "HandlerCallable",
         "HandlerContext",
-        "HandlerSend",
+        "Send",
         "RestTransport",
         "SocketTransport",
         "SocketTransportError",

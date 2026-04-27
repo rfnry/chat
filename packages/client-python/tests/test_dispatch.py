@@ -7,7 +7,7 @@ from rfnry_chat_protocol import AssistantIdentity, UserIdentity
 
 from rfnry_chat_client.handler.context import HandlerContext
 from rfnry_chat_client.handler.dispatcher import HandlerDispatcher
-from rfnry_chat_client.handler.send import HandlerSend
+from rfnry_chat_client.send import Send
 
 
 class _StubClient:
@@ -70,7 +70,7 @@ async def test_default_drops_self_authored() -> None:
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler(ctx: HandlerContext, _send: Send) -> None:
         calls.append(ctx.event)
 
     dispatcher.register("message", handler)
@@ -84,7 +84,7 @@ async def test_default_drops_non_addressed() -> None:
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler(ctx: HandlerContext, _send: Send) -> None:
         calls.append(ctx.event)
 
     dispatcher.register("message", handler)
@@ -98,7 +98,7 @@ async def test_default_fires_for_broadcast() -> None:
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler(ctx: HandlerContext, _send: Send) -> None:
         calls.append(ctx.event)
 
     dispatcher.register("message", handler)
@@ -112,7 +112,7 @@ async def test_default_fires_when_addressed() -> None:
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler(ctx: HandlerContext, _send: Send) -> None:
         calls.append(ctx.event)
 
     dispatcher.register("message", handler)
@@ -126,7 +126,7 @@ async def test_all_events_opt_out_bypasses_filters() -> None:
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler(ctx: HandlerContext, _send: Send) -> None:
         calls.append(ctx.event)
 
     dispatcher.register("message", handler, all_events=True)
@@ -142,10 +142,10 @@ async def test_tool_call_name_filter() -> None:
     stock_calls: list[Any] = []
     weather_calls: list[Any] = []
 
-    async def on_stock(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def on_stock(ctx: HandlerContext, _send: Send) -> None:
         stock_calls.append(ctx.event)
 
-    async def on_weather(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def on_weather(ctx: HandlerContext, _send: Send) -> None:
         weather_calls.append(ctx.event)
 
     dispatcher.register("tool.call", on_stock, tool_name="get_stock")
@@ -161,7 +161,7 @@ async def test_wildcard_event_type() -> None:
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler(ctx: HandlerContext, _send: Send) -> None:
         calls.append(ctx.event)
 
     dispatcher.register("*", handler)
@@ -176,10 +176,10 @@ async def test_multiple_handlers_fire_concurrently() -> None:
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     counter = {"value": 0}
 
-    async def handler_a(_ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler_a(_ctx: HandlerContext, _send: Send) -> None:
         counter["value"] += 1
 
-    async def handler_b(_ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler_b(_ctx: HandlerContext, _send: Send) -> None:
         counter["value"] += 10
 
     dispatcher.register("message", handler_a)
@@ -194,7 +194,7 @@ async def test_user_identity_works_as_own_client() -> None:
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
     calls: list[Any] = []
 
-    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler(ctx: HandlerContext, _send: Send) -> None:
         calls.append(ctx.event)
 
     dispatcher.register("message", handler)
@@ -211,7 +211,7 @@ async def test_emitter_handler_publishes_via_client() -> None:
     client = _StubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
-    async def reply(_ctx: HandlerContext, send: HandlerSend):
+    async def reply(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="hi")])
 
     dispatcher.register("message", reply)
@@ -247,7 +247,7 @@ async def test_emitter_zero_yield_lazy_skips_begin_and_end_run() -> None:
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
-    async def guarded(ctx: HandlerContext, _send: HandlerSend):
+    async def guarded(ctx: HandlerContext, _send: Send):
         # Classic role-filter guard that early-returns.
         if ctx.event.author.role != "user":
             return
@@ -271,7 +271,7 @@ async def test_emitter_zero_yield_eager_opens_phantom_run_pair() -> None:
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
-    async def guarded(ctx: HandlerContext, _send: HandlerSend):
+    async def guarded(ctx: HandlerContext, _send: Send):
         # Early-return without yielding — but eager run is already open.
         if ctx.event.author.role != "user":
             return
@@ -295,7 +295,7 @@ async def test_emitter_single_yield_triggers_exactly_one_run() -> None:
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
-    async def reply(_ctx: HandlerContext, send: HandlerSend):
+    async def reply(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="hi")])
 
     dispatcher.register("message", reply)
@@ -318,7 +318,7 @@ async def test_emitter_multiple_yields_share_one_run() -> None:
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
-    async def reply(_ctx: HandlerContext, send: HandlerSend):
+    async def reply(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="hi")])
         yield send.message(content=[TextPart(text="world")])
 
@@ -342,7 +342,7 @@ async def test_emitter_exception_before_first_yield_eager_fails_run() -> None:
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
-    async def boom(_ctx: HandlerContext, _send: HandlerSend):
+    async def boom(_ctx: HandlerContext, _send: Send):
         raise RuntimeError("before yield")
         yield  # pragma: no cover  # unreachable, makes function async-gen
 
@@ -365,7 +365,7 @@ async def test_emitter_exception_before_first_yield_lazy_skips_run() -> None:
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
-    async def boom(_ctx: HandlerContext, _send: HandlerSend):
+    async def boom(_ctx: HandlerContext, _send: Send):
         raise RuntimeError("before yield")
         yield  # pragma: no cover  # unreachable, makes function async-gen
 
@@ -388,7 +388,7 @@ async def test_emitter_exception_after_first_yield_ends_run_with_error() -> None
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
-    async def partial_then_boom(_ctx: HandlerContext, send: HandlerSend):
+    async def partial_then_boom(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="hi")])
         raise RuntimeError("after yield")
 
@@ -405,7 +405,7 @@ async def test_emitter_exception_after_first_yield_ends_run_with_error() -> None
 
 
 async def test_emitter_restamps_created_at_at_publish_time() -> None:
-    """Regression for event-ordering bug: HandlerSend.message() and siblings
+    """Regression for event-ordering bug: Send.message() and siblings
     stamp `created_at=datetime.now(UTC)` at handler-yield time (i.e. before
     lazy-run begin_run runs). Without a re-stamp, a handler that yields a
     message can produce an event whose `created_at` is strictly earlier than
@@ -423,7 +423,7 @@ async def test_emitter_restamps_created_at_at_publish_time() -> None:
 
     constructed_at: list[datetime] = []
 
-    async def reply(_ctx: HandlerContext, send: HandlerSend):
+    async def reply(_ctx: HandlerContext, send: Send):
         msg = send.message(content=[TextPart(text="hi")])
         constructed_at.append(msg.created_at)
         # Yield to the event loop so "publish time" is strictly after
@@ -460,7 +460,7 @@ async def test_emitter_restamps_created_at_on_every_yield() -> None:
 
     constructed_at: list[datetime] = []
 
-    async def reply(_ctx: HandlerContext, send: HandlerSend):
+    async def reply(_ctx: HandlerContext, send: Send):
         m1 = send.message(content=[TextPart(text="first")])
         constructed_at.append(m1.created_at)
         await asyncio.sleep(0)
@@ -494,7 +494,7 @@ async def test_eager_run_starts_before_handler_body() -> None:
 
     order: list[str] = []
 
-    async def slow_reply(_ctx: HandlerContext, send: HandlerSend):
+    async def slow_reply(_ctx: HandlerContext, send: Send):
         # Any awaits inside the handler body happen AFTER begin_run.
         order.append("handler_body_start")
         await asyncio.sleep(0)
@@ -527,7 +527,7 @@ async def test_lazy_run_not_created_when_handler_returns_without_yielding() -> N
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
-    async def guarded_handler(ctx: HandlerContext, send: HandlerSend):
+    async def guarded_handler(ctx: HandlerContext, send: Send):
         if ctx.event.author.role != "user":
             return
         yield send.message(content=[])  # pragma: no cover

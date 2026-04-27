@@ -9,7 +9,7 @@ from conftest import FakeSioClient
 from rfnry_chat_protocol import AssistantIdentity, UserIdentity
 
 from rfnry_chat_client.client import ChatClient
-from rfnry_chat_client.handler.stream import Stream
+from rfnry_chat_client.stream import Stream
 from rfnry_chat_client.transport.socket import SocketTransport
 
 
@@ -174,27 +174,27 @@ async def test_stream_allows_non_assistant_identity() -> None:
 
 
 async def test_handler_send_message_stream_requires_run() -> None:
-    from rfnry_chat_client.handler.send import HandlerSend
+    from rfnry_chat_client.send import Send
 
     client, _ = _build_client()
     me = client.identity
-    send = HandlerSend(thread_id="t_1", author=me, run_id=None, client=client)
+    send = Send(thread_id="t_1", author=me, run_id=None, client=client)
     with pytest.raises(RuntimeError, match="run_id"):
         send.message_stream()
 
 
 async def test_handler_send_message_stream_requires_client() -> None:
-    from rfnry_chat_client.handler.send import HandlerSend
+    from rfnry_chat_client.send import Send
 
     me = AssistantIdentity(id="a_me", name="Me")
-    send = HandlerSend(thread_id="t_1", author=me, run_id="run_1", client=None)
+    send = Send(thread_id="t_1", author=me, run_id="run_1", client=None)
     with pytest.raises(RuntimeError, match="ChatClient"):
         send.message_stream()
 
 
 async def test_message_stream_recipients_forwarded_to_final_event() -> None:
     """message_stream(recipients=[...]) sets recipients on the finalized MessageEvent."""
-    from rfnry_chat_client.handler.send import HandlerSend
+    from rfnry_chat_client.send import Send
 
     client, sio = _build_client()
     me = client.identity
@@ -216,7 +216,7 @@ async def test_message_stream_recipients_forwarded_to_final_event() -> None:
         }
     }
 
-    send = HandlerSend(thread_id="t_1", author=me, run_id="run_1", client=client)
+    send = Send(thread_id="t_1", author=me, run_id="run_1", client=client)
     async with send.message_stream(recipients=["u_x"]) as stream:
         await stream.write("hello")
 

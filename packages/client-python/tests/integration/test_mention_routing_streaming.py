@@ -12,8 +12,8 @@ from rfnry_chat_protocol import AssistantIdentity, UserIdentity
 
 from rfnry_chat_client.client import ChatClient
 from rfnry_chat_client.handler.context import HandlerContext
-from rfnry_chat_client.handler.send import HandlerSend
-from rfnry_chat_client.handler.stream import Stream
+from rfnry_chat_client.send import Send
+from rfnry_chat_client.stream import Stream
 
 ALICE = UserIdentity(id="u_alice", name="Alice")
 HELPER = AssistantIdentity(id="a_helper", name="Helper")
@@ -64,7 +64,7 @@ async def test_streamed_message_recipients_from_sender_preserved(
     received: list[Any] = []
 
     @alice_client.on("message", all_events=True)
-    async def observe(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def observe(ctx: HandlerContext, _send: Send) -> None:
         received.append(ctx.event)
 
     try:
@@ -119,7 +119,7 @@ async def test_streamed_message_no_recipients_parses_from_prose(
     received: list[Any] = []
 
     @alice_client.on("message", all_events=True)
-    async def observe(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def observe(ctx: HandlerContext, _send: Send) -> None:
         received.append(ctx.event)
 
     try:
