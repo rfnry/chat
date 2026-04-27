@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from rfnry_chat_protocol import (
     ContentPart,
+    Event,
     Identity,
     MessageEvent,
     ReasoningEvent,
@@ -53,6 +54,11 @@ class Send:
         run_id = await self._run_starter()
         self._run_id = run_id
         return run_id
+
+    async def emit(self, event: Event) -> Event:
+        if self._client is None:
+            raise RuntimeError("Send.emit requires a ChatClient; Send was constructed without one")
+        return await self._client.emit_event(event)
 
     def message(
         self,
