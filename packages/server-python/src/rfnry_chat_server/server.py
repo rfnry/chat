@@ -50,6 +50,7 @@ from rfnry_chat_server.run_events import (
 from rfnry_chat_server.run_events import (
     run_started as _run_started_event,
 )
+from rfnry_chat_server.send import Send
 from rfnry_chat_server.store.protocol import ChatStore
 
 _log = logging.getLogger(__name__)
@@ -380,6 +381,34 @@ class ChatServer:
 
     def invalidate_members_cache(self, thread_id: str) -> None:
         self._members_cache.invalidate(thread_id)
+
+    @asynccontextmanager
+    async def send(
+        self,
+        thread_id: str,
+        *,
+        as_identity: Identity,
+        triggered_by: Identity | None = None,
+        idempotency_key: str | None = None,
+    ) -> AsyncIterator[Send]:
+        thread = await self.store.get_thread(thread_id)
+        if thread is None:
+            raise LookupError(f"thread not found: {thread_id}")
+        if not await self.check_authorize(as_identity, thread_id, "message.send"):
+            raise PermissionError(f"identity {as_identity.id} not authorized to send in {thread_id}")
+        run = await self.begin_run(
+            thread=thread,
+            actor=as_identity,
+            triggered_by=triggered_by or as_identity,
+            idempotency_key=idempotency_key,
+        )
+        send = Send(thread_id=thread_id, author=as_identity, run_id=run.id)
+        try:
+            yield send
+        except BaseException as exc:
+            await self.end_run(run_id=run.id, error=RunError(code="send_error", message=str(exc)))
+            raise
+        await self.end_run(run_id=run.id, error=None)
 
     async def publish_event(self, event: Event, *, thread: Thread | None = None) -> Event:
         members: list[ThreadMember] | None = None
