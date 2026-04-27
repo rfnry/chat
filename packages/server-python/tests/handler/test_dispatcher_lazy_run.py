@@ -7,7 +7,7 @@ from rfnry_chat_protocol import MessageEvent, TextPart, Thread, UserIdentity
 
 from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
 from rfnry_chat_server.handler.context import HandlerContext
-from rfnry_chat_server.handler.send import HandlerSend
+from rfnry_chat_server.send import Send
 from rfnry_chat_server.server import ChatServer
 from rfnry_chat_server.store.memory.store import InMemoryChatStore
 
@@ -45,7 +45,7 @@ async def test_early_return_handler_lazy_opens_no_run() -> None:
     thread = await _make_thread(store, "th_test1", alice)
 
     @server.on_message(lazy_run=True)
-    async def _noop(_ctx: HandlerContext, _send: HandlerSend):
+    async def _noop(_ctx: HandlerContext, _send: Send):
         # Early-return emitter: never yields anything.
         return
         yield  # pragma: no cover — marks as async-generator
@@ -72,7 +72,7 @@ async def test_early_return_handler_eager_opens_phantom_run_pair() -> None:
     thread = await _make_thread(store, "th_test1b", alice)
 
     @server.on_message()  # lazy_run=False (default)
-    async def _noop(_ctx: HandlerContext, _send: HandlerSend):
+    async def _noop(_ctx: HandlerContext, _send: Send):
         return
         yield  # pragma: no cover — marks as async-generator
 
@@ -96,7 +96,7 @@ async def test_yielding_handler_opens_exactly_one_run() -> None:
     thread = await _make_thread(store, "th_test2", alice)
 
     @server.on_message()
-    async def _echo(_ctx: HandlerContext, send: HandlerSend):
+    async def _echo(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="ack")])
 
     evt = _user_message(thread.id, "hi")
@@ -121,7 +121,7 @@ async def test_exception_before_first_yield_eager_fails_run() -> None:
     thread = await _make_thread(store, "th_test3", alice)
 
     @server.on_message()  # lazy_run=False (default)
-    async def _explode(_ctx: HandlerContext, _send: HandlerSend):
+    async def _explode(_ctx: HandlerContext, _send: Send):
         raise RuntimeError("boom before yield")
         yield  # pragma: no cover
 
@@ -145,7 +145,7 @@ async def test_exception_before_first_yield_lazy_opens_no_run() -> None:
     thread = await _make_thread(store, "th_test3b", alice)
 
     @server.on_message(lazy_run=True)
-    async def _explode(_ctx: HandlerContext, _send: HandlerSend):
+    async def _explode(_ctx: HandlerContext, _send: Send):
         raise RuntimeError("boom before yield")
         yield  # pragma: no cover
 
@@ -169,7 +169,7 @@ async def test_exception_after_yield_fails_run() -> None:
     thread = await _make_thread(store, "th_test4", alice)
 
     @server.on_message()
-    async def _yield_then_explode(_ctx: HandlerContext, send: HandlerSend):
+    async def _yield_then_explode(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="first")])
         raise RuntimeError("boom after yield")
 
@@ -193,7 +193,7 @@ async def test_multiple_yields_single_run() -> None:
     thread = await _make_thread(store, "th_test5", alice)
 
     @server.on_message()
-    async def _multi(_ctx: HandlerContext, send: HandlerSend):
+    async def _multi(_ctx: HandlerContext, send: Send):
         yield send.message(content=[TextPart(text="one")])
         yield send.message(content=[TextPart(text="two")])
         yield send.message(content=[TextPart(text="three")])
@@ -222,7 +222,7 @@ async def test_eager_run_started_event_precedes_first_emitted_message() -> None:
     thread = await _make_thread(store, "th_test6", alice)
 
     @server.on_message()  # lazy_run=False (default)
-    async def _delayed(_ctx: HandlerContext, send: HandlerSend):
+    async def _delayed(_ctx: HandlerContext, send: Send):
         # Simulate async work (e.g. LLM call) before yielding.
         await asyncio.sleep(0)
         yield send.message(content=[TextPart(text="response")])

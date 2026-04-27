@@ -17,7 +17,7 @@ from rfnry_chat_protocol import (
 )
 
 
-class HandlerSend:
+class Send:
     def __init__(
         self,
         *,
@@ -26,12 +26,6 @@ class HandlerSend:
         run_id: str | None = None,
         run_starter: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
-        # `run_starter` enables lazy run creation: the dispatcher passes a
-        # closure that calls server.begin_run(...) on first need, caches the
-        # returned run_id on this HandlerSend (via set_run_id), and the
-        # dispatcher uses the same id to call end_run later. This lets
-        # early-returning handlers (e.g. role-filter guards) skip begin_run
-        # entirely — no phantom run.started / run.completed fan-out.
         self._thread_id = thread_id
         self._author = author
         self._run_id = run_id
@@ -42,18 +36,13 @@ class HandlerSend:
         return self._run_id
 
     def set_run_id(self, run_id: str) -> None:
-        """Late-bind the run id. Called by the dispatcher after lazy
-        begin_run so subsequent send.message() / send.reasoning() calls carry
-        the run_id directly."""
         self._run_id = run_id
 
     async def ensure_run_id(self) -> str:
-        """Return the current run_id, starting a run via `run_starter` if
-        needed."""
         if self._run_id is not None:
             return self._run_id
         if self._run_starter is None:
-            raise RuntimeError("HandlerSend has no run_id and no run_starter; cannot lazily start a run")
+            raise RuntimeError("Send has no run_id and no run_starter; cannot lazily start a run")
         run_id = await self._run_starter()
         self._run_id = run_id
         return run_id

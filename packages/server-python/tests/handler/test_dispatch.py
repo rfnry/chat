@@ -20,7 +20,7 @@ from rfnry_chat_protocol import (
 from rfnry_chat_server.auth import HandshakeData
 from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
 from rfnry_chat_server.handler.context import HandlerContext
-from rfnry_chat_server.handler.send import HandlerSend
+from rfnry_chat_server.send import Send
 from rfnry_chat_server.server import ChatServer
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 
@@ -87,7 +87,7 @@ async def test_message_observer_fires(
     seen: list[MessageEvent] = []
 
     @server.on("message")
-    async def handler(ctx: HandlerContext, _send: HandlerSend) -> None:
+    async def handler(ctx: HandlerContext, _send: Send) -> None:
         seen.append(ctx.event)  # type: ignore[arg-type]
 
     await server.publish_event(_user_message(thread_id, "hello"))
@@ -102,7 +102,7 @@ async def test_message_emitter_publishes_with_system_author(
     server, rec, thread_id = setup
 
     @server.on("message")
-    async def handler(_ctx: HandlerContext, send: HandlerSend):
+    async def handler(_ctx: HandlerContext, send: Send):
         yield send.reasoning("processing")
 
     await server.publish_event(_user_message(thread_id, "please think"))
@@ -119,7 +119,7 @@ async def test_tool_call_with_in_run_wraps_run(
     server, rec, thread_id = setup
 
     @server.on_tool_call("ping")
-    async def handler(ctx: HandlerContext, send: HandlerSend):
+    async def handler(ctx: HandlerContext, send: Send):
         yield send.tool_result(ctx.event.tool.id, result={"pong": True})  # type: ignore[union-attr]
 
     await server.publish_event(_user_tool_call(thread_id, "ping", {}))
@@ -141,7 +141,7 @@ async def test_chain_depth_cap_stops_runaway(
     server, rec, thread_id = setup
 
     @server.on("reasoning")
-    async def loop_forever(_ctx: HandlerContext, send: HandlerSend):
+    async def loop_forever(_ctx: HandlerContext, send: Send):
         yield send.reasoning("more")
 
     await server.publish_event(_user_reasoning(thread_id, "start"))
@@ -158,7 +158,7 @@ async def test_system_authored_events_do_not_retrigger(
     call_count = {"value": 0}
 
     @server.on("message")
-    async def handler(_ctx: HandlerContext, send: HandlerSend):
+    async def handler(_ctx: HandlerContext, send: Send):
         call_count["value"] += 1
         yield send.message(content=[TextPart(text="reply")])
 
@@ -187,7 +187,7 @@ async def test_system_identity_override(clean_db: asyncpg.Pool) -> None:
     await store.create_thread(Thread(id="th_sys", tenant={}, metadata={}, created_at=now, updated_at=now))
 
     @server.on("message")
-    async def handler(_ctx: HandlerContext, send: HandlerSend):
+    async def handler(_ctx: HandlerContext, send: Send):
         yield send.reasoning("hi")
 
     await server.publish_event(_user_message("th_sys", "msg"))

@@ -8,8 +8,8 @@ from rfnry_chat_protocol import Event, RunError, SystemIdentity, Thread
 
 from rfnry_chat_server.handler.context import HandlerContext
 from rfnry_chat_server.handler.registry import HandlerRegistration, HandlerRegistry
-from rfnry_chat_server.handler.send import HandlerSend
 from rfnry_chat_server.handler.types import HandlerCallable
+from rfnry_chat_server.send import Send
 
 if TYPE_CHECKING:
     from rfnry_chat_server.server import ChatServer
@@ -76,7 +76,7 @@ class HandlerDispatcher:
             return began_run_id
 
         ctx = HandlerContext(event=event, thread=thread, store=self._server.store, server=self._server)
-        send = HandlerSend(
+        send = Send(
             thread_id=thread.id,
             author=self._system,
             run_id=None,
@@ -114,7 +114,7 @@ class HandlerDispatcher:
 
     async def _run_observer(self, handler: HandlerCallable, event: Event, thread: Thread) -> None:
         ctx = HandlerContext(event=event, thread=thread, store=self._server.store, server=self._server)
-        send = HandlerSend(thread_id=thread.id, author=self._system, run_id=None)
+        send = Send(thread_id=thread.id, author=self._system, run_id=None)
         result: Any = handler(ctx, send)  # type: ignore[call-overload]
         if inspect.isawaitable(result):
             await result

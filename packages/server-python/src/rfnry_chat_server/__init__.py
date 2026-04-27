@@ -61,7 +61,6 @@ from rfnry_chat_server.broadcast.socketio import SocketIOBroadcaster
 from rfnry_chat_server.handler.context import HandlerContext
 from rfnry_chat_server.handler.dispatcher import MAX_HANDLER_CHAIN_DEPTH, HandlerDispatcher
 from rfnry_chat_server.handler.registry import HandlerRegistration, HandlerRegistry
-from rfnry_chat_server.handler.send import HandlerSend
 from rfnry_chat_server.handler.types import HandlerCallable
 from rfnry_chat_server.mentions import parse_mention_ids
 from rfnry_chat_server.namespace import (
@@ -72,6 +71,7 @@ from rfnry_chat_server.namespace import (
 )
 from rfnry_chat_server.presence import PresenceRegistry
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
+from rfnry_chat_server.send import Send
 from rfnry_chat_server.server import ChatServer
 from rfnry_chat_server.store.memory.store import InMemoryChatStore
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
@@ -138,8 +138,8 @@ __all__ = [
     "HandlerDispatcher",
     "HandlerRegistration",
     "HandlerRegistry",
-    "HandlerSend",
     "MAX_HANDLER_CHAIN_DEPTH",
+    "Send",
     "ToolCall",
     "ToolCallEvent",
     "ToolResult",
