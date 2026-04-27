@@ -32,6 +32,7 @@ from rfnry_chat_client.frames import (
 from rfnry_chat_client.handler.dispatcher import HandlerDispatcher
 from rfnry_chat_client.handler.types import HandlerCallable
 from rfnry_chat_client.inbox import InboxDispatcher, InviteHandler
+from rfnry_chat_client.send import Send
 from rfnry_chat_client.transport.rest import RestTransport
 from rfnry_chat_client.transport.socket import SocketTransport
 
@@ -386,6 +387,32 @@ class ChatClient:
     async def get_run(self, run_id: str) -> Run:
         """Fetch the current state of a Run by id."""
         return await self._rest.get_run(run_id)
+
+    @asynccontextmanager
+    async def send(
+        self,
+        thread_id: str,
+        *,
+        triggered_by_event_id: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> AsyncIterator[Send]:
+        run_id = await self.begin_run(
+            thread_id,
+            triggered_by_event_id=triggered_by_event_id,
+            idempotency_key=idempotency_key,
+        )
+        send = Send(
+            thread_id=thread_id,
+            author=self._identity,
+            run_id=run_id,
+            client=self,
+        )
+        try:
+            yield send
+        except BaseException as exc:
+            await self.end_run(run_id, error=RunError(code="send_error", message=str(exc)))
+            raise
+        await self.end_run(run_id)
 
     async def add_member(self, thread_id: str, identity: Identity, role: str = "member") -> ThreadMember:
         return await self._rest.add_member(thread_id, identity=identity, role=role)
