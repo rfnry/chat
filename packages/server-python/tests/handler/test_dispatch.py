@@ -195,3 +195,25 @@ async def test_system_identity_override(clean_db: asyncpg.Pool) -> None:
 
     reasoning = [e for e in rec.events if e.type == "reasoning"]
     assert reasoning[0].author.id == "srv_alpha"
+
+
+async def test_handler_idempotency_key_dedupes_runs(
+    setup: tuple[ChatServer, RecordingBroadcaster, str],
+) -> None:
+    server, _rec, thread_id = setup
+    call_count = {"value": 0}
+    run_ids: list[str | None] = []
+
+    @server.on("message", idempotency_key=lambda _e: "shared_handler_key")
+    async def handler(_ctx: HandlerContext, send: Send):
+        call_count["value"] += 1
+        run_ids.append(send.run_id)
+        yield send.message(content=[TextPart(text="ok")])
+
+    await server.publish_event(_user_message(thread_id, "first", evt_id="evt_a"))
+    await _drain_background_tasks()
+    await server.publish_event(_user_message(thread_id, "second", evt_id="evt_b"))
+    await _drain_background_tasks()
+    assert call_count["value"] == 2
+    assert run_ids[0] == run_ids[1]
+    assert run_ids[0] is not None

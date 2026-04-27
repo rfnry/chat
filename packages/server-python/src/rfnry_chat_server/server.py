@@ -341,23 +341,60 @@ class ChatServer:
         *,
         tool: str | None = None,
         lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator(event_type, tool=tool, lazy_run=lazy_run)
+        return self._handlers.decorator(
+            event_type,
+            tool=tool,
+            lazy_run=lazy_run,
+            idempotency_key=idempotency_key,
+        )
 
-    def on_message(self, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("message", lazy_run=lazy_run)
+    def on_message(
+        self,
+        *,
+        lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("message", lazy_run=lazy_run, idempotency_key=idempotency_key)
 
-    def on_reasoning(self, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("reasoning", lazy_run=lazy_run)
+    def on_reasoning(
+        self,
+        *,
+        lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("reasoning", lazy_run=lazy_run, idempotency_key=idempotency_key)
 
-    def on_tool_call(self, name: str, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("tool.call", tool=name, lazy_run=lazy_run)
+    def on_tool_call(
+        self,
+        name: str | None = None,
+        *,
+        lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator(
+            "tool.call",
+            tool=name,
+            lazy_run=lazy_run,
+            idempotency_key=idempotency_key,
+        )
 
-    def on_tool_result(self, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("tool.result", lazy_run=lazy_run)
+    def on_tool_result(
+        self,
+        *,
+        lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("tool.result", lazy_run=lazy_run, idempotency_key=idempotency_key)
 
-    def on_any_event(self, *, lazy_run: bool = False) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self._handlers.decorator("*", lazy_run=lazy_run)
+    def on_any_event(
+        self,
+        *,
+        lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
+    ) -> Callable[[HandlerCallable], HandlerCallable]:
+        return self._handlers.decorator("*", lazy_run=lazy_run, idempotency_key=idempotency_key)
 
     async def check_authorize(
         self,
@@ -388,27 +425,55 @@ class ChatServer:
         thread_id: str,
         *,
         as_identity: Identity,
-        triggered_by: Identity | None = None,
+        triggered_by: Event | Identity | None = None,
         idempotency_key: str | None = None,
+        lazy: bool = False,
     ) -> AsyncIterator[Send]:
         thread = await self.store.get_thread(thread_id)
         if thread is None:
             raise LookupError(f"thread not found: {thread_id}")
         if not await self.check_authorize(as_identity, thread_id, "message.send"):
             raise PermissionError(f"identity {as_identity.id} not authorized to send in {thread_id}")
-        run = await self.begin_run(
-            thread=thread,
-            actor=as_identity,
-            triggered_by=triggered_by or as_identity,
-            idempotency_key=idempotency_key,
+
+        if isinstance(triggered_by, Event):
+            triggered_identity: Identity = triggered_by.author
+        elif triggered_by is not None:
+            triggered_identity = triggered_by
+        else:
+            triggered_identity = as_identity
+
+        opened_run: list[Run] = []
+
+        async def _start_run() -> str:
+            if opened_run:
+                return opened_run[0].id
+            run = await self.begin_run(
+                thread=thread,
+                actor=as_identity,
+                triggered_by=triggered_identity,
+                idempotency_key=idempotency_key,
+            )
+            opened_run.append(run)
+            return run.id
+
+        if not lazy:
+            await _start_run()
+
+        send = Send(
+            thread_id=thread_id,
+            author=as_identity,
+            run_id=opened_run[0].id if opened_run else None,
+            server=self,
+            run_starter=_start_run,
         )
-        send = Send(thread_id=thread_id, author=as_identity, run_id=run.id)
         try:
             yield send
         except BaseException as exc:
-            await self.end_run(run_id=run.id, error=RunError(code="send_error", message=str(exc)))
+            if opened_run:
+                await self.end_run(run_id=opened_run[0].id, error=RunError(code="send_error", message=str(exc)))
             raise
-        await self.end_run(run_id=run.id, error=None)
+        if opened_run:
+            await self.end_run(run_id=opened_run[0].id, error=None)
 
     async def publish_event(self, event: Event, *, thread: Thread | None = None) -> Event:
         members: list[ThreadMember] | None = None

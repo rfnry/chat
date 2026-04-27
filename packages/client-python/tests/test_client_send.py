@@ -133,3 +133,47 @@ async def test_send_supports_multiple_emissions_in_one_window() -> None:
     assert len(emitted) == 2
     assert all(e.run_id == socket.begin_calls[0]["run_id"] for e in emitted)
     assert len(socket.end_calls) == 1
+
+
+async def test_send_lazy_skips_run_open_if_no_emission() -> None:
+    socket = _StubSocket()
+    client = _client(socket)
+    async with client.send("t_1", lazy=True) as _:
+        pass
+    assert socket.begin_calls == []
+    assert socket.end_calls == []
+
+
+async def test_send_lazy_opens_run_on_first_emit() -> None:
+    socket = _StubSocket()
+    client = _client(socket)
+    async with client.send("t_1", lazy=True) as send:
+        assert socket.begin_calls == []
+        await send.emit(send.message([TextPart(text="hi")]))
+        assert len(socket.begin_calls) == 1
+    assert len(socket.end_calls) == 1
+
+
+async def test_send_triggered_by_event_extracts_event_id() -> None:
+    from rfnry_chat_protocol import MessageEvent
+
+    socket = _StubSocket()
+    client = _client(socket)
+    triggering = MessageEvent(
+        id="evt_origin",
+        thread_id="t_1",
+        author=ME,
+        created_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+        content=[TextPart(text="trigger")],
+    )
+    async with client.send("t_1", triggered_by=triggering) as _:
+        pass
+    assert socket.begin_calls[0]["triggered_by_event_id"] == "evt_origin"
+
+
+async def test_send_idempotency_key_passes_through() -> None:
+    socket = _StubSocket()
+    client = _client(socket)
+    async with client.send("t_1", idempotency_key="op_abc") as _:
+        pass
+    assert socket.begin_calls[0]["idempotency_key"] == "op_abc"

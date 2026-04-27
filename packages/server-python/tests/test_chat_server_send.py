@@ -127,3 +127,85 @@ async def test_server_send_supports_multiple_emissions(clean_db: asyncpg.Pool) -
     ]
     assert "one" in bodies
     assert "two" in bodies
+
+
+async def test_server_send_emit_method_persists_through_publish_event(clean_db: asyncpg.Pool) -> None:
+    server, thread_id, gateway = await _make_server_with_thread(clean_db)
+    async with server.send(thread_id, as_identity=gateway) as send:
+        await send.emit(send.message([TextPart(text="via send.emit")]))
+    page = await server.store.list_events(thread_id, limit=50)
+    bodies = [
+        p.text
+        for e in page.items
+        if e.type == "message"
+        for p in e.content
+        if p.type == "text"
+    ]
+    assert "via send.emit" in bodies
+
+
+async def test_server_send_lazy_skips_run_open_if_no_emission(clean_db: asyncpg.Pool) -> None:
+    server, thread_id, gateway = await _make_server_with_thread(clean_db)
+    page_before = await server.store.list_events(thread_id, limit=50)
+    runs_before = sum(1 for e in page_before.items if e.type == "run.started")
+
+    async with server.send(thread_id, as_identity=gateway, lazy=True) as _:
+        pass
+
+    page_after = await server.store.list_events(thread_id, limit=50)
+    runs_after = sum(1 for e in page_after.items if e.type == "run.started")
+    assert runs_before == runs_after
+
+
+async def test_server_send_lazy_opens_run_on_first_emit(clean_db: asyncpg.Pool) -> None:
+    server, thread_id, gateway = await _make_server_with_thread(clean_db)
+    async with server.send(thread_id, as_identity=gateway, lazy=True) as send:
+        await send.emit(send.message([TextPart(text="late")]))
+    page = await server.store.list_events(thread_id, limit=50)
+    bodies = [
+        p.text
+        for e in page.items
+        if e.type == "message"
+        for p in e.content
+        if p.type == "text"
+    ]
+    assert "late" in bodies
+
+
+async def test_server_send_triggered_by_event_extracts_author_identity(clean_db: asyncpg.Pool) -> None:
+    from datetime import UTC, datetime
+
+    from rfnry_chat_protocol import MessageEvent
+
+    server, thread_id, gateway = await _make_server_with_thread(clean_db)
+    members = await server.store.list_members(thread_id)
+    alice = next(m.identity for m in members if m.identity.id == "u_alice")
+
+    captured_run_id: list[str] = []
+    triggering = MessageEvent(
+        id="evt_origin",
+        thread_id=thread_id,
+        author=alice,
+        created_at=datetime.now(UTC),
+        content=[TextPart(text="triggered")],
+    )
+    async with server.send(thread_id, as_identity=gateway, triggered_by=triggering) as send:
+        captured_run_id.append(send.run_id or "")
+        await send.emit(send.message([TextPart(text="reply")]))
+    run = await server.store.get_run(captured_run_id[0])
+    assert run is not None
+    assert run.triggered_by.id == "u_alice"
+
+
+async def test_server_send_triggered_by_identity_used_directly(clean_db: asyncpg.Pool) -> None:
+    server, thread_id, gateway = await _make_server_with_thread(clean_db)
+    members = await server.store.list_members(thread_id)
+    alice = next(m.identity for m in members if m.identity.id == "u_alice")
+
+    captured_run_id: list[str] = []
+    async with server.send(thread_id, as_identity=gateway, triggered_by=alice) as send:
+        captured_run_id.append(send.run_id or "")
+        await send.emit(send.message([TextPart(text="reply")]))
+    run = await server.store.get_run(captured_run_id[0])
+    assert run is not None
+    assert run.triggered_by.id == "u_alice"

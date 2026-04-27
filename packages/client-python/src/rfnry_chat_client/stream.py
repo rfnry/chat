@@ -34,6 +34,7 @@ class Stream:
         metadata: dict[str, Any] | None = None,
         run_resolver: Callable[[], Awaitable[str]] | None = None,
         recipients: list[str] | None = None,
+        error_code: str = "stream_error",
     ) -> None:
         if run_id is None and run_resolver is None:
             raise RuntimeError("Stream requires either a run_id or a run_resolver")
@@ -45,6 +46,7 @@ class Stream:
         self._target_type = target_type
         self._metadata = metadata or {}
         self._recipients = recipients
+        self._error_code = error_code
         self._event_id = f"evt_{secrets.token_hex(8)}"
         self._buffer: list[str] = []
         self._started = False
@@ -94,7 +96,7 @@ class Stream:
     ) -> Literal[False]:
         error: StreamError | None = None
         if exc is not None:
-            error = StreamError(code="handler_error", message=str(exc))
+            error = StreamError(code=self._error_code, message=str(exc))
         end_frame = StreamEndFrame(
             event_id=self._event_id,
             thread_id=self._thread_id,

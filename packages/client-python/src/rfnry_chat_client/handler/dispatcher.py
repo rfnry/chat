@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import inspect
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -21,6 +22,9 @@ MAX_HANDLER_CHAIN_DEPTH = 8
 _chain_depth: contextvars.ContextVar[int] = contextvars.ContextVar("rfnry_chat_client_handler_chain_depth", default=0)
 
 
+IdempotencyKeyFn = Callable[[Event], "str | None"]
+
+
 @dataclass(frozen=True)
 class _Registration:
     event_type: str
@@ -28,6 +32,7 @@ class _Registration:
     all_events: bool
     tool_name: str | None
     lazy_run: bool
+    idempotency_key: IdempotencyKeyFn | None
 
 
 class HandlerDispatcher:
@@ -44,6 +49,7 @@ class HandlerDispatcher:
         all_events: bool = False,
         tool_name: str | None = None,
         lazy_run: bool = False,
+        idempotency_key: IdempotencyKeyFn | None = None,
     ) -> None:
         self._registrations.append(
             _Registration(
@@ -52,6 +58,7 @@ class HandlerDispatcher:
                 all_events=all_events,
                 tool_name=tool_name,
                 lazy_run=lazy_run,
+                idempotency_key=idempotency_key,
             )
         )
 
@@ -76,7 +83,13 @@ class HandlerDispatcher:
 
     async def _run_one(self, reg: _Registration, event: Event) -> None:
         if inspect.isasyncgenfunction(reg.handler):
-            await self._run_emitter(reg.handler, event, lazy_run=reg.lazy_run)
+            key = reg.idempotency_key(event) if reg.idempotency_key is not None else None
+            await self._run_emitter(
+                reg.handler,
+                event,
+                lazy_run=reg.lazy_run,
+                idempotency_key=key,
+            )
             return
         await self._run_observer(reg.handler, event)
 
@@ -86,6 +99,7 @@ class HandlerDispatcher:
         event: Event,
         *,
         lazy_run: bool,
+        idempotency_key: str | None,
     ) -> None:
         began_run_id: str | None = None
 
@@ -96,6 +110,7 @@ class HandlerDispatcher:
             reply = await self._client.socket.begin_run(
                 event.thread_id,
                 triggered_by_event_id=event.id,
+                idempotency_key=idempotency_key,
             )
             began_run_id = reply["run_id"]
             return began_run_id
@@ -107,6 +122,7 @@ class HandlerDispatcher:
             run_id=None,
             client=self._client,
             run_starter=_start_run,
+            stream_error_code="handler_error",
         )
 
         # Eager mode (default): begin_run BEFORE the handler body runs, so the

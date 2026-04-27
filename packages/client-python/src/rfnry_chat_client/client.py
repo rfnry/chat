@@ -393,26 +393,47 @@ class ChatClient:
         self,
         thread_id: str,
         *,
+        triggered_by: Event | Identity | None = None,
         triggered_by_event_id: str | None = None,
         idempotency_key: str | None = None,
+        lazy: bool = False,
     ) -> AsyncIterator[Send]:
-        run_id = await self.begin_run(
-            thread_id,
-            triggered_by_event_id=triggered_by_event_id,
-            idempotency_key=idempotency_key,
-        )
+        resolved_event_id = triggered_by_event_id
+        if triggered_by is not None and resolved_event_id is None:
+            if isinstance(triggered_by, Event):
+                resolved_event_id = triggered_by.id
+
+        opened_run_id: list[str] = []
+
+        async def _start_run() -> str:
+            if opened_run_id:
+                return opened_run_id[0]
+            run_id = await self.begin_run(
+                thread_id,
+                triggered_by_event_id=resolved_event_id,
+                idempotency_key=idempotency_key,
+            )
+            opened_run_id.append(run_id)
+            return run_id
+
+        if not lazy:
+            await _start_run()
+
         send = Send(
             thread_id=thread_id,
             author=self._identity,
-            run_id=run_id,
+            run_id=opened_run_id[0] if opened_run_id else None,
             client=self,
+            run_starter=_start_run,
         )
         try:
             yield send
         except BaseException as exc:
-            await self.end_run(run_id, error=RunError(code="send_error", message=str(exc)))
+            if opened_run_id:
+                await self.end_run(opened_run_id[0], error=RunError(code="send_error", message=str(exc)))
             raise
-        await self.end_run(run_id)
+        if opened_run_id:
+            await self.end_run(opened_run_id[0])
 
     async def add_member(self, thread_id: str, identity: Identity, role: str = "member") -> ThreadMember:
         return await self._rest.add_member(thread_id, identity=identity, role=role)
@@ -471,6 +492,7 @@ class ChatClient:
         tool: str | None = None,
         all_events: bool = False,
         lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
         def decorator(handler: HandlerCallable) -> HandlerCallable:
             self._dispatcher.register(
@@ -479,20 +501,29 @@ class ChatClient:
                 all_events=all_events,
                 tool_name=tool,
                 lazy_run=lazy_run,
+                idempotency_key=idempotency_key,
             )
             return handler
 
         return decorator
 
     def on_message(
-        self, *, all_events: bool = False, lazy_run: bool = False
+        self,
+        *,
+        all_events: bool = False,
+        lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("message", all_events=all_events, lazy_run=lazy_run)
+        return self.on("message", all_events=all_events, lazy_run=lazy_run, idempotency_key=idempotency_key)
 
     def on_reasoning(
-        self, *, all_events: bool = False, lazy_run: bool = False
+        self,
+        *,
+        all_events: bool = False,
+        lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("reasoning", all_events=all_events, lazy_run=lazy_run)
+        return self.on("reasoning", all_events=all_events, lazy_run=lazy_run, idempotency_key=idempotency_key)
 
     def on_tool_call(
         self,
@@ -500,18 +531,33 @@ class ChatClient:
         *,
         all_events: bool = False,
         lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("tool.call", tool=name, all_events=all_events, lazy_run=lazy_run)
+        return self.on(
+            "tool.call",
+            tool=name,
+            all_events=all_events,
+            lazy_run=lazy_run,
+            idempotency_key=idempotency_key,
+        )
 
     def on_tool_result(
-        self, *, all_events: bool = False, lazy_run: bool = False
+        self,
+        *,
+        all_events: bool = False,
+        lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("tool.result", all_events=all_events, lazy_run=lazy_run)
+        return self.on("tool.result", all_events=all_events, lazy_run=lazy_run, idempotency_key=idempotency_key)
 
     def on_any_event(
-        self, *, all_events: bool = False, lazy_run: bool = False
+        self,
+        *,
+        all_events: bool = False,
+        lazy_run: bool = False,
+        idempotency_key: Callable[[Event], str | None] | None = None,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
-        return self.on("*", all_events=all_events, lazy_run=lazy_run)
+        return self.on("*", all_events=all_events, lazy_run=lazy_run, idempotency_key=idempotency_key)
 
     def on_invited(self) -> Callable[[InviteHandler], InviteHandler]:
         def decorator(handler: InviteHandler) -> InviteHandler:

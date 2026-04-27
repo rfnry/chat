@@ -93,8 +93,29 @@ async def test_stream_error_exit_emits_end_frame_with_error_and_skips_final_even
     events = [name for name, _ in sio.emitted]
     assert "event:send" not in events
     end_frame = next(payload for name, payload in sio.emitted if name == "stream:end")
-    assert end_frame["error"]["code"] == "handler_error"
+    assert end_frame["error"]["code"] == "stream_error"
     assert "boom" in end_frame["error"]["message"]
+
+
+async def test_stream_error_code_overrideable() -> None:
+    client, sio = _build_client()
+    me = client.identity
+    assert isinstance(me, AssistantIdentity)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        async with Stream(
+            client=client,
+            thread_id="t_1",
+            run_id="run_1",
+            author=me,
+            target_type="message",
+            error_code="handler_error",
+        ) as s:
+            await s.write("partial")
+            raise RuntimeError("boom")
+
+    end_frame = next(payload for name, payload in sio.emitted if name == "stream:end")
+    assert end_frame["error"]["code"] == "handler_error"
 
 
 async def test_reasoning_stream_final_event_is_reasoning() -> None:

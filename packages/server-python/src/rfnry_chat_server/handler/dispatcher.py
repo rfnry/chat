@@ -48,7 +48,13 @@ class HandlerDispatcher:
 
     async def _run_one(self, entry: HandlerRegistration, event: Event, thread: Thread) -> None:
         if inspect.isasyncgenfunction(entry.handler):
-            await self._run_emitter(entry.handler, event, thread, lazy_run=entry.lazy_run)
+            await self._run_emitter(
+                entry.handler,
+                event,
+                thread,
+                lazy_run=entry.lazy_run,
+                idempotency_key=entry.idempotency_key(event) if entry.idempotency_key else None,
+            )
             return
         await self._run_observer(entry.handler, event, thread)
 
@@ -59,6 +65,7 @@ class HandlerDispatcher:
         thread: Thread,
         *,
         lazy_run: bool,
+        idempotency_key: str | None,
     ) -> None:
         began_run_id: str | None = None
 
@@ -70,7 +77,7 @@ class HandlerDispatcher:
                 thread=thread,
                 actor=self._system,
                 triggered_by=event.author,
-                idempotency_key=None,
+                idempotency_key=idempotency_key,
             )
             began_run_id = run.id
             return began_run_id

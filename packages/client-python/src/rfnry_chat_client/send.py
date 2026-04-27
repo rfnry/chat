@@ -32,12 +32,14 @@ class Send:
         run_id: str | None = None,
         client: ChatClient | None = None,
         run_starter: Callable[[], Awaitable[str]] | None = None,
+        stream_error_code: str = "stream_error",
     ) -> None:
         self._thread_id = thread_id
         self._author = author
         self._run_id = run_id
         self._client = client
         self._run_starter = run_starter
+        self._stream_error_code = stream_error_code
 
     @property
     def run_id(self) -> str | None:
@@ -58,7 +60,14 @@ class Send:
     async def emit(self, event: Event) -> Event:
         if self._client is None:
             raise RuntimeError("Send.emit requires a ChatClient; Send was constructed without one")
-        return await self._client.emit_event(event)
+        updates: dict[str, Any] = {"created_at": datetime.now(UTC)}
+        if event.run_id is None:
+            if self._run_id is not None:
+                updates["run_id"] = self._run_id
+            elif self._run_starter is not None:
+                updates["run_id"] = await self.ensure_run_id()
+        fresh = event.model_copy(update=updates)
+        return await self._client.emit_event(fresh)
 
     def message(
         self,
@@ -186,6 +195,7 @@ class Send:
             metadata=metadata,
             recipients=recipients,
             run_resolver=(self.ensure_run_id if effective_run_id is None else None),
+            error_code=self._stream_error_code,
         )
 
 

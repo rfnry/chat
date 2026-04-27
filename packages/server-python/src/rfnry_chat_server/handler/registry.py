@@ -7,6 +7,8 @@ from rfnry_chat_protocol import Event
 
 from rfnry_chat_server.handler.types import HandlerCallable
 
+IdempotencyKeyFn = Callable[[Event], str | None]
+
 
 @dataclass(frozen=True)
 class HandlerRegistration:
@@ -14,6 +16,7 @@ class HandlerRegistration:
     handler: HandlerCallable
     tool_name: str | None
     lazy_run: bool
+    idempotency_key: IdempotencyKeyFn | None
 
 
 class HandlerRegistry:
@@ -27,6 +30,7 @@ class HandlerRegistry:
         *,
         tool_name: str | None = None,
         lazy_run: bool = False,
+        idempotency_key: IdempotencyKeyFn | None = None,
     ) -> None:
         self._entries.append(
             HandlerRegistration(
@@ -34,6 +38,7 @@ class HandlerRegistry:
                 handler=handler,
                 tool_name=tool_name,
                 lazy_run=lazy_run,
+                idempotency_key=idempotency_key,
             )
         )
 
@@ -56,9 +61,16 @@ class HandlerRegistry:
         *,
         tool: str | None = None,
         lazy_run: bool = False,
+        idempotency_key: IdempotencyKeyFn | None = None,
     ) -> Callable[[HandlerCallable], HandlerCallable]:
         def wrap(handler: HandlerCallable) -> HandlerCallable:
-            self.register(event_type, handler, tool_name=tool, lazy_run=lazy_run)
+            self.register(
+                event_type,
+                handler,
+                tool_name=tool,
+                lazy_run=lazy_run,
+                idempotency_key=idempotency_key,
+            )
             return handler
 
         return wrap

@@ -69,9 +69,31 @@ async def test_emit_forwards_to_client_emit_event() -> None:
     client = _RecordingClient()
     send = Send(thread_id="t_1", author=_ME, run_id="run_x", client=client)  # type: ignore[arg-type]
     event = send.message([TextPart(text="hi")])
-    returned = await send.emit(event)
-    assert client.emitted == [event]
-    assert returned is event
+    await send.emit(event)
+    assert len(client.emitted) == 1
+    assert client.emitted[0].id == event.id
+    assert client.emitted[0].run_id == "run_x"
+
+
+async def test_emit_restamps_created_at() -> None:
+    client = _RecordingClient()
+    send = Send(thread_id="t_1", author=_ME, run_id="run_x", client=client)  # type: ignore[arg-type]
+    event = send.message([TextPart(text="hi")])
+    original_created_at = event.created_at
+    import asyncio
+    await asyncio.sleep(0.01)
+    await send.emit(event)
+    assert client.emitted[0].created_at >= original_created_at
+    assert client.emitted[0].created_at != original_created_at
+
+
+async def test_emit_fills_missing_run_id() -> None:
+    client = _RecordingClient()
+    send = Send(thread_id="t_1", author=_ME, run_id="run_late", client=client)  # type: ignore[arg-type]
+    bare = send.message([TextPart(text="hi")]).model_copy(update={"run_id": None})
+    assert bare.run_id is None
+    await send.emit(bare)
+    assert client.emitted[0].run_id == "run_late"
 
 
 async def test_emit_returns_what_client_returns() -> None:

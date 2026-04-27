@@ -3,10 +3,11 @@ from __future__ import annotations
 import secrets
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from rfnry_chat_protocol import (
     ContentPart,
+    Event,
     Identity,
     MessageEvent,
     ReasoningEvent,
@@ -15,6 +16,9 @@ from rfnry_chat_protocol import (
     ToolResult,
     ToolResultEvent,
 )
+
+if TYPE_CHECKING:
+    from rfnry_chat_server.server import ChatServer
 
 
 class Send:
@@ -25,11 +29,13 @@ class Send:
         author: Identity,
         run_id: str | None = None,
         run_starter: Callable[[], Awaitable[str]] | None = None,
+        server: ChatServer | None = None,
     ) -> None:
         self._thread_id = thread_id
         self._author = author
         self._run_id = run_id
         self._run_starter = run_starter
+        self._server = server
 
     @property
     def run_id(self) -> str | None:
@@ -46,6 +52,18 @@ class Send:
         run_id = await self._run_starter()
         self._run_id = run_id
         return run_id
+
+    async def emit(self, event: Event) -> Event:
+        if self._server is None:
+            raise RuntimeError("Send.emit requires a ChatServer; Send was constructed without one")
+        updates: dict[str, Any] = {"created_at": datetime.now(UTC)}
+        if event.run_id is None:
+            if self._run_id is not None:
+                updates["run_id"] = self._run_id
+            elif self._run_starter is not None:
+                updates["run_id"] = await self.ensure_run_id()
+        fresh = event.model_copy(update=updates)
+        return await self._server.publish_event(fresh)
 
     def message(
         self,
