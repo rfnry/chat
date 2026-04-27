@@ -118,17 +118,19 @@ Streaming is available to any connected identity (users, assistants, system).
 
 ## Proactive flows
 
-Two helpers for agents that initiate conversations (webhook-triggered pings, cron-driven alerts, etc.):
+`client.send_to(identity)` is the canonical entry point for agents that initiate conversations (webhook-triggered pings, cron-driven alerts, bridge gateways). It creates or reuses a thread, ensures the target is a member, joins, opens a Run-scoped emission window, and yields a `Send`:
 
 ```python
-# Open (or reuse) a thread, optionally invite a participant, join, send a message — in one call.
-thread, event = await client.open_thread_with(
-    message=[TextPart(text="Disk usage on api-03 crossed 90%.")],
-    invite=UserIdentity(id="u_alice", name="Alice"), # optional
-    thread_id=existing_thread_id_or_None,            # optional; creates if None
-    tenant={"org": "acme"},                          # optional
-)
+async with client.send_to(UserIdentity(id="u_alice", name="Alice")) as send:
+    await send.emit(send.message([TextPart(text="Disk usage on api-03 crossed 90%.")]))
+    # multiple emissions, streaming, etc. all work in one window
+```
 
+Idempotency: pass `client_id="op_xyz"` to reuse the same thread on retries.
+
+For known threads, use `client.send(thread_id)` directly (skips the find-or-create + add-member + join setup).
+
+```python
 # Switch the URL (or auth) at runtime without losing registered handlers.
 await client.reconnect(base_url="http://chat-other.internal")
 ```

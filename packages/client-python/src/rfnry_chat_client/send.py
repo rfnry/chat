@@ -42,6 +42,10 @@ class Send:
         self._stream_error_code = stream_error_code
 
     @property
+    def thread_id(self) -> str:
+        return self._thread_id
+
+    @property
     def run_id(self) -> str | None:
         return self._run_id
 

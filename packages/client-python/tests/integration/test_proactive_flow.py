@@ -35,10 +35,10 @@ def _authenticate_as(identity_id: str) -> Any:
     return _authenticate
 
 
-async def test_bot_open_thread_with_triggers_on_invited_and_delivers_message(
+async def test_bot_send_to_triggers_on_invited_and_delivers_message(
     live_server: tuple[str, Any],
 ) -> None:
-    """Bot calls open_thread_with(invite=alice, message=...).
+    """Bot calls send_to(alice) and emits a greeting.
 
     Asserts:
       - Alice's on_invited handler fires exactly once with the right frame.
@@ -69,24 +69,22 @@ async def test_bot_open_thread_with_triggers_on_invited_and_delivers_message(
     await bot.connect()
 
     try:
-        thread, _sent_event = await bot.open_thread_with(
-            message=[TextPart(text="ping from bot")],
-            invite=ALICE,
-        )
+        captured_thread_id: list[str] = []
+        async with bot.send_to(ALICE) as send:
+            captured_thread_id.append(send.thread_id)
+            await send.emit(send.message([TextPart(text="ping from bot")], recipients=[ALICE.id]))
 
-        # Wait for the inbox frame.
         await asyncio.wait_for(invited_event.wait(), timeout=5)
         assert len(invited_received) == 1
         frame = invited_received[0]
-        assert frame.thread.id == thread.id
+        assert frame.thread.id == captured_thread_id[0]
         assert frame.added_member.id == ALICE.id
         assert frame.added_by.id == BOT.id
 
-        # Alice auto-joined (default behavior). Wait for the bot's message.
         await asyncio.wait_for(message_event.wait(), timeout=5)
         assert len(message_received) == 1
         msg = message_received[0]
-        assert msg.thread_id == thread.id
+        assert msg.thread_id == captured_thread_id[0]
         assert any(
             getattr(p, "type", None) == "text" and getattr(p, "text", None) == "ping from bot" for p in msg.content
         )

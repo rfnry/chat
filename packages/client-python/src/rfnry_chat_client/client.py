@@ -16,7 +16,6 @@ from rfnry_chat_protocol import (
     Identity,
     Run,
     RunError,
-    Thread,
     ThreadMember,
     parse_event,
 )
@@ -389,6 +388,33 @@ class ChatClient:
         return await self._rest.get_run(run_id)
 
     @asynccontextmanager
+    async def send_to(
+        self,
+        identity: Identity,
+        *,
+        tenant: dict[str, str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        client_id: str | None = None,
+        triggered_by: Event | Identity | None = None,
+        idempotency_key: str | None = None,
+        lazy: bool = False,
+    ) -> AsyncIterator[Send]:
+        thread = await self._rest.create_thread(
+            tenant=tenant,
+            metadata=metadata,
+            client_id=client_id or _gen_client_id(),
+        )
+        await self.add_member(thread.id, identity)
+        await self.join_thread(thread.id)
+        async with self.send(
+            thread.id,
+            triggered_by=triggered_by,
+            idempotency_key=idempotency_key,
+            lazy=lazy,
+        ) as send:
+            yield send
+
+    @asynccontextmanager
     async def send(
         self,
         thread_id: str,
@@ -440,50 +466,6 @@ class ChatClient:
 
     async def remove_member(self, thread_id: str, identity_id: str) -> None:
         await self._rest.remove_member(thread_id, identity_id)
-
-    async def open_thread_with(
-        self,
-        *,
-        message: list[ContentPart],
-        invite: Identity | None = None,
-        thread_id: str | None = None,
-        tenant: dict[str, str] | None = None,
-        metadata: dict[str, Any] | None = None,
-        client_id: str | None = None,
-    ) -> tuple[Thread, Event]:
-        """Proactively open (or reuse) a thread, optionally invite a participant, and send a message.
-
-        - If ``thread_id`` is None, creates a new thread (this client becomes first member).
-          Thread creation is idempotent per ``client_id``; one is auto-generated if not supplied
-          so retries of the whole call return the same thread rather than stacking duplicates.
-        - If ``invite`` is provided, adds them (add_member is idempotent server-side,
-          so no preflight is performed).
-        - Joins the thread room (idempotent).
-        - Sends the message, recipients defaulting to ``[invite.id]`` if invite was specified.
-
-        Returns ``(thread, sent_event)``.
-        """
-        if thread_id is None:
-            import uuid
-
-            thread = await self._rest.create_thread(
-                tenant=tenant,
-                metadata=metadata,
-                client_id=client_id or str(uuid.uuid4()),
-            )
-        else:
-            thread = await self._rest.get_thread(thread_id)
-
-        if invite is not None:
-            # add_member is idempotent server-side (ON CONFLICT DO NOTHING);
-            # no pre-flight needed.
-            await self.add_member(thread.id, invite)
-
-        await self.join_thread(thread.id)
-
-        recipients = [invite.id] if invite is not None else None
-        event = await self.send_message(thread.id, content=message, recipients=recipients)
-        return thread, event
 
     def on(
         self,
