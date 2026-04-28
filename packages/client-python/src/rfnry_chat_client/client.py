@@ -387,6 +387,9 @@ class ChatClient:
         """Fetch the current state of a Run by id."""
         return await self._rest.get_run(run_id)
 
+    async def cancel_run(self, run_id: str) -> dict[str, Any]:
+        return await self._socket.cancel_run(run_id)
+
     @asynccontextmanager
     async def send_to(
         self,
