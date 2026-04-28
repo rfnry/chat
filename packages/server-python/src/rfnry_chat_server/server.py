@@ -464,6 +464,7 @@ class ChatServer:
             author=as_identity,
             run_id=opened_run[0].id if opened_run else None,
             server=self,
+            thread=thread,
             run_starter=_start_run,
         )
         try:

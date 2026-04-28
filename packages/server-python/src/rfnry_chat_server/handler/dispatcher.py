@@ -88,6 +88,8 @@ class HandlerDispatcher:
             author=self._system,
             run_id=None,
             run_starter=_start_run,
+            server=self._server,
+            thread=thread,
         )
 
         # Eager mode (default): begin_run BEFORE the handler body runs, so the

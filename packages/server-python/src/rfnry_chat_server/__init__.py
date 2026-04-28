@@ -77,6 +77,7 @@ from rfnry_chat_server.store.memory.store import InMemoryChatStore
 from rfnry_chat_server.store.postgres.store import PostgresChatStore
 from rfnry_chat_server.store.protocol import ChatStore
 from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
+from rfnry_chat_server.stream import Stream as Stream  # re-export
 
 __all__ = [
     "AnalyticsEvent",
@@ -140,6 +141,7 @@ __all__ = [
     "HandlerRegistry",
     "MAX_HANDLER_CHAIN_DEPTH",
     "Send",
+    "Stream",
     "ToolCall",
     "ToolCallEvent",
     "ToolResult",

@@ -17,6 +17,8 @@ from rfnry_chat_protocol import (
     ToolResultEvent,
 )
 
+from rfnry_chat_server.stream import Stream
+
 if TYPE_CHECKING:
     from rfnry_chat_server.server import ChatServer
 
@@ -30,12 +32,14 @@ class Send:
         run_id: str | None = None,
         run_starter: Callable[[], Awaitable[str]] | None = None,
         server: ChatServer | None = None,
+        thread: Any | None = None,
     ) -> None:
         self._thread_id = thread_id
         self._author = author
         self._run_id = run_id
         self._run_starter = run_starter
         self._server = server
+        self._thread = thread
 
     @property
     def thread_id(self) -> str:
@@ -147,6 +151,54 @@ class Send:
             metadata=metadata or {},
             recipients=recipients,
             tool=ToolResult(id=tool_id, result=result, error=error),
+        )
+
+    def message_stream(
+        self,
+        *,
+        recipients: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        error_code: str = "stream_error",
+    ) -> Stream:
+        return self._make_stream("message", recipients, metadata, error_code)
+
+    def reasoning_stream(
+        self,
+        *,
+        recipients: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        error_code: str = "stream_error",
+    ) -> Stream:
+        return self._make_stream("reasoning", recipients, metadata, error_code)
+
+    def _make_stream(
+        self,
+        target_type: str,
+        recipients: list[str] | None,
+        metadata: dict[str, Any] | None,
+        error_code: str,
+    ) -> Stream:
+        if self._server is None:
+            raise RuntimeError("streaming requires a ChatServer; Send was constructed without one")
+        if self._run_id is None:
+            raise RuntimeError(
+                "streaming requires a run_id. Open the Send via chat_server.send "
+                "which opens a Run and binds the thread."
+            )
+        if self._thread is None:
+            raise RuntimeError(
+                "Send was constructed without a thread; streaming requires the bound Thread. "
+                "Use chat_server.send(thread_id, as_identity=...) which fetches and binds it."
+            )
+        return Stream(
+            server=self._server,
+            thread=self._thread,
+            run_id=self._run_id,
+            author=self._author,
+            target_type=target_type,  # type: ignore[arg-type]
+            metadata=metadata,
+            recipients=recipients,
+            error_code=error_code,
         )
 
 
