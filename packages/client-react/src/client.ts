@@ -211,6 +211,25 @@ export class ChatClient {
     return { thread, event }
   }
 
+  async sendTo(opts: {
+    identity: Identity
+    threadId?: string
+    tenant?: Record<string, string>
+    metadata?: Record<string, unknown>
+    clientId?: string
+  }): Promise<Thread> {
+    const thread = opts.threadId
+      ? await this.rest.getThread(opts.threadId)
+      : await this.rest.createThread({
+          tenant: opts.tenant,
+          metadata: opts.metadata,
+          clientId: opts.clientId ?? crypto.randomUUID(),
+        })
+    await this.rest.addMember(thread.id, opts.identity)
+    await this.joinThread(thread.id)
+    return thread
+  }
+
   getRun(runId: string): Promise<Run> {
     return this.rest.getRun(runId)
   }
