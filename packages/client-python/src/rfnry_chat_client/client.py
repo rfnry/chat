@@ -392,6 +392,7 @@ class ChatClient:
         self,
         identity: Identity,
         *,
+        thread_id: str | None = None,
         tenant: dict[str, str] | None = None,
         metadata: dict[str, Any] | None = None,
         client_id: str | None = None,
@@ -399,11 +400,14 @@ class ChatClient:
         idempotency_key: str | None = None,
         lazy: bool = False,
     ) -> AsyncIterator[Send]:
-        thread = await self._rest.create_thread(
-            tenant=tenant,
-            metadata=metadata,
-            client_id=client_id or _gen_client_id(),
-        )
+        if thread_id is not None:
+            thread = await self._rest.get_thread(thread_id)
+        else:
+            thread = await self._rest.create_thread(
+                tenant=tenant,
+                metadata=metadata,
+                client_id=client_id or _gen_client_id(),
+            )
         await self.add_member(thread.id, identity)
         await self.join_thread(thread.id)
         async with self.send(

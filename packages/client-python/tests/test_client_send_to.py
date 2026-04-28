@@ -55,8 +55,23 @@ class _StubRest:
     def __init__(self) -> None:
         self.create_thread_calls: list[dict[str, Any]] = []
         self.add_member_calls: list[tuple[str, str]] = []
+        self.get_thread_calls: list[str] = []
         self._counter = 0
         self._created_by_client_id: dict[str, Thread] = {}
+        self._existing: dict[str, Thread] = {}
+
+    def seed_existing(self, thread_id: str) -> Thread:
+        from datetime import UTC, datetime
+
+        t = Thread(
+            id=thread_id,
+            tenant={},
+            metadata={},
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        self._existing[thread_id] = t
+        return t
 
     async def create_thread(
         self,
@@ -81,6 +96,14 @@ class _StubRest:
         if client_id is not None:
             self._created_by_client_id[client_id] = t
         return t
+
+    async def get_thread(self, thread_id: str) -> Thread:
+        self.get_thread_calls.append(thread_id)
+        if thread_id in self._existing:
+            return self._existing[thread_id]
+        if thread_id in self._created_by_client_id:
+            return self._created_by_client_id[thread_id]
+        raise KeyError(f"thread not found: {thread_id}")
 
     async def add_member(self, thread_id: str, *, identity: Identity, role: str = "member") -> ThreadMember:
         self.add_member_calls.append((thread_id, identity.id))
@@ -200,3 +223,28 @@ async def test_send_to_triggered_by_event_extracts_event_id() -> None:
     async with client.send_to(ALICE, triggered_by=triggering) as _:
         pass
     assert socket.begin_calls[0]["triggered_by_event_id"] == "evt_origin"
+
+
+async def test_send_to_with_existing_thread_id_skips_create() -> None:
+    socket = _StubSocket()
+    rest = _StubRest()
+    rest.seed_existing("th_existing")
+    client = _client(socket, rest)
+
+    async with client.send_to(ALICE, thread_id="th_existing") as send:
+        assert send.thread_id == "th_existing"
+    assert rest.create_thread_calls == []
+    assert rest.get_thread_calls == ["th_existing"]
+    assert rest.add_member_calls == [("th_existing", "u_alice")]
+    assert socket.join_calls == ["th_existing"]
+
+
+async def test_send_to_with_thread_id_supports_emit() -> None:
+    socket = _StubSocket()
+    rest = _StubRest()
+    rest.seed_existing("th_existing")
+    client = _client(socket, rest)
+
+    async with client.send_to(ALICE, thread_id="th_existing") as send:
+        evt = await send.emit(send.message([TextPart(text="hi")]))
+    assert evt.thread_id == "th_existing"
