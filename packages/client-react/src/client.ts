@@ -225,9 +225,22 @@ export class ChatClient {
 
   async beginRun(
     threadId: string,
-    opts: { triggeredByEventId?: string; idempotencyKey?: string } = {}
+    opts: {
+      triggeredBy?: Event | Identity
+      triggeredByEventId?: string
+      idempotencyKey?: string
+    } = {}
   ): Promise<Run> {
-    const { runId } = await this.socketTransport.beginRun(threadId, opts)
+    let triggeredByEventId = opts.triggeredByEventId
+    if (triggeredByEventId === undefined && opts.triggeredBy !== undefined) {
+      if (!('role' in opts.triggeredBy)) {
+        triggeredByEventId = (opts.triggeredBy as Event).id
+      }
+    }
+    const { runId } = await this.socketTransport.beginRun(threadId, {
+      triggeredByEventId,
+      idempotencyKey: opts.idempotencyKey,
+    })
     return this.rest.getRun(runId)
   }
 

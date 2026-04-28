@@ -18,7 +18,11 @@ export type UseThreadActions = {
   isPending: boolean
   send: (draft: EventDraft) => Promise<Event>
   emit: (event: Record<string, unknown> & { type: string }) => Promise<Event>
-  beginRun: (opts?: { triggeredByEventId?: string; idempotencyKey?: string }) => Promise<Run>
+  beginRun: (opts?: {
+    triggeredBy?: Event | Identity
+    triggeredByEventId?: string
+    idempotencyKey?: string
+  }) => Promise<Run>
   endRun: (runId: string, opts?: { error?: RunError }) => Promise<Run>
   cancelRun: (runId: string) => Promise<void>
   streamMessage: (opts: {
@@ -69,7 +73,13 @@ export function useThreadActions(threadId: string | null): UseThreadActions {
         if (!threadId) throw new Error('threadId is required')
         return withTransition(() => client.emitEvent({ ...event, threadId }))
       },
-      beginRun: (opts: { triggeredByEventId?: string; idempotencyKey?: string } = {}) => {
+      beginRun: (
+        opts: {
+          triggeredBy?: Event | Identity
+          triggeredByEventId?: string
+          idempotencyKey?: string
+        } = {}
+      ) => {
         if (!threadId) throw new Error('threadId is required')
         return withTransition(() => client.beginRun(threadId, opts))
       },
