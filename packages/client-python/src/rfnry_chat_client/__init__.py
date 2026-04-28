@@ -10,6 +10,7 @@ from rfnry_chat_client.handler.context import HandlerContext
 from rfnry_chat_client.handler.dispatcher import MAX_HANDLER_CHAIN_DEPTH, HandlerDispatcher
 from rfnry_chat_client.handler.types import HandlerCallable
 from rfnry_chat_client.inbox import InboxDispatcher, InviteHandler
+from rfnry_chat_client.mentions import parse_mention_ids
 from rfnry_chat_client.pool import ChatClientPool, ClientFactory
 from rfnry_chat_client.send import Send
 from rfnry_chat_client.stream import Stream
@@ -36,4 +37,5 @@ __all__ = [
     "SocketTransportError",
     "ThreadConflictError",
     "ThreadNotFoundError",
+    "parse_mention_ids",
 ]
