@@ -31,6 +31,7 @@ from rfnry_chat_client.frames import (
 from rfnry_chat_client.handler.dispatcher import HandlerDispatcher
 from rfnry_chat_client.handler.types import HandlerCallable
 from rfnry_chat_client.inbox import InboxDispatcher, InviteHandler
+from rfnry_chat_client.members_cache import MembersCache
 from rfnry_chat_client.send import Send
 from rfnry_chat_client.transport.rest import RestTransport
 from rfnry_chat_client.transport.socket import SocketTransport
@@ -111,8 +112,10 @@ class ChatClient:
         socket_transport: SocketTransport | None = None,
         auto_join_on_invite: bool = True,
         socket_call_timeout: float = 15.0,
+        member_cache_ttl_seconds: float = 5.0,
     ) -> None:
         self._identity = identity
+        self._member_cache_ttl_seconds = member_cache_ttl_seconds
 
         if authenticate is None:
             import base64
@@ -152,6 +155,7 @@ class ChatClient:
         self._dispatcher = HandlerDispatcher(identity=identity, client=self)
         self._inbox = InboxDispatcher(client=self, auto_join=auto_join_on_invite)
         self._frames = FrameDispatcher()
+        self._members_cache = MembersCache(self._rest, ttl_seconds=member_cache_ttl_seconds)
 
     @property
     def identity(self) -> Identity:
@@ -169,11 +173,17 @@ class ChatClient:
         self._socket.on_raw_event("event", self._dispatcher.feed)
         self._socket.on_raw_event("thread:invited", self._inbox.feed)
         self._socket.on_raw_event("thread:updated", self._frames.feed_thread_updated)
-        self._socket.on_raw_event("members:updated", self._frames.feed_members_updated)
+        self._socket.on_raw_event("members:updated", self._on_members_updated_frame)
         self._socket.on_raw_event("run:updated", self._frames.feed_run_updated)
         self._socket.on_raw_event("presence:joined", self._frames.feed_presence_joined)
         self._socket.on_raw_event("presence:left", self._frames.feed_presence_left)
         await self._socket.connect()
+
+    async def _on_members_updated_frame(self, raw: dict[str, Any]) -> None:
+        thread_id = raw.get("thread_id")
+        if isinstance(thread_id, str):
+            self._members_cache.invalidate(thread_id)
+        await self._frames.feed_members_updated(raw)
 
     async def disconnect(self) -> None:
         await self._socket.disconnect()
@@ -469,10 +479,19 @@ class ChatClient:
             await self.end_run(opened_run_id[0])
 
     async def add_member(self, thread_id: str, identity: Identity, role: str = "member") -> ThreadMember:
-        return await self._rest.add_member(thread_id, identity=identity, role=role)
+        member = await self._rest.add_member(thread_id, identity=identity, role=role)
+        self._members_cache.invalidate(thread_id)
+        return member
 
     async def remove_member(self, thread_id: str, identity_id: str) -> None:
         await self._rest.remove_member(thread_id, identity_id)
+        self._members_cache.invalidate(thread_id)
+
+    async def list_members(self, thread_id: str) -> list[ThreadMember]:
+        return await self._members_cache.get(thread_id)
+
+    def invalidate_members_cache(self, thread_id: str) -> None:
+        self._members_cache.invalidate(thread_id)
 
     def on(
         self,
