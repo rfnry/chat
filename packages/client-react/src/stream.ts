@@ -11,7 +11,7 @@ export type StreamOptions = {
   onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
 }
 
-export class Stream {
+export class ChatStream {
   readonly eventId: string
   private readonly socket: SocketTransport
   private readonly threadId: string

@@ -11,9 +11,11 @@ import type {
   Thread,
   ThreadMember,
   ThreadPatch,
+  ToolCallEvent,
+  ToolResultEvent,
 } from '@rfnry/chat-protocol'
 import type { Socket } from 'socket.io-client'
-import { Stream } from './stream'
+import { ChatStream } from './stream'
 import { type Page, RestTransport } from './transport/rest'
 import { SocketTransport } from './transport/socket'
 
@@ -34,6 +36,51 @@ export type ChatClientOptions = {
 }
 
 export type { Page } from './transport/rest'
+
+export type WithRunSend = {
+  threadId: string
+  runId: string | null
+  message: (
+    content: ContentPart[],
+    opts?: { recipients?: string[]; metadata?: Record<string, unknown> }
+  ) => Promise<MessageEvent>
+  reasoning: (
+    text: string,
+    opts?: { recipients?: string[]; metadata?: Record<string, unknown> }
+  ) => Promise<ReasoningEvent>
+  toolCall: (
+    name: string,
+    args: unknown,
+    opts?: { id?: string; recipients?: string[]; metadata?: Record<string, unknown> }
+  ) => Promise<ToolCallEvent>
+  toolResult: (
+    toolId: string,
+    result?: unknown,
+    opts?: {
+      error?: { code: string; message: string }
+      recipients?: string[]
+      metadata?: Record<string, unknown>
+    }
+  ) => Promise<ToolResultEvent>
+  emit: <E extends Event>(event: E) => Promise<E>
+  streamMessage: (opts?: {
+    author?: Identity
+    metadata?: Record<string, unknown>
+    onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
+  }) => ChatStream
+  streamReasoning: (opts?: {
+    author?: Identity
+    metadata?: Record<string, unknown>
+    onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
+  }) => ChatStream
+}
+
+export type WithRunOptions = {
+  triggeredBy?: Event | Identity
+  triggeredByEventId?: string
+  idempotencyKey?: string
+  lazy?: boolean
+}
 
 type ResolvedTransports = {
   rest: RestTransport
@@ -274,8 +321,8 @@ export class ChatClient {
     author: Identity
     metadata?: Record<string, unknown>
     onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
-  }): Stream {
-    return new Stream({
+  }): ChatStream {
+    return new ChatStream({
       socket: this.socketTransport,
       threadId: opts.threadId,
       runId: opts.runId,
@@ -292,8 +339,8 @@ export class ChatClient {
     author: Identity
     metadata?: Record<string, unknown>
     onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
-  }): Stream {
-    return new Stream({
+  }): ChatStream {
+    return new ChatStream({
       socket: this.socketTransport,
       threadId: opts.threadId,
       runId: opts.runId,
@@ -302,6 +349,155 @@ export class ChatClient {
       metadata: opts.metadata,
       onFinalEvent: opts.onFinalEvent,
     })
+  }
+
+  async withRun<T>(
+    threadId: string,
+    callback: (send: WithRunSend) => Promise<T>,
+    opts: WithRunOptions = {}
+  ): Promise<T> {
+    if (!threadId) throw new Error('threadId is required')
+    const author = this.identity
+    if (!author) throw new Error('withRun requires an authenticated identity')
+
+    let runId: string | null = null
+    const startRun = async (): Promise<string> => {
+      if (runId) return runId
+      const run = await this.beginRun(threadId, {
+        triggeredBy: opts.triggeredBy,
+        triggeredByEventId: opts.triggeredByEventId,
+        idempotencyKey: opts.idempotencyKey,
+      })
+      runId = run.id
+      return runId
+    }
+
+    if (!opts.lazy) await startRun()
+
+    const buildBase = async () => {
+      const rid = await startRun()
+      return {
+        id: `evt_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`,
+        thread_id: threadId,
+        run_id: rid,
+        author,
+        created_at: new Date().toISOString(),
+        metadata: {} as Record<string, unknown>,
+      }
+    }
+
+    const send: WithRunSend = {
+      threadId,
+      get runId() {
+        return runId
+      },
+      message: async (content, msgOpts = {}) => {
+        const base = await buildBase()
+        const event = {
+          ...base,
+          type: 'message' as const,
+          content,
+          metadata: msgOpts.metadata ?? {},
+          recipients: msgOpts.recipients ?? null,
+        }
+        return (await this.emitEvent(
+          event as unknown as Record<string, unknown> & { threadId: string }
+        )) as MessageEvent
+      },
+      reasoning: async (text, msgOpts = {}) => {
+        const base = await buildBase()
+        const event = {
+          ...base,
+          type: 'reasoning' as const,
+          content: text,
+          metadata: msgOpts.metadata ?? {},
+          recipients: msgOpts.recipients ?? null,
+        }
+        return (await this.emitEvent(
+          event as unknown as Record<string, unknown> & { threadId: string }
+        )) as ReasoningEvent
+      },
+      toolCall: async (name, args, toolOpts = {}) => {
+        const base = await buildBase()
+        const event = {
+          ...base,
+          type: 'tool.call' as const,
+          tool: {
+            id: toolOpts.id ?? `call_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`,
+            name,
+            arguments: args,
+          },
+          metadata: toolOpts.metadata ?? {},
+          recipients: toolOpts.recipients ?? null,
+        }
+        return (await this.emitEvent(
+          event as unknown as Record<string, unknown> & { threadId: string }
+        )) as ToolCallEvent
+      },
+      toolResult: async (toolId, result, toolOpts = {}) => {
+        const base = await buildBase()
+        const event = {
+          ...base,
+          type: 'tool.result' as const,
+          tool: { id: toolId, result, error: toolOpts.error ?? null },
+          metadata: toolOpts.metadata ?? {},
+          recipients: toolOpts.recipients ?? null,
+        }
+        return (await this.emitEvent(
+          event as unknown as Record<string, unknown> & { threadId: string }
+        )) as ToolResultEvent
+      },
+      emit: async (event) => {
+        const rid = await startRun()
+        const stamped = {
+          ...(event as unknown as Record<string, unknown>),
+          run_id: (event as unknown as { run_id?: unknown }).run_id ?? rid,
+          created_at: new Date().toISOString(),
+          threadId,
+        }
+        return (await this.emitEvent(
+          stamped as unknown as Record<string, unknown> & { threadId: string }
+        )) as typeof event
+      },
+      streamMessage: (streamOpts = {}) => {
+        if (!runId)
+          throw new Error('streamMessage requires the run to be open; remove lazy or emit first')
+        return this.streamMessage({
+          threadId,
+          runId,
+          author: streamOpts.author ?? author,
+          metadata: streamOpts.metadata,
+          onFinalEvent: streamOpts.onFinalEvent,
+        })
+      },
+      streamReasoning: (streamOpts = {}) => {
+        if (!runId)
+          throw new Error('streamReasoning requires the run to be open; remove lazy or emit first')
+        return this.streamReasoning({
+          threadId,
+          runId,
+          author: streamOpts.author ?? author,
+          metadata: streamOpts.metadata,
+          onFinalEvent: streamOpts.onFinalEvent,
+        })
+      },
+    }
+
+    try {
+      const result = await callback(send)
+      if (runId) await this.endRun(runId)
+      return result
+    } catch (err) {
+      if (runId) {
+        await this.endRun(runId, {
+          error: {
+            code: 'send_error',
+            message: err instanceof Error ? err.message : String(err),
+          },
+        })
+      }
+      throw err
+    }
   }
 
   connect(): Promise<void> {

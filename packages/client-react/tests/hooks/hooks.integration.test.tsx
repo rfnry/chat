@@ -2,9 +2,9 @@ import { act, render, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ChatClient } from '../../src/client'
-import { useThreadEvents } from '../../src/hooks/useThreadEvents'
-import { useThreadIsWorking } from '../../src/hooks/useThreadIsWorking'
-import { useThreadSession } from '../../src/hooks/useThreadSession'
+import { useChatHistory } from '../../src/hooks/useChatHistory'
+import { useChatIsWorking } from '../../src/hooks/useChatIsWorking'
+import { useChatSession } from '../../src/hooks/useChatSession'
 import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 
@@ -31,9 +31,9 @@ function Probe({
   onEvents?: (n: number) => void
   onWorking?: (working: boolean) => void
 }) {
-  const session = useThreadSession(threadId)
-  const events = useThreadEvents(threadId)
-  const isWorking = useThreadIsWorking(threadId)
+  const session = useChatSession(threadId)
+  const events = useChatHistory(threadId)
+  const isWorking = useChatIsWorking(threadId)
   if (onEvents) onEvents(events.length)
   if (onWorking) onWorking(isWorking)
   return <div data-testid="status">{session.status}</div>

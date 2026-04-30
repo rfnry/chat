@@ -1,4 +1,3 @@
-import type { Identity } from '@rfnry/chat-protocol'
 import { useContext } from 'react'
 import { ChatContext, type EventRegistry } from '../provider/ChatContext'
 
@@ -18,10 +17,4 @@ export function useChatEvents(): EventRegistry {
   const ctx = useContext(ChatContext)
   if (!ctx) throw new Error('useChatEvents must be used within ChatProvider')
   return ctx.events
-}
-
-export function useIdentity(): Identity | null {
-  const ctx = useContext(ChatContext)
-  if (!ctx) throw new Error('useIdentity must be used inside <ChatProvider>')
-  return ctx.client.identity
 }

@@ -3,7 +3,7 @@ import { createStore } from 'zustand/vanilla'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting'
 
-export type StreamingEntry = {
+export type StreamingItem = {
   eventId: string
   threadId: string
   runId: string
@@ -18,7 +18,7 @@ export type ChatStoreState = {
   members: Record<string, Identity[]>
   threadMeta: Record<string, Thread>
   activeRuns: Record<string, Record<string, Run>>
-  streams: Record<string, StreamingEntry>
+  streams: Record<string, StreamingItem>
   joinedThreads: Set<string>
   connectionStatus: ConnectionStatus
   actions: {
@@ -28,7 +28,7 @@ export type ChatStoreState = {
     setMembers(threadId: string, members: Identity[]): void
     setThreadMeta(thread: Thread): void
     upsertRun(run: Run): void
-    beginStream(entry: Omit<StreamingEntry, 'text' | 'createdAt'>): void
+    beginStream(entry: Omit<StreamingItem, 'text' | 'createdAt'>): void
     appendStreamDelta(eventId: string, text: string): void
     endStream(eventId: string): void
     addJoinedThread(threadId: string): void

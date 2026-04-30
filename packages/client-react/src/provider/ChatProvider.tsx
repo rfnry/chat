@@ -36,7 +36,7 @@ export type ChatProviderProps = ChatClientOptions & {
    * Receives only `(thread, addedBy)` — the invitee identity is implicit (it's
    * the connected user). If you need the full frame including `addedMember`
    * (e.g. for group-chat invites where you care which user was added), use
-   * the `useInviteHandler` hook instead.
+   * the `useChatHandlers().on.invited` hook instead.
    */
   onThreadInvited?: (thread: Thread, addedBy: Identity) => void
   /**
@@ -44,7 +44,7 @@ export type ChatProviderProps = ChatClientOptions & {
    * `client.joinThread(frame.thread.id)` so live event delivery starts
    * immediately. Defaults to `true`, mirroring Python's
    * `auto_join_on_invite=True`. Set to `false` if you want to inspect the
-   * frame first (via `useInviteHandler` or `client.on('thread:invited',
+   * frame first (via `useChatHandlers().on.invited` or `client.on('thread:invited',
    * ...)`) and decide whether to join.
    */
   autoJoinOnInvite?: boolean
@@ -241,7 +241,7 @@ export function ChatProvider(props: ChatProviderProps) {
 
         // Publish the context value NOW — don't block on the presence REST
         // fetch. Consumers that need presence read from an unhydrated slice
-        // and re-render once hydrate() lands (usePresence in Task 4.4
+        // and re-render once hydrate() lands (useChatPresence in Task 4.4
         // exposes `hydrated` so UIs can show a spinner). Blocking here would
         // mean a flaky presence endpoint delays (or prevents) the whole
         // ChatProvider from becoming usable, which is the wrong tradeoff.

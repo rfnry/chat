@@ -12,7 +12,7 @@ export type PresenceSliceState = {
 }
 
 // Hybrid shape: spreads StoreApi (exposes getState/setState/subscribe for
-// useStore-based reactivity in usePresence) AND exposes flat ergonomic methods
+// useStore-based reactivity in useChatPresence) AND exposes flat ergonomic methods
 // so ChatProvider can call `presence.hydrate(snapshot)` directly. This diverges
 // from chatStore.ts (which nests actions under state.actions) — presence chose
 // the flatter surface because its actions are called from non-React code

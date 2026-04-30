@@ -206,7 +206,7 @@ describe('ChatClient.sendTo', () => {
     expect(emitWithAck).toHaveBeenCalledWith('thread:join', { thread_id: 'th_new' })
   })
 
-  it('does not send any message — only setup (caller emits via useThreadActions)', async () => {
+  it('does not send any message — only setup (caller emits via client.withRun)', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
       const method = (init?.method ?? 'GET').toUpperCase()
