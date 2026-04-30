@@ -84,7 +84,7 @@ export type WithRunOptions = {
 
 type ResolvedTransports = {
   rest: RestTransport
-  socketTransport: SocketTransport
+  socket: SocketTransport
 }
 
 type ListenerEntry = {
@@ -98,7 +98,7 @@ export class ChatClient {
   socketPath: string
   identity: Identity | null
   private rest: RestTransport
-  private socketTransport: SocketTransport
+  private socket: SocketTransport
   private fetchImpl: typeof fetch | undefined
   private authenticateFn: (() => Promise<AuthenticatePayload>) | undefined
   private readonly reconnectionAttempts: number | undefined
@@ -128,21 +128,9 @@ export class ChatClient {
     }
     this.authenticateFn = authenticate
 
-    const authHeaders = authenticate ? async () => (await authenticate!()).headers ?? {} : undefined
-
-    this.rest = new RestTransport({
-      baseUrl: this.url,
-      path: this.path,
-      fetchImpl: opts.fetchImpl,
-      authenticate: authHeaders,
-    })
-    this.socketTransport = new SocketTransport({
-      baseUrl: this.url,
-      socketPath: this.socketPath,
-      authenticate,
-      reconnectionAttempts: this.reconnectionAttempts,
-      onReconnectFailed: this.onReconnectFailed,
-    })
+    const { rest, socket } = this._buildTransports()
+    this.rest = rest
+    this.socket = socket
   }
 
   private _buildTransports(): ResolvedTransports {
@@ -155,14 +143,14 @@ export class ChatClient {
       fetchImpl: this.fetchImpl,
       authenticate: authHeaders,
     })
-    const socketTransport = new SocketTransport({
+    const socket = new SocketTransport({
       baseUrl: this.url,
       socketPath: this.socketPath,
       authenticate: this.authenticateFn,
       reconnectionAttempts: this.reconnectionAttempts,
       onReconnectFailed: this.onReconnectFailed,
     })
-    return { rest, socketTransport }
+    return { rest, socket }
   }
 
   createThread(input: {
@@ -275,7 +263,7 @@ export class ChatClient {
   }
 
   async emitEvent(event: Record<string, unknown> & { threadId: string }): Promise<Event> {
-    return this.socketTransport.sendEvent(event.threadId, toEventWire(event))
+    return this.socket.sendEvent(event.threadId, toEventWire(event))
   }
 
   async beginRun(
@@ -292,7 +280,7 @@ export class ChatClient {
         triggeredByEventId = (opts.triggeredBy as Event).id
       }
     }
-    const { runId } = await this.socketTransport.beginRun(threadId, {
+    const { runId } = await this.socket.beginRun(threadId, {
       triggeredByEventId,
       idempotencyKey: opts.idempotencyKey,
     })
@@ -300,7 +288,7 @@ export class ChatClient {
   }
 
   async endRun(runId: string, opts: { error?: RunError } = {}): Promise<Run> {
-    await this.socketTransport.endRun(runId, { error: opts.error })
+    await this.socket.endRun(runId, { error: opts.error })
     return this.rest.getRun(runId)
   }
 
@@ -312,7 +300,7 @@ export class ChatClient {
     onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
   }): ChatStream {
     return new ChatStream({
-      socket: this.socketTransport,
+      socket: this.socket,
       threadId: opts.threadId,
       runId: opts.runId,
       author: opts.author,
@@ -330,7 +318,7 @@ export class ChatClient {
     onFinalEvent?: (event: MessageEvent | ReasoningEvent) => Promise<void> | void
   }): ChatStream {
     return new ChatStream({
-      socket: this.socketTransport,
+      socket: this.socket,
       threadId: opts.threadId,
       runId: opts.runId,
       author: opts.author,
@@ -490,11 +478,11 @@ export class ChatClient {
   }
 
   connect(): Promise<void> {
-    return this.socketTransport.connect()
+    return this.socket.connect()
   }
 
   disconnect(): Promise<void> {
-    return this.socketTransport.disconnect()
+    return this.socket.disconnect()
   }
 
   async reconnect(
@@ -507,7 +495,7 @@ export class ChatClient {
       fetchImpl?: typeof fetch
     } = {}
   ): Promise<void> {
-    await this.socketTransport.disconnect()
+    await this.socket.disconnect()
 
     if (opts.url !== undefined) this.url = opts.url.replace(/\/$/, '')
     if (opts.path !== undefined) this.path = opts.path
@@ -528,26 +516,26 @@ export class ChatClient {
       })
     }
 
-    const { rest, socketTransport } = this._buildTransports()
+    const { rest, socket } = this._buildTransports()
     this.rest = rest
-    this.socketTransport = socketTransport
+    this.socket = socket
 
-    await this.socketTransport.connect()
+    await this.socket.connect()
 
     for (const entry of this.listeners) {
-      this.socketTransport.on(entry.event, entry.handler)
+      this.socket.on(entry.event, entry.handler)
     }
   }
 
   on(event: string, handler: (data: unknown) => void): () => void {
     const entry: ListenerEntry = { event, handler }
     this.listeners.push(entry)
-    this.socketTransport.on(event, handler)
+    this.socket.on(event, handler)
     return () => {
       const idx = this.listeners.indexOf(entry)
       if (idx !== -1) this.listeners.splice(idx, 1)
 
-      const sock = this.socketTransport.rawSocket
+      const sock = this.socket.rawSocket
       if (sock) sock.off(event, handler)
     }
   }
@@ -556,15 +544,15 @@ export class ChatClient {
     threadId: string,
     since?: { createdAt: string; id: string }
   ): Promise<{ threadId: string; replayed: Event[]; replayTruncated: boolean }> {
-    return this.socketTransport.joinThread(threadId, since)
+    return this.socket.joinThread(threadId, since)
   }
 
   leaveThread(threadId: string): Promise<void> {
-    return this.socketTransport.leaveThread(threadId)
+    return this.socket.leaveThread(threadId)
   }
 
   get rawSocket(): Socket | null {
-    return this.socketTransport.rawSocket
+    return this.socket.rawSocket
   }
 }
 
