@@ -58,7 +58,12 @@ export {
   type ChatHandlers,
   type EventHandler,
   type InviteHandler,
+  type MembersUpdatedHandler,
+  type PresenceJoinedHandler,
+  type PresenceLeftHandler,
+  type RunUpdatedHandler,
   type SugarHandlerOptions,
+  type ThreadUpdatedHandler,
   type UseHandlerOptions,
   useChatHandlers,
 } from './hooks/useChatHandlers'

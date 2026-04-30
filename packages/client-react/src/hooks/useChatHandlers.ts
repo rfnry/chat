@@ -1,4 +1,18 @@
-import { type Event, type ThreadInvitedFrame, toThreadInvitedFrame } from '@rfnry/chat-protocol'
+import {
+  type Event,
+  type Identity,
+  type PresenceJoinedFrame,
+  type PresenceLeftFrame,
+  parsePresenceJoinedFrame,
+  parsePresenceLeftFrame,
+  type Run,
+  type Thread,
+  type ThreadInvitedFrame,
+  toIdentity,
+  toRun,
+  toThread,
+  toThreadInvitedFrame,
+} from '@rfnry/chat-protocol'
 import { useEffect, useRef } from 'react'
 import type { EventListener } from '../provider/ChatContext'
 import { useChatClient, useChatEvents } from './useChatClient'
@@ -20,6 +34,11 @@ export type UseHandlerOptions = {
 }
 
 export type InviteHandler = (frame: ThreadInvitedFrame) => void | Promise<void>
+export type ThreadUpdatedHandler = (thread: Thread) => void | Promise<void>
+export type MembersUpdatedHandler = (threadId: string, members: Identity[]) => void | Promise<void>
+export type RunUpdatedHandler = (run: Run) => void | Promise<void>
+export type PresenceJoinedHandler = (frame: PresenceJoinedFrame) => void | Promise<void>
+export type PresenceLeftHandler = (frame: PresenceLeftFrame) => void | Promise<void>
 
 export type ChatHandlers = {
   on: {
@@ -29,6 +48,11 @@ export type ChatHandlers = {
     toolResult: typeof useOnToolResult
     anyEvent: typeof useOnAnyEvent
     invited: typeof useOnInvited
+    threadUpdated: typeof useOnThreadUpdated
+    membersUpdated: typeof useOnMembersUpdated
+    runUpdated: typeof useOnRunUpdated
+    presenceJoined: typeof useOnPresenceJoined
+    presenceLeft: typeof useOnPresenceLeft
     event: typeof useOnEvent
   }
 }
@@ -68,18 +92,23 @@ function useEventSubscription(
   }, [events, client, eventType, options.toolName, allEvents])
 }
 
-function useInviteSubscription(handler: InviteHandler): void {
+function useFrameSubscription<T>(
+  socketEvent: string,
+  parse: (raw: unknown) => T,
+  handler: (parsed: T) => void | Promise<void>
+): void {
   const client = useChatClient()
   const handlerRef = useRef(handler)
   handlerRef.current = handler
+  const parseRef = useRef(parse)
+  parseRef.current = parse
 
   useEffect(() => {
-    const off = client.on('thread:invited', (raw: unknown) => {
-      const frame = toThreadInvitedFrame(raw as never)
-      void handlerRef.current(frame)
+    const off = client.on(socketEvent, (raw: unknown) => {
+      void handlerRef.current(parseRef.current(raw))
     })
     return off
-  }, [client])
+  }, [client, socketEvent])
 }
 
 function useOnMessage(fn: EventHandler, opts: SugarHandlerOptions = {}): void {
@@ -103,7 +132,38 @@ function useOnAnyEvent(fn: EventHandler, opts: SugarHandlerOptions = {}): void {
 }
 
 function useOnInvited(fn: InviteHandler): void {
-  useInviteSubscription(fn)
+  useFrameSubscription('thread:invited', (raw) => toThreadInvitedFrame(raw as never), fn)
+}
+
+function useOnThreadUpdated(fn: ThreadUpdatedHandler): void {
+  useFrameSubscription('thread:updated', (raw) => toThread(raw as never), fn)
+}
+
+function useOnMembersUpdated(fn: MembersUpdatedHandler): void {
+  const client = useChatClient()
+  const handlerRef = useRef(fn)
+  handlerRef.current = fn
+
+  useEffect(() => {
+    const off = client.on('members:updated', (raw: unknown) => {
+      const payload = raw as { thread_id: string; members: unknown[] }
+      const identities = payload.members.map((m) => toIdentity(m as never))
+      void handlerRef.current(payload.thread_id, identities)
+    })
+    return off
+  }, [client])
+}
+
+function useOnRunUpdated(fn: RunUpdatedHandler): void {
+  useFrameSubscription('run:updated', (raw) => toRun(raw as never), fn)
+}
+
+function useOnPresenceJoined(fn: PresenceJoinedHandler): void {
+  useFrameSubscription('presence:joined', parsePresenceJoinedFrame, fn)
+}
+
+function useOnPresenceLeft(fn: PresenceLeftHandler): void {
+  useFrameSubscription('presence:left', parsePresenceLeftFrame, fn)
 }
 
 function useOnEvent(eventType: string, fn: EventHandler, opts: UseHandlerOptions = {}): void {
@@ -118,6 +178,11 @@ const HANDLER_NAMESPACE: ChatHandlers = {
     toolResult: useOnToolResult,
     anyEvent: useOnAnyEvent,
     invited: useOnInvited,
+    threadUpdated: useOnThreadUpdated,
+    membersUpdated: useOnMembersUpdated,
+    runUpdated: useOnRunUpdated,
+    presenceJoined: useOnPresenceJoined,
+    presenceLeft: useOnPresenceLeft,
     event: useOnEvent,
   },
 }
@@ -130,7 +195,10 @@ const HANDLER_NAMESPACE: ChatHandlers = {
  * handler). Call them unconditionally at the top level of your component,
  * just like any other hook.
  *
- * Mirrors Python's `@client.on_message`, `@client.on_tool_call`, etc.
+ * Mirrors Python's `@client.on_message`, `@client.on_tool_call`,
+ * `@client.on_thread_updated`, `@client.on_members_updated`,
+ * `@client.on_run_updated`, `@client.on_presence_joined`,
+ * `@client.on_presence_left`, etc.
  */
 export function useChatHandlers(): ChatHandlers {
   return HANDLER_NAMESPACE
