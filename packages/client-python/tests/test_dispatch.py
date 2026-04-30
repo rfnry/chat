@@ -222,9 +222,6 @@ async def test_emitter_handler_publishes_via_client() -> None:
 
 
 class _RunTrackingStubClient(_StubClient):
-    """Stub client that records every begin_run / end_run call so lazy-run
-    tests can assert exact counts."""
-
     def __init__(self) -> None:
         super().__init__()
         self.begin_calls: list[dict[str, Any]] = []
@@ -240,18 +237,16 @@ class _RunTrackingStubClient(_StubClient):
 
 
 async def test_emitter_zero_yield_lazy_skips_begin_and_end_run() -> None:
-    """lazy_run=True: an emitter handler with an application-level early-return
-    guard must not create a run when it returns without yielding. This is the
-    opt-in behavior for fan-out channels where N-1 agents have role guards."""
+
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     async def guarded(ctx: HandlerContext, _send: Send):
-        # Classic role-filter guard that early-returns.
+
         if ctx.event.author.role != "user":
             return
-        # Unreachable in this test; we feed a non-user author.
+
         yield _unused  # type: ignore[name-defined]  # noqa: F821
 
     dispatcher.register("message", guarded, all_events=True, lazy_run=True)
@@ -263,32 +258,27 @@ async def test_emitter_zero_yield_lazy_skips_begin_and_end_run() -> None:
 
 
 async def test_emitter_zero_yield_eager_opens_phantom_run_pair() -> None:
-    """Default eager mode: an emitter handler that early-returns without
-    yielding still creates a run.started / run.completed pair because begin_run
-    fires before the handler body. This is the deliberate trade-off — handlers
-    with application-level guards must opt into lazy_run=True."""
+
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
 
     async def guarded(ctx: HandlerContext, _send: Send):
-        # Early-return without yielding — but eager run is already open.
+
         if ctx.event.author.role != "user":
             return
         yield _unused  # type: ignore[name-defined]  # noqa: F821  # pragma: no cover
 
-    dispatcher.register("message", guarded, all_events=True)  # lazy_run=False (default)
+    dispatcher.register("message", guarded, all_events=True)
     await dispatcher.feed(_msg(author_id="u_other", author_role="assistant"))
 
-    # Eager default: begin_run fired before handler body; end_run fired after.
     assert len(client.begin_calls) == 1
     assert len(client.end_calls) == 1
     assert client.emitted == []
 
 
 async def test_emitter_single_yield_triggers_exactly_one_run() -> None:
-    """A handler that yields one event produces exactly one begin_run +
-    one end_run, and the run_id is stamped on the emitted event."""
+
     from rfnry_chat_protocol import TextPart
 
     me = AssistantIdentity(id="a_me", name="Me")
@@ -305,13 +295,12 @@ async def test_emitter_single_yield_triggers_exactly_one_run() -> None:
     assert len(client.end_calls) == 1
     assert client.end_calls[0]["run_id"] == client.begin_calls[0]["triggered_by_event_id"] or True
     assert len(client.emitted) == 1
-    # The first emitted event must carry the run_id produced by begin_run.
+
     assert client.emitted[0].run_id == "run_1"
 
 
 async def test_emitter_multiple_yields_share_one_run() -> None:
-    """A handler that yields multiple events must produce exactly one run —
-    begin_run fires on the first yield, end_run fires after the last."""
+
     from rfnry_chat_protocol import TextPart
 
     me = AssistantIdentity(id="a_me", name="Me")
@@ -328,16 +317,13 @@ async def test_emitter_multiple_yields_share_one_run() -> None:
     assert len(client.begin_calls) == 1
     assert len(client.end_calls) == 1
     assert len(client.emitted) == 2
-    # Both emitted events share the same run_id (first patched, second built
-    # against the now-cached send._run_id).
+
     assert client.emitted[0].run_id == "run_1"
     assert client.emitted[1].run_id == "run_1"
 
 
 async def test_emitter_exception_before_first_yield_eager_fails_run() -> None:
-    """Default eager mode: if the handler raises before yielding, the run was
-    already opened eagerly — so end_run is called with handler_error to mark
-    it failed. The exception is re-raised after cleanup."""
+
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
@@ -346,7 +332,7 @@ async def test_emitter_exception_before_first_yield_eager_fails_run() -> None:
         raise RuntimeError("before yield")
         yield  # pragma: no cover  # unreachable, makes function async-gen
 
-    dispatcher.register("message", boom)  # lazy_run=False (default)
+    dispatcher.register("message", boom)
     try:
         await dispatcher.feed(_msg(author_id="u_other"))
     except RuntimeError:
@@ -359,8 +345,7 @@ async def test_emitter_exception_before_first_yield_eager_fails_run() -> None:
 
 
 async def test_emitter_exception_before_first_yield_lazy_skips_run() -> None:
-    """lazy_run=True: if the handler raises before yielding, no run was created
-    because begin_run is deferred to first yield — so no end_run fires either."""
+
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
@@ -380,8 +365,7 @@ async def test_emitter_exception_before_first_yield_lazy_skips_run() -> None:
 
 
 async def test_emitter_exception_after_first_yield_ends_run_with_error() -> None:
-    """If the handler raises AFTER yielding, end_run must be called with an
-    error payload so the server transitions the run to 'failed'."""
+
     from rfnry_chat_protocol import TextPart
 
     me = AssistantIdentity(id="a_me", name="Me")
@@ -405,14 +389,7 @@ async def test_emitter_exception_after_first_yield_ends_run_with_error() -> None
 
 
 async def test_emitter_restamps_created_at_at_publish_time() -> None:
-    """Regression for event-ordering bug: Send.message() and siblings
-    stamp `created_at=datetime.now(UTC)` at handler-yield time (i.e. before
-    lazy-run begin_run runs). Without a re-stamp, a handler that yields a
-    message can produce an event whose `created_at` is strictly earlier than
-    the run.started frame that the server publishes inside begin_run — which
-    makes an event log sorted by `created_at` render as "message before its
-    own run started". The dispatcher must re-stamp `created_at` right before
-    calling emit_event so the published timestamp reflects publish order."""
+
     import asyncio
 
     from rfnry_chat_protocol import TextPart
@@ -426,8 +403,7 @@ async def test_emitter_restamps_created_at_at_publish_time() -> None:
     async def reply(_ctx: HandlerContext, send: Send):
         msg = send.message(content=[TextPart(text="hi")])
         constructed_at.append(msg.created_at)
-        # Yield to the event loop so "publish time" is strictly after
-        # "construction time" even on very fast clocks.
+
         await asyncio.sleep(0)
         yield msg
 
@@ -437,8 +413,7 @@ async def test_emitter_restamps_created_at_at_publish_time() -> None:
     assert len(client.emitted) == 1
     assert len(constructed_at) == 1
     emitted_created_at = client.emitted[0].created_at
-    # The emitted (published) event's created_at must be strictly later than
-    # the timestamp the handler saw when it built the event.
+
     assert emitted_created_at > constructed_at[0], (
         f"expected published created_at ({emitted_created_at}) to be strictly "
         f"greater than handler-build time ({constructed_at[0]}); dispatcher "
@@ -447,9 +422,7 @@ async def test_emitter_restamps_created_at_at_publish_time() -> None:
 
 
 async def test_emitter_restamps_created_at_on_every_yield() -> None:
-    """Each emitted event's created_at must be sampled right before its own
-    emit_event call — not shared across yields. Two yields => two distinct
-    re-stamps, both strictly greater than the constructor timestamps."""
+
     import asyncio
 
     from rfnry_chat_protocol import TextPart
@@ -476,14 +449,12 @@ async def test_emitter_restamps_created_at_on_every_yield() -> None:
     assert len(client.emitted) == 2
     assert client.emitted[0].created_at > constructed_at[0]
     assert client.emitted[1].created_at > constructed_at[1]
-    # And the second publish is strictly after the first.
+
     assert client.emitted[1].created_at >= client.emitted[0].created_at
 
 
 async def test_eager_run_starts_before_handler_body() -> None:
-    """Default eager mode: begin_run fires before the handler body runs, so
-    run.started is observable immediately after the triggering event is sent —
-    not after any awaits inside the handler body."""
+
     import asyncio
 
     from rfnry_chat_protocol import TextPart
@@ -495,7 +466,7 @@ async def test_eager_run_starts_before_handler_body() -> None:
     order: list[str] = []
 
     async def slow_reply(_ctx: HandlerContext, send: Send):
-        # Any awaits inside the handler body happen AFTER begin_run.
+
         order.append("handler_body_start")
         await asyncio.sleep(0)
         order.append("before_yield")
@@ -509,10 +480,9 @@ async def test_eager_run_starts_before_handler_body() -> None:
 
     client.begin_run = tracked_begin_run  # type: ignore[method-assign]
 
-    dispatcher.register("message", slow_reply)  # lazy_run=False (default)
+    dispatcher.register("message", slow_reply)
     await dispatcher.feed(_msg(author_id="u_other"))
 
-    # begin_run must come before the handler body.
     assert order[0] == "begin_run", f"expected begin_run first, got order={order}"
     assert "handler_body_start" in order
     assert order.index("begin_run") < order.index("handler_body_start")
@@ -521,8 +491,7 @@ async def test_eager_run_starts_before_handler_body() -> None:
 
 
 async def test_lazy_run_not_created_when_handler_returns_without_yielding() -> None:
-    """lazy_run=True: a handler with an application-level guard that returns
-    before yielding produces no run at all — not even a phantom completed run."""
+
     me = AssistantIdentity(id="a_me", name="Me")
     client = _RunTrackingStubClient()
     dispatcher = HandlerDispatcher(identity=me, client=client)  # type: ignore[arg-type]
@@ -533,7 +502,7 @@ async def test_lazy_run_not_created_when_handler_returns_without_yielding() -> N
         yield send.message(content=[])  # pragma: no cover
 
     dispatcher.register("message", guarded_handler, all_events=True, lazy_run=True)
-    # Feed an assistant message — the guard will fire and return without yielding.
+
     await dispatcher.feed(_msg(author_id="u_other", author_role="assistant"))
 
     assert client.begin_calls == [], "lazy_run=True: no run expected for guarded early-return"

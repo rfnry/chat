@@ -3,7 +3,6 @@ import { render, waitFor } from '@testing-library/react'
 import { useContext } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Hoisted mock so the provider's `import { io } from 'socket.io-client'` sees our fake.
 const { socketOn, socketOnce, socketDisconnect } = vi.hoisted(() => ({
   socketOn: vi.fn(),
   socketOnce: vi.fn(),
@@ -54,7 +53,6 @@ describe('ChatProvider socket wiring', () => {
 
     await waitFor(() => expect(captured).not.toBeNull())
 
-    // Find the handler the provider registered for 'thread:updated'
     const call = socketOn.mock.calls.find(([event]) => event === 'thread:updated')
     expect(call).toBeDefined()
     const handler = (call as unknown as [string, (data: unknown) => void])[1]

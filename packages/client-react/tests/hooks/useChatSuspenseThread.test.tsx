@@ -49,7 +49,7 @@ describe('useChatSuspenseThread', () => {
         <Probe />
       </Wrapper>
     )
-    // First paint shows the Suspense fallback.
+
     expect(getByTestId('loading').textContent).toBe('loading')
 
     await waitFor(() => {

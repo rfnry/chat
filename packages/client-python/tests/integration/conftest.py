@@ -87,8 +87,7 @@ async def live_server(
             raw = handshake.auth.get("identity_id")
             if isinstance(raw, str):
                 identity_id = raw
-        # REST calls carry no socket-style auth payload; fall back to a
-        # test-only header so multi-identity tests can distinguish callers.
+
         if identity_id is None:
             header_val = handshake.headers.get("x-identity-id")
             if isinstance(header_val, str):

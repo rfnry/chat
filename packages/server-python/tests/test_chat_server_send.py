@@ -23,10 +23,14 @@ async def _make_server_with_thread(clean_db: asyncpg.Pool) -> tuple[ChatServer, 
         return alice
 
     server = ChatServer(store=store, authenticate=auth)
-    thread = await store.create_thread_with_member(
-        tenant={"org": "A"},
-        creator=alice,
-    ) if hasattr(store, "create_thread_with_member") else None
+    thread = (
+        await store.create_thread_with_member(
+            tenant={"org": "A"},
+            creator=alice,
+        )
+        if hasattr(store, "create_thread_with_member")
+        else None
+    )
     if thread is None:
         from datetime import UTC, datetime
 
@@ -118,13 +122,7 @@ async def test_server_send_supports_multiple_emissions(clean_db: asyncpg.Pool) -
         await server.publish_event(send.message([TextPart(text="one")]))
         await server.publish_event(send.message([TextPart(text="two")]))
     page = await server.store.list_events(thread_id, limit=50)
-    bodies = [
-        p.text
-        for e in page.items
-        if e.type == "message"
-        for p in e.content
-        if p.type == "text"
-    ]
+    bodies = [p.text for e in page.items if e.type == "message" for p in e.content if p.type == "text"]
     assert "one" in bodies
     assert "two" in bodies
 
@@ -134,13 +132,7 @@ async def test_server_send_emit_method_persists_through_publish_event(clean_db: 
     async with server.send(thread_id, as_identity=gateway) as send:
         await send.emit(send.message([TextPart(text="via send.emit")]))
     page = await server.store.list_events(thread_id, limit=50)
-    bodies = [
-        p.text
-        for e in page.items
-        if e.type == "message"
-        for p in e.content
-        if p.type == "text"
-    ]
+    bodies = [p.text for e in page.items if e.type == "message" for p in e.content if p.type == "text"]
     assert "via send.emit" in bodies
 
 
@@ -162,13 +154,7 @@ async def test_server_send_lazy_opens_run_on_first_emit(clean_db: asyncpg.Pool) 
     async with server.send(thread_id, as_identity=gateway, lazy=True) as send:
         await send.emit(send.message([TextPart(text="late")]))
     page = await server.store.list_events(thread_id, limit=50)
-    bodies = [
-        p.text
-        for e in page.items
-        if e.type == "message"
-        for p in e.content
-        if p.type == "text"
-    ]
+    bodies = [p.text for e in page.items if e.type == "message" for p in e.content if p.type == "text"]
     assert "late" in bodies
 
 

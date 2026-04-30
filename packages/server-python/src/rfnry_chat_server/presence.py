@@ -6,19 +6,6 @@ from rfnry_chat_protocol import Identity
 
 
 class PresenceRegistry:
-    """In-memory refcount of which identities have at least one live socket.
-
-    Edge-transition signals: `add` returns True on the 0→1 socket-count
-    transition; `remove` returns a `(was_last, identity, tenant_path)` tuple
-    where the last two are non-None only on the 1→0 transition. All other
-    tab opens/closes return falsy/empty so the caller knows not to broadcast.
-
-    Invariant: each identity_id maps to exactly one tenant_path at a time.
-    The auth/namespace layer is responsible for ensuring `derive_namespace_path`
-    produces the same value for every socket of a given Identity. Violations
-    raise ValueError rather than silently rebroadcasting on the wrong tenant.
-    """
-
     def __init__(self) -> None:
         self._sids: dict[str, set[str]] = {}
         self._identities: dict[str, Identity] = {}

@@ -12,7 +12,7 @@ def _hs(token: str = "alice") -> HandshakeData:
 
 
 async def test_cache_hit_avoids_underlying_call() -> None:
-    """A second call with the same token must NOT re-invoke the wrapped callback."""
+
     calls = 0
 
     async def upstream(hs: HandshakeData) -> UserIdentity | None:
@@ -23,12 +23,12 @@ async def test_cache_hit_avoids_underlying_call() -> None:
     wrapped = cached_authenticate(upstream, ttl_seconds=60.0)
     a = await wrapped(_hs())
     b = await wrapped(_hs())
-    assert a is b  # cached object reference returned
+    assert a is b
     assert calls == 1
 
 
 async def test_cache_miss_for_different_token() -> None:
-    """Different Authorization headers produce independent cache entries."""
+
     calls = 0
 
     async def upstream(hs: HandshakeData) -> UserIdentity | None:
@@ -46,7 +46,7 @@ async def test_cache_miss_for_different_token() -> None:
 
 
 async def test_cache_expires_after_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An entry past its TTL must trigger a fresh upstream call."""
+
     calls = 0
 
     async def upstream(hs: HandshakeData) -> UserIdentity | None:
@@ -64,17 +64,17 @@ async def test_cache_expires_after_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
     await wrapped(_hs())
     assert calls == 1
 
-    fake_now[0] += 30.0  # within TTL
+    fake_now[0] += 30.0
     await wrapped(_hs())
     assert calls == 1
 
-    fake_now[0] += 31.0  # total elapsed: 61s — past TTL
+    fake_now[0] += 31.0
     await wrapped(_hs())
     assert calls == 2
 
 
 async def test_cache_lru_eviction_at_max_size() -> None:
-    """Cache evicts least-recently-used entries when at capacity."""
+
     calls = 0
 
     async def upstream(hs: HandshakeData) -> UserIdentity | None:
@@ -84,24 +84,22 @@ async def test_cache_lru_eviction_at_max_size() -> None:
         return UserIdentity(id=f"u_{token}", name=token)
 
     wrapped = cached_authenticate(upstream, ttl_seconds=60.0, max_size=2)
-    await wrapped(_hs("a"))  # cache: {a}
-    await wrapped(_hs("b"))  # cache: {a, b}
-    await wrapped(_hs("a"))  # cache: {b, a} — touches a
-    await wrapped(_hs("c"))  # cache: {a, c} — evicts b (LRU)
+    await wrapped(_hs("a"))
+    await wrapped(_hs("b"))
+    await wrapped(_hs("a"))
+    await wrapped(_hs("c"))
 
-    assert calls == 3  # a, b, c upstream calls so far
+    assert calls == 3
 
-    # Re-fetching a should hit cache (still present)
     await wrapped(_hs("a"))
     assert calls == 3
 
-    # Re-fetching b should miss cache (was evicted)
     await wrapped(_hs("b"))
     assert calls == 4
 
 
 async def test_cache_with_custom_key_function() -> None:
-    """Consumers can override the cache key (e.g. cookie-based auth)."""
+
     calls = 0
 
     async def upstream(hs: HandshakeData) -> UserIdentity | None:
@@ -122,8 +120,7 @@ async def test_cache_with_custom_key_function() -> None:
 
 
 async def test_cache_caches_none_too() -> None:
-    """Failed auth (returns None) must also be cached so attackers can't
-    brute-force token validity by timing or rate."""
+
     calls = 0
 
     async def upstream(hs: HandshakeData) -> UserIdentity | None:
@@ -140,9 +137,7 @@ async def test_cache_caches_none_too() -> None:
 
 
 async def test_empty_key_bypasses_cache() -> None:
-    """If the cache key function returns an empty string (e.g. no auth header),
-    bypass the cache entirely so unauthenticated requests don't share a single
-    cached entry."""
+
     calls = 0
 
     async def upstream(hs: HandshakeData) -> UserIdentity | None:
@@ -151,7 +146,7 @@ async def test_empty_key_bypasses_cache() -> None:
         return None
 
     wrapped = cached_authenticate(upstream, ttl_seconds=60.0)
-    no_auth_hs = HandshakeData(headers={}, auth={})  # no Authorization header
+    no_auth_hs = HandshakeData(headers={}, auth={})
     await wrapped(no_auth_hs)
     await wrapped(no_auth_hs)
-    assert calls == 2  # bypassed cache; upstream called both times
+    assert calls == 2

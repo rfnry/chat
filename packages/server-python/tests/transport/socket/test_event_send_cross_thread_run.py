@@ -1,5 +1,3 @@
-"""Guard: event:send must reject a run_id that belongs to a different thread."""
-
 from __future__ import annotations
 
 import asyncio
@@ -75,8 +73,7 @@ async def live(clean_db: asyncpg.Pool) -> AsyncIterator[tuple[str, ChatServer]]:
 
 
 async def test_event_send_rejects_run_id_from_different_thread(live: tuple[str, ChatServer]) -> None:
-    """Sending event:send into thread A with a run_id owned by thread B must
-    return an invalid_request error — not silently persist the cross-thread FK."""
+
     base, _ = live
 
     async with httpx.AsyncClient(base_url=base) as http:
@@ -88,12 +85,10 @@ async def test_event_send_rejects_run_id_from_different_thread(live: tuple[str, 
     await client.call("thread:join", {"thread_id": thread_a})
     await client.call("thread:join", {"thread_id": thread_b})
 
-    # Open a run in thread B — capture the run_id.
     run_b = await client.call("run:begin", {"thread_id": thread_b})
     run_id_b = run_b["run_id"]
     assert isinstance(run_id_b, str)
 
-    # Attempt to attach an event in thread A using the run from thread B.
     response = await client.call(
         "event:send",
         {
@@ -114,7 +109,7 @@ async def test_event_send_rejects_run_id_from_different_thread(live: tuple[str, 
 
 
 async def test_event_send_accepts_run_id_from_same_thread(live: tuple[str, ChatServer]) -> None:
-    """Sanity check: run_id from the same thread must be accepted."""
+
     base, _ = live
 
     async with httpx.AsyncClient(base_url=base) as http:
@@ -146,7 +141,7 @@ async def test_event_send_accepts_run_id_from_same_thread(live: tuple[str, ChatS
 
 
 async def test_event_send_accepts_null_run_id(live: tuple[str, ChatServer]) -> None:
-    """Events without a run_id must continue to work unchanged."""
+
     base, _ = live
 
     async with httpx.AsyncClient(base_url=base) as http:
@@ -174,7 +169,7 @@ async def test_event_send_accepts_null_run_id(live: tuple[str, ChatServer]) -> N
 
 
 async def test_event_send_rejects_nonexistent_run_id(live: tuple[str, ChatServer]) -> None:
-    """A run_id that does not exist in the store must also be rejected."""
+
     base, _ = live
 
     async with httpx.AsyncClient(base_url=base) as http:

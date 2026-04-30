@@ -41,14 +41,7 @@ class ChatStore(Protocol):
     async def update_thread(self, thread_id: str, patch: ThreadPatch) -> Thread: ...
     async def delete_thread(self, thread_id: str) -> None: ...
 
-    async def append_event(self, event: Event) -> Event:
-        """Persist `event` and return it. Implementations MUST return the input
-        event unmodified — `ChatServer.publish_event` broadcasts `event` and
-        persists it concurrently, which is only safe if the persisted form is
-        identical to the input. A future store that needs to mutate (e.g. assign
-        a server-generated id) must signal this requirement so the parallel
-        path can be reverted to sequential."""
-        ...
+    async def append_event(self, event: Event) -> Event: ...
 
     async def list_events(
         self,
@@ -75,15 +68,7 @@ class ChatStore(Protocol):
         new_status: RunStatus,
         *,
         error: RunError | None = None,
-    ) -> Run | None:
-        """Atomic conditional update.
-
-        Set the run's status ONLY if it is currently pending or running.
-        Returns the updated Run on success, None if the run is already
-        in a terminal state (completed / failed / cancelled) or not
-        found. Folds the idempotency check into a single DB round-trip.
-        """
-        ...
+    ) -> Run | None: ...
 
     async def find_run_by_idempotency_key(self, thread_id: str, key: str) -> Run | None: ...
     async def find_active_run(self, thread_id: str, actor_id: str) -> Run | None: ...

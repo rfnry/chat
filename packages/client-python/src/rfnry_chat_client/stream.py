@@ -62,7 +62,7 @@ class Stream:
 
     async def __aenter__(self) -> Stream:
         if self._run_id is None:
-            assert self._run_resolver is not None  # guarded in __init__
+            assert self._run_resolver is not None
             self._run_id = await self._run_resolver()
         frame = StreamStartFrame(
             event_id=self._event_id,

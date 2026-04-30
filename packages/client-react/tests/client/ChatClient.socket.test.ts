@@ -119,7 +119,7 @@ describe('ChatClient socket', () => {
     expect(err.name).toBe('SocketTransportError')
     expect(err.code).toBe('forbidden')
     expect(err.message).toBe('forbidden: not a member')
-    // Regression guard: socket errors must NOT masquerade as HTTP 0.
+
     expect((err as unknown as { status?: number }).status).toBeUndefined()
   })
 

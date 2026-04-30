@@ -88,10 +88,7 @@ async def test_find_active_run(store: PostgresChatStore) -> None:
 async def test_allows_multiple_active_runs_per_actor(
     store: PostgresChatStore,
 ) -> None:
-    """The runs_active_per_actor partial unique index was dropped: concurrent
-    begin_run calls from the same (thread, actor) must both succeed and
-    produce distinct runs. Runs are observability envelopes, not per-actor
-    locks — callers that want dedup pass an idempotency_key."""
+
     first = await store.create_run(_new_run(id="run_1"))
     second = await store.create_run(_new_run(id="run_2"))
     assert first.id == "run_1"
@@ -108,10 +105,7 @@ async def test_idempotency_key_partial_unique(store: PostgresChatStore) -> None:
 
 
 async def test_runs_active_started_index_exists(clean_db: asyncpg.Pool) -> None:
-    """Regression for R13: the watchdog sweep query (status IN
-    ('pending','running') AND started_at < threshold) must be backed by a
-    partial index. Without it, the sweep is a sequential scan over the
-    full runs table and gets unusably slow under load."""
+
     s = PostgresChatStore(pool=clean_db)
     await s.ensure_schema()
     async with clean_db.acquire() as conn:
@@ -125,10 +119,7 @@ async def test_runs_active_started_index_exists(clean_db: asyncpg.Pool) -> None:
 
 
 async def test_runs_active_per_actor_index_is_absent(clean_db: asyncpg.Pool) -> None:
-    """The runs_active_per_actor partial unique index was dropped: it turned
-    truly concurrent begin_run calls for the same (thread, actor) into
-    UniqueViolationErrors. ensure_schema must also drop the index from
-    any database created against the old schema."""
+
     s = PostgresChatStore(pool=clean_db)
     await s.ensure_schema()
     async with clean_db.acquire() as conn:
@@ -144,10 +135,7 @@ async def test_runs_active_per_actor_index_is_absent(clean_db: asyncpg.Pool) -> 
 async def test_create_run_returns_persisted_state_via_returning(
     store: PostgresChatStore,
 ) -> None:
-    """Regression for R12.1: create_run must reflect the persisted DB state,
-    not just the input. Today started_at is set in Python so input == output;
-    this test pins the contract for future schema changes that might use
-    DB-side defaults."""
+
     run = _new_run(id="run_r12")
     created = await store.create_run(run)
 

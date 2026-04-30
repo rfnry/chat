@@ -1,27 +1,3 @@
-"""End-to-end smoke test for the run lifecycle with guarded handlers.
-
-Scenario: one user + three assistant clients all joined to the same thread.
-Every assistant registers a role-filtering `on_message` emitter (with
-lazy_run=True) that only yields when the author.role is "user". The user
-sends a single message.
-
-Expected event counts observed on the thread's event log:
-
-  - 3 `run.started`   (one per agent, because each agent's handler yields
-                        exactly one reply)
-  - 3 `run.completed` (one per agent)
-  - 3 assistant `message` events (the actual replies)
-
-lazy_run=True: handlers with application-level early-return guards opt in
-to defer begin_run to first yield, preserving the no-phantom-run behavior
-in fan-out channels. Without lazy_run=True the eager default would produce
-6 extra phantom runs (each of the 3 agents fires for the 2 messages emitted
-by its sibling agents).
-
-This test is the regression pin. It uses the real socket + REST stack
-against a Postgres-backed ChatServer in the same process.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -149,17 +125,11 @@ async def _create_thread_with_members(base: str, members: list[Identity]) -> str
 async def test_three_agent_channel_user_message_produces_3_runs(
     multi_agent_server: tuple[str, ChatServer],
 ) -> None:
-    """Smoke test for the team-communication fanout. One message from Alice
-    into a 3-agent channel produces exactly 3 run.started and 3 run.completed
-    frames — one real run per agent, zero empty runs from the role-filter
-    early-returns on sibling agents' fanout."""
+
     base, chat_server = multi_agent_server
 
     thread_id = await _create_thread_with_members(base, [USER, AGENT_A, AGENT_B, AGENT_C])
 
-    # User client observes all events (including run.started / run.completed
-    # frames) and counts them. The client passes `all_events=True` on the
-    # handler so the default self/recipient filter does not drop run frames.
     user_client = ChatClient(base_url=base, identity=USER, authenticate=_authenticate_as(USER.id))
     agent_a = ChatClient(base_url=base, identity=AGENT_A, authenticate=_authenticate_as(AGENT_A.id))
     agent_b = ChatClient(base_url=base, identity=AGENT_B, authenticate=_authenticate_as(AGENT_B.id))
@@ -173,10 +143,6 @@ async def test_three_agent_channel_user_message_produces_3_runs(
         received.append({"type": ctx.event.type, "author": ctx.event.author.id})
         last_event.set()
 
-    # Each agent registers a classic role-filter emitter with lazy_run=True:
-    # it early-returns on non-user messages without opening a run. Without
-    # lazy_run=True the eager default would open a phantom run for every
-    # sibling-agent message that triggers the guard.
     def _register_agent(client: ChatClient, reply_text: str) -> None:
         @client.on_message(lazy_run=True)
         async def respond(ctx: HandlerContext, send: Send):
@@ -199,14 +165,10 @@ async def test_three_agent_channel_user_message_produces_3_runs(
         await agent_b.join_thread(thread_id)
         await agent_c.join_thread(thread_id)
 
-        # User sends one message.
         await user_client.send_message(thread_id=thread_id, content=[TextPart(text="hello team")])
 
-        # Wait until activity quiesces. We expect:
-        #   1 user message + 3 agent messages + 3 run.started + 3 run.completed
-        #   = 10 events.
         async def _quiesced() -> bool:
-            # Sample count at T and T+150ms; if stable, assume done.
+
             n1 = len(received)
             await asyncio.sleep(0.15)
             return len(received) == n1 and n1 >= 10
@@ -222,7 +184,7 @@ async def test_three_agent_channel_user_message_produces_3_runs(
 
         assert len(run_started) == 3, f"expected 3 run.started, got {len(run_started)}; full stream: {types}"
         assert len(run_completed) == 3, f"expected 3 run.completed, got {len(run_completed)}; full stream: {types}"
-        # 1 user message + 3 agent replies.
+
         assert len(messages) == 4, f"expected 4 messages (1 user + 3 agents), got {len(messages)}; full stream: {types}"
     finally:
         await user_client.disconnect()

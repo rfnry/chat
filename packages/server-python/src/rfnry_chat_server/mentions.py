@@ -8,17 +8,7 @@ _TRAILING_PUNCT = ",.!?;:)]}'\""
 
 
 def parse_mention_ids(text: str, member_ids: set[str]) -> list[str]:
-    """Extract @<id> tokens from prose where <id> is in member_ids.
 
-    Token rule: '@' followed by any run of non-whitespace characters,
-    ending at the next whitespace or end-of-string. The captured run has
-    trailing punctuation (,.!?;:)]}'\") trimmed before id lookup, so
-    '@engineer,' resolves to id 'engineer'. Whitespace immediately after
-    '@' is not a mention.
-
-    Returns matched ids in first-seen order, deduped. Unknown tokens are
-    silently skipped. Case-sensitive on ids.
-    """
     seen: set[str] = set()
     out: list[str] = []
     i = 0
@@ -41,12 +31,7 @@ def parse_mention_ids(text: str, member_ids: set[str]) -> list[str]:
 
 
 def extract_text(content: Iterable[ContentPart]) -> str:
-    """Concatenate text-typed content parts for mention scanning.
 
-    Non-text parts (images, audio, documents, forms) are skipped — they
-    cannot carry @<id> tokens. Multiple text parts are joined with a
-    newline so a token cannot straddle a boundary.
-    """
     parts: list[str] = []
     for p in content:
         if getattr(p, "type", None) == "text":

@@ -1,10 +1,3 @@
-"""R11.1/R11.2: tenant room join on connect + tenant-scoped broadcast isolation.
-
-- namespace_keys=["org"]  → room is  tenant:/acme
-- namespace_keys=None     → room is  tenant:/   (single-tenant sentinel)
-- thread:created for tenant A must NOT reach a socket from tenant B
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -59,7 +52,7 @@ def _wire(chat_server: ChatServer) -> Any:
 
 @pytest.fixture
 async def live_with_ns_keys(clean_db: asyncpg.Pool) -> AsyncIterator[tuple[str, ChatServer]]:
-    """Live server with namespace_keys=["org"]; authenticate always returns acme identity."""
+
     store = PostgresChatStore(pool=clean_db)
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "acme"}})
 
@@ -78,7 +71,7 @@ async def live_with_ns_keys(clean_db: asyncpg.Pool) -> AsyncIterator[tuple[str, 
 
 @pytest.fixture
 async def live_no_ns_keys(clean_db: asyncpg.Pool) -> AsyncIterator[tuple[str, ChatServer]]:
-    """Live server with namespace_keys=None (single-tenant); authenticate always returns alice."""
+
     store = PostgresChatStore(pool=clean_db)
     alice = UserIdentity(id="u_alice", name="Alice", metadata={})
 
@@ -98,8 +91,7 @@ async def live_no_ns_keys(clean_db: asyncpg.Pool) -> AsyncIterator[tuple[str, Ch
 async def test_authenticated_socket_joins_tenant_room_on_connect(
     live_with_ns_keys: tuple[str, ChatServer],
 ) -> None:
-    """R11.1: socket whose identity tenant is {"org": "acme"} receives a frame
-    emitted to room tenant:/acme immediately after connect."""
+
     base, chat_server = live_with_ns_keys
 
     received: list[dict[str, Any]] = []
@@ -119,7 +111,6 @@ async def test_authenticated_socket_joins_tenant_room_on_connect(
         socketio_path="/chat/ws",
     )
 
-    # Emit directly to the tenant room from the server side.
     sio: socketio.AsyncServer = chat_server.broadcaster._sio  # type: ignore[attr-defined]
     tenant_room = _tenant_room({"org": "acme"}, namespace_keys=["org"])
     await sio.emit("thread:created", {"thread_id": "th_test"}, room=tenant_room, namespace="/acme")
@@ -135,7 +126,7 @@ async def test_authenticated_socket_joins_tenant_room_on_connect(
 async def test_single_tenant_socket_joins_root_tenant_room_on_connect(
     live_no_ns_keys: tuple[str, ChatServer],
 ) -> None:
-    """R11.1 (single-tenant): socket joins tenant:/ when namespace_keys=None."""
+
     base, chat_server = live_no_ns_keys
 
     received: list[dict[str, Any]] = []
@@ -170,10 +161,7 @@ async def test_single_tenant_socket_joins_root_tenant_room_on_connect(
 async def test_thread_created_emits_only_to_matching_tenant_room(
     clean_db: asyncpg.Pool,
 ) -> None:
-    """R11.2 (tenant isolation): a thread:created event for tenant A must
-    NOT reach a socket from tenant B. The previous per-SID broadcast loop
-    enforced this via filtering; the new room-based emit enforces it via
-    Socket.IO room membership. This test pins the contract."""
+
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "acme"}})
     bob = UserIdentity(id="u_bob", name="Bob", metadata={"tenant": {"org": "globex"}})
     identities: dict[str, Identity] = {"alice": alice, "bob": bob}

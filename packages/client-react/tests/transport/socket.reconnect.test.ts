@@ -59,7 +59,7 @@ describe('SocketTransport reconnect bounds', () => {
     const onReconnectFailed = vi.fn()
     const t = new SocketTransport({ baseUrl: 'http://chat.test', onReconnectFailed })
     await t.connect()
-    // simulate socket.io firing reconnect_failed
+
     for (const cb of handlers['reconnect_failed'] ?? []) cb()
     expect(onReconnectFailed).toHaveBeenCalledTimes(1)
   })

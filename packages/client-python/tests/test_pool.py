@@ -53,7 +53,7 @@ async def test_pool_close_removes_entry() -> None:
     pool = ChatClientPool(factory=factory)
     a1 = await pool.get_or_connect("http://chat-a.test")
     await pool.close("http://chat-a.test")
-    # After close(), a fresh connect should build a NEW client for the same URL.
+
     a2 = await pool.get_or_connect("http://chat-a.test")
     assert a1 is not a2
 

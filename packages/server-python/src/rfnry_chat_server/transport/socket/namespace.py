@@ -51,28 +51,6 @@ def thread_room(thread_id: str) -> str:
     return f"thread:{thread_id}"
 
 
-# ---------------------------------------------------------------------------
-# Task C1 finding (python-socketio 5.16.1)
-# ---------------------------------------------------------------------------
-# `socketio.AsyncServer._get_namespace_handler(namespace, args)` prepends the
-# concrete namespace as the first positional arg when the handler was
-# registered under the wildcard `"*"` — i.e. for a wildcard registration the
-# namespace instance receives `trigger_event(event, namespace, *original_args)`
-# instead of the usual `trigger_event(event, *original_args)`.
-#
-# For a static registration (e.g. `/`), no extra arg is injected, so the
-# standard `trigger_event(event, *original_args)` contract holds.
-#
-# `ThreadNamespace.trigger_event` below therefore:
-#   1) Detects wildcard mode via `self.namespace == "*"` and pops the extra
-#      leading argument, stashing the concrete namespace on a per-sid dict so
-#      that handlers can look it up via `self._concrete_namespace_for(sid)`.
-#   2) Translates colon-separated socket.io event names (e.g. "thread:join")
-#      into Python-safe method names (`on_thread_join`), because class-based
-#      namespaces default to mapping `"thread_join"` (underscore) → method.
-# ---------------------------------------------------------------------------
-
-
 class ThreadNamespace(socketio.AsyncNamespace):
     def __init__(
         self,
@@ -84,22 +62,15 @@ class ThreadNamespace(socketio.AsyncNamespace):
         super().__init__(namespace)
         self._server = server
         self._replay_cap = replay_cap
-        # Maps sid -> concrete namespace path; populated in trigger_event when
-        # the namespace was registered with the "*" wildcard.
+
         self._sid_namespaces: dict[str, str] = {}
 
-    # ------------------------------------------------------------------
-    # Dispatch
-    # ------------------------------------------------------------------
     async def trigger_event(self, event: str, *args: Any) -> Any:
-        # When registered under "*", python-socketio prepends the concrete
-        # namespace as args[0]. Pop it and cache by sid so handlers can look
-        # it up later via _concrete_namespace_for.
+
         if self.namespace == "*" and args:
             concrete_ns = args[0]
             rest = args[1:]
-            # sid is the handler's first positional arg for every event
-            # we care about (connect/disconnect/thread:*, message:*, ...).
+
             if rest and isinstance(rest[0], str):
                 sid = rest[0]
                 self._sid_namespaces[sid] = concrete_ns
@@ -112,8 +83,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
         try:
             result = handler(*args)
         except TypeError:
-            # python-socketio 5.12+ passes a `reason` arg to disconnect;
-            # older handlers only accept sid. Mimic the upstream fallback.
             if event == "disconnect" and args:
                 result = handler(*args[:-1])
             else:
@@ -121,21 +90,12 @@ class ThreadNamespace(socketio.AsyncNamespace):
         if hasattr(result, "__await__"):
             result = await result
 
-        # Clean up cached namespace mapping on disconnect.
         if event == "disconnect" and args and isinstance(args[0], str):
             self._sid_namespaces.pop(args[0], None)
         return result
 
     def _concrete_namespace_for(self, sid: str) -> str:
-        """Return the concrete namespace the given sid connected to.
 
-        When the namespace is registered statically (e.g. "/"), there is no
-        ambiguity: `self.namespace` is the answer. Under wildcard mode we
-        read the mapping populated in `trigger_event`; if the sid is missing
-        from that mapping we raise explicitly rather than silently falling
-        back to "/" (which isn't a registered namespace under wildcard mode
-        and would produce confusing downstream errors).
-        """
         if self.namespace != "*":
             return self.namespace
         ns = self._sid_namespaces.get(sid)
@@ -145,12 +105,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
             )
         return ns
 
-    # ------------------------------------------------------------------
-    # Session helpers — route to the concrete namespace under wildcard.
-    # AsyncNamespace.{save_,get_}session normally default the namespace to
-    # `self.namespace`, which is literally "*" in wildcard mode. The sid is
-    # registered under the concrete path, so we must override.
-    # ------------------------------------------------------------------
     async def save_session(self, sid: str, session: dict[str, Any], namespace: str | None = None) -> None:
         ns = namespace or self._concrete_namespace_for(sid)
         await self.server.save_session(sid, session, namespace=ns)
@@ -167,15 +121,8 @@ class ThreadNamespace(socketio.AsyncNamespace):
         ns = namespace or self._concrete_namespace_for(sid)
         await self.server.leave_room(sid, room, namespace=ns)
 
-    # ------------------------------------------------------------------
-    # Event handlers
-    # ------------------------------------------------------------------
     async def on_connect(self, sid: str, environ: dict[str, Any], auth: Any = None) -> None:
-        # `trigger_event` already stashed `sid -> concrete_ns` in
-        # `_sid_namespaces` before dispatching us (wildcard mode only). If
-        # we raise ConnectionRefusedError anywhere below, python-socketio
-        # never dispatches `disconnect` for this sid, so we must clean up
-        # the cache entry ourselves or it leaks forever on refused auth.
+
         try:
             handshake = _build_handshake(environ, auth)
             identity = await self._server.authenticate(handshake)
@@ -214,15 +161,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
             await self.enter_room(sid, f"tenant:{tenant_path}")
             await self.enter_room(sid, _presence_room(tenant_path))
 
-            # Refcount semantics: only broadcast `presence:joined` on the 0→1
-            # edge so re-connecting tabs from the same identity don't spam the
-            # room. `skip_sid=sid` ensures the joining socket itself doesn't
-            # receive its own joined frame.
-            #
-            # Re-raise PresenceRegistry's ValueError (cross-tenant re-add
-            # invariant) as ConnectionRefusedError so python-socketio dispatches
-            # `disconnect` and the `_sid_namespaces` cleanup in the except block
-            # below fires — an un-caught raise here would leak the sid entry.
             try:
                 is_first = await self._server.presence.add(
                     identity.id,
@@ -233,18 +171,6 @@ class ThreadNamespace(socketio.AsyncNamespace):
             except ValueError as exc:
                 raise socketio.exceptions.ConnectionRefusedError(f"presence_tenant_conflict: {exc}") from exc
             if is_first and self._server.broadcaster is not None:
-                # Derive the concrete namespace from the sid itself rather than
-                # hardcoding "/" in the static branch — this stays correct even
-                # if the ns_path ever changes (e.g. a test harness mounts at
-                # a non-default path) and prevents the silent-no-op failure mode
-                # that broadcast_presence_joined's docstring warns about.
-                #
-                # If the broadcast itself fails (e.g. transport-level error from
-                # socketio.emit), roll back the presence.add so the identity
-                # isn't stuck "online" — python-socketio won't dispatch
-                # `disconnect` for a sid that never fully connected, so the
-                # registry entry would otherwise leak until another socket for
-                # the same identity cycles through a full connect+disconnect.
                 try:
                     await self._server.broadcaster.broadcast_presence_joined(
                         PresenceJoinedFrame(identity=identity, at=datetime.now(UTC)),
@@ -260,35 +186,21 @@ class ThreadNamespace(socketio.AsyncNamespace):
             raise
 
     async def on_disconnect(self, sid: str, *_args: Any) -> None:
-        """Decrement presence refcount and broadcast `presence:left` on the 1→0
-        edge for this identity. Safe to call even if the sid never completed
-        auth — `presence.remove` returns (False, None, None) for unknown sids.
 
-        We derive the namespace via `_concrete_namespace_for(sid)` BEFORE
-        trigger_event's disconnect cleanup pops the cache; as long as we run
-        ourselves within the same dispatch window, the entry is still present.
-        """
         try:
             session = await self.get_session(sid)
         except KeyError:
-            # Session dict never got stored (e.g. connect refused before save).
-            # presence.remove is safe to call with an unknown sid.
             session = {}
         identity = session.get("identity")
         if identity is None:
-            # No session → either pre-auth or already cleaned up. Nothing to do.
             return
 
         was_last, removed_identity, tenant_path = await self._server.presence.remove(identity.id, sid)
         if was_last and removed_identity is not None and tenant_path is not None:
             if self._server.broadcaster is not None:
-                # Mirror on_connect: derive namespace from the sid's concrete ns
-                # so the emit lands in the right room manager under wildcard mode.
                 try:
                     namespace = self._concrete_namespace_for(sid)
                 except RuntimeError:
-                    # sid already popped from cache — fall back to the session's
-                    # stored namespace (populated in on_connect) or "/".
                     namespace = session.get("namespace") or "/"
                 await self._server.broadcaster.broadcast_presence_left(
                     PresenceLeftFrame(identity=removed_identity, at=datetime.now(UTC)),
@@ -297,9 +209,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
                 )
 
     async def _check_namespace_match(self, sid: str, thread_tenant: dict[str, str]) -> bool:
-        """Return True if the thread's tenant agrees with the session's
-        namespace_tenant on every namespace_keys entry. Callers should treat
-        a False return as `not_found` (do not leak existence)."""
+
         if self._server.namespace_keys is None:
             return True
         session = await self.get_session(sid)
@@ -350,10 +260,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
         thread_id = data.get("thread_id")
         if not isinstance(thread_id, str):
             return _error("invalid_request", "thread_id required")
-        # Deliberately no _check_namespace_match here: leave_room is scoped to
-        # the sid's concrete namespace via the overridden `leave_room`, and
-        # leaving a room you were never in is a Socket.IO no-op. Enforcing the
-        # check would add work without changing behavior.
+
         await self.leave_room(sid, thread_room(thread_id))
         return {"thread_id": thread_id, "left": True}
 
@@ -515,16 +422,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
             frame = StreamStartFrame.model_validate(data)
         except ValidationError as exc:
             return _error("invalid_request", str(exc))
-        # Cache the authorized thread in the session keyed by event_id so that
-        # on_stream_delta and on_stream_end can skip _access_check entirely —
-        # each delta would otherwise cost 2 DB round-trips (get_thread +
-        # membership) for data unchanged since stream:start.
-        #
-        # python-socketio's get_session returns the live in-process dict (not a
-        # copy); mutating `active` here is immediately visible to concurrent
-        # frames on the same sid. save_session is the explicit write barrier
-        # but is not the only thing preserving the mutation. If anyone "cleans
-        # up" by deep-copying, concurrent streams will silently lose updates.
+
         session = await self.get_session(sid)
         active: dict[str, Any] = session.setdefault("active_streams", {})
         active[frame.event_id] = access
@@ -533,8 +431,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
         return {"ok": True}
 
     async def on_stream_delta(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
-        # Validate the frame BEFORE session lookup so malformed frames return
-        # invalid_request, not not_found.
+
         thread_id = data.get("thread_id")
         if not isinstance(thread_id, str):
             return _error("invalid_request", "thread_id required")
@@ -550,8 +447,7 @@ class ThreadNamespace(socketio.AsyncNamespace):
         return {"ok": True}
 
     async def on_stream_end(self, sid: str, data: dict[str, Any]) -> dict[str, Any]:
-        # Validate the frame BEFORE session lookup so malformed frames return
-        # invalid_request, not not_found.
+
         thread_id = data.get("thread_id")
         if not isinstance(thread_id, str):
             return _error("invalid_request", "thread_id required")
@@ -608,9 +504,7 @@ def _identity_tenant(identity: Identity) -> dict[str, str]:
     raw = identity.metadata.get("tenant", {})
     if not isinstance(raw, dict):
         return {}
-    # See the comment on `identity_tenant` in transport/rest/deps.py — non-string
-    # tenant values are dropped rather than coerced via str(), mirroring the
-    # strict isinstance check inside derive_namespace_path.
+
     return {k: v for k, v in raw.items() if isinstance(v, str)}
 
 

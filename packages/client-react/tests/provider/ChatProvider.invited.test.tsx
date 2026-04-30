@@ -3,7 +3,6 @@ import { render, waitFor } from '@testing-library/react'
 import { useContext } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Hoisted mock so the provider's `import { io } from 'socket.io-client'` sees our fake.
 const { socketOn, socketOnce, socketDisconnect, socketEmitWithAck, socketTimeout } = vi.hoisted(
   () => ({
     socketOn: vi.fn(),
@@ -46,8 +45,7 @@ describe('ChatProvider — thread:invited', () => {
     socketDisconnect.mockClear()
     socketEmitWithAck.mockClear()
     socketTimeout.mockClear()
-    // Default join ack so joinThread resolves cleanly.
-    // timeout() returns an object with emitWithAck; wire it up each reset.
+
     socketEmitWithAck.mockResolvedValue({
       thread_id: 'th_X',
       replayed: [],
@@ -79,7 +77,6 @@ describe('ChatProvider — thread:invited', () => {
 
     await waitFor(() => expect(captured).not.toBeNull())
 
-    // Find the handler the provider registered for 'thread:invited'.
     const call = socketOn.mock.calls.find(([event]) => event === 'thread:invited')
     expect(call).toBeDefined()
     const handler = (call as unknown as [string, (data: unknown) => void])[1]
@@ -96,7 +93,6 @@ describe('ChatProvider — thread:invited', () => {
       added_by: { role: 'assistant', id: 'a_bot', name: 'Bot', metadata: {} },
     })
 
-    // 1. Thread meta hydrated into the store.
     await waitFor(() => {
       const store = captured as unknown as ReturnType<typeof useChatStore>
       const meta = store.getState().threadMeta.th_X
@@ -105,12 +101,10 @@ describe('ChatProvider — thread:invited', () => {
       expect(meta?.metadata).toMatchObject({ title: 'Proactive ping' })
     })
 
-    // 2. joinThread was auto-called: the transport emits 'thread:join' with emitWithAck.
     await waitFor(() => {
       expect(socketEmitWithAck).toHaveBeenCalledWith('thread:join', { thread_id: 'th_X' })
     })
 
-    // 3. onThreadInvited callback fired with (thread, addedBy).
     await waitFor(() => {
       expect(onInvited).toHaveBeenCalledTimes(1)
     })
@@ -119,7 +113,6 @@ describe('ChatProvider — thread:invited', () => {
     expect(addedBy.id).toBe('a_bot')
     expect(addedBy.role).toBe('assistant')
 
-    // 4. react-query threads key invalidated.
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['chat', 'threads'] })
   })
 })

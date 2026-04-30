@@ -71,7 +71,7 @@ async def test_list_threads_preserves_reasonable_limit(
 async def test_list_threads_clamps_non_positive_limit_to_one(
     clean_db: asyncpg.Pool,
 ) -> None:
-    """Zero or negative limits are treated as the minimum (1)."""
+
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
     store = PostgresChatStore(pool=clean_db)
 

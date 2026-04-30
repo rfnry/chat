@@ -47,7 +47,7 @@ function compareEvents(a: Event, b: Event): number {
 function insertSorted(sorted: Event[], event: Event): Event[] {
   const n = sorted.length
   if (n === 0) return [event]
-  // Hot path: events arrive in order — append at the end is the common case.
+
   if (compareEvents(sorted[n - 1]!, event) <= 0) return [...sorted, event]
   let lo = 0
   let hi = n
@@ -89,9 +89,7 @@ export function createChatStore() {
             delete threadRuns[event.runId]
             activeRuns = { ...activeRuns, [event.threadId]: threadRuns }
           }
-          // Remove streaming entry in the same update so React sees one
-          // consistent snapshot — no flicker between stream:end and the
-          // finalized event arriving.
+
           let streams = state.streams
           if (Object.hasOwn(streams, event.id)) {
             streams = { ...streams }
@@ -161,11 +159,7 @@ export function createChatStore() {
             },
           }
         }),
-      endStream: (_eventId) => {
-        // Intentionally a no-op: the streaming entry persists until the
-        // finalized event with the same id arrives via addEvent, which
-        // removes it in the same store update to prevent flicker.
-      },
+      endStream: (_eventId) => {},
       addJoinedThread: (threadId) =>
         set((state) => {
           const next = new Set(state.joinedThreads)

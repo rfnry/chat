@@ -81,6 +81,7 @@ async def test_emit_restamps_created_at() -> None:
     event = send.message([TextPart(text="hi")])
     original_created_at = event.created_at
     import asyncio
+
     await asyncio.sleep(0.01)
     await send.emit(event)
     assert client.emitted[0].created_at >= original_created_at

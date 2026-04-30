@@ -201,9 +201,7 @@ async def test_send_to_idempotency_key_passes_to_run() -> None:
     client = _client(socket, rest)
     async with client.send_to(ALICE, idempotency_key="op_run") as send:
         await send.emit(send.message([TextPart(text="hi")]))
-    # Wire payload retains it (StubSocket.begin_calls captures triggered_by but
-    # not idempotency_key explicitly — tested separately in test_client_send.py;
-    # here we verify no error and one run was opened).
+
     assert len(socket.begin_calls) == 1
 
 

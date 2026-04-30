@@ -25,11 +25,7 @@ export type SugarHandlerOptions = {
 
 export type UseHandlerOptions = {
   toolName?: string
-  /**
-   * When true, deliver every matching event — including self-authored ones
-   * and ones whose `recipients` excludes this identity. Mirrors the Python
-   * Dispatcher's default-filter opt-out.
-   */
+
   allEvents?: boolean
 }
 
@@ -187,19 +183,6 @@ const HANDLER_NAMESPACE: ChatHandlers = {
   },
 }
 
-/**
- * Returns the chat event-handler registration namespace.
- *
- * Each `on.X(fn, opts?)` call registers a listener for the corresponding
- * event type and is itself a hook call (uses `useEffect` + a ref to the
- * handler). Call them unconditionally at the top level of your component,
- * just like any other hook.
- *
- * Mirrors Python's `@client.on_message`, `@client.on_tool_call`,
- * `@client.on_thread_updated`, `@client.on_members_updated`,
- * `@client.on_run_updated`, `@client.on_presence_joined`,
- * `@client.on_presence_left`, etc.
- */
 export function useChatHandlers(): ChatHandlers {
   return HANDLER_NAMESPACE
 }

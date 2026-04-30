@@ -43,34 +43,12 @@ _log = logging.getLogger("rfnry_chat_client.runner")
 
 
 class _LifespanNoiseFilter(logging.Filter):
-    """Silence uvicorn.error CancelledError noise that appears on SIGINT when
-    an outbound socketio-client connection is alive.
-
-    Background: socketio.AsyncClient.connect() spins up background tasks
-    (via aiohttp) that prevent uvicorn from reaching its normal graceful
-    shutdown on SIGINT. Instead, uvicorn's main_loop gets cancelled
-    directly, which cancels the lifespan task at `await receive()`
-    (waiting for a `lifespan.shutdown` message that never arrives). Two
-    separate log paths can surface this, both on ``uvicorn.error``:
-
-    1. ``LifespanOn.main()`` catches the BaseException and logs
-       ``"Exception in 'lifespan' protocol\\n"`` with ``exc_info=exc``.
-
-    2. Starlette's ``Router.lifespan()`` catches the BaseException and
-       sends a ``lifespan.shutdown.failed`` message whose ``message``
-       field is the full ``traceback.format_exc()`` string; uvicorn then
-       logs that string directly via ``self.logger.error(message)``.
-
-    Both are purely cosmetic — exit code is still 0 and
-    ``client.disconnect()`` still runs before the task is cancelled.
-    """
-
     _CANCELLED_MARKERS = ("asyncio.CancelledError", "asyncio.exceptions.CancelledError")
 
     def filter(self, record: logging.LogRecord) -> bool:
         if not isinstance(record.msg, str):
             return True
-        # Path 1: "Exception in 'lifespan' protocol" with exc_info
+
         if record.msg.startswith("Exception in 'lifespan' protocol"):
             exc_type = record.exc_info[0] if record.exc_info else None
             if exc_type is None:
@@ -80,7 +58,7 @@ class _LifespanNoiseFilter(logging.Filter):
             except TypeError:
                 is_cancelled = False
             return not is_cancelled
-        # Path 2: starlette lifespan.shutdown.failed — raw traceback text
+
         if record.msg.startswith("Traceback (most recent call last):") and any(
             marker in record.msg for marker in self._CANCELLED_MARKERS
         ):
@@ -199,11 +177,7 @@ class ChatClient:
         path: str | None = None,
         socketio_path: str | None = None,
     ) -> None:
-        """Disconnect, rebuild transports with new options, reconnect.
 
-        Handler registrations survive — they live on the dispatcher, which is
-        not replaced.
-        """
         try:
             await self._socket.disconnect()
         except Exception:
@@ -263,8 +237,7 @@ class ChatClient:
                         connect_backoff_seconds * (2 ** (attempt - 1)),
                         max_backoff_seconds,
                     )
-                    # Floored jitter in [0.5 * base, 1.5 * base) — exponential growth with
-                    # a 1x-wide spread that breaks lockstep across a fleet of clients.
+
                     delay = base * (0.5 + random.random())
                     await asyncio.sleep(delay)
         if last_error is not None:
@@ -292,28 +265,7 @@ class ChatClient:
         max_backoff_seconds: float = 30.0,
         disconnect_timeout: float = 5.0,
     ) -> AsyncIterator[None]:
-        """Async context manager for running a ChatClient alongside a FastAPI app.
 
-        Plug this into your FastAPI lifespan::
-
-            @asynccontextmanager
-            async def lifespan(app):
-                async with client.running(on_connect=_join_channels):
-                    yield
-
-        Handles the background ``run()`` task, connect retry, on_connect hook,
-        clean ``disconnect()`` on exit, and cancellation of the run task.
-
-        Also installs a logging filter on ``uvicorn.error`` to silence the
-        known-harmless "Exception in 'lifespan' protocol" CancelledError
-        log that appears on SIGINT when an outbound socketio-client
-        connection is alive (this is a uvicorn-level cosmetic quirk, not
-        a real failure — exit code is still 0).
-
-        For FULLY silent SIGINT shutdown (no top-level asyncio.CancelledError
-        traceback either), wrap your own ``uvicorn.run()`` in
-        ``try/except asyncio.CancelledError``.
-        """
         _install_lifespan_noise_filter()
         task = asyncio.create_task(
             self.run(
@@ -372,8 +324,7 @@ class ChatClient:
         triggered_by_event_id: str | None = None,
         idempotency_key: str | None = None,
     ) -> str:
-        """Open a Run and return its id. Use `get_run(id)` to fetch the full
-        Run object if needed."""
+
         reply = await self._socket.begin_run(
             thread_id,
             triggered_by_event_id=triggered_by_event_id,
@@ -387,14 +338,14 @@ class ChatClient:
         *,
         error: RunError | None = None,
     ) -> None:
-        """Close a Run. Use `get_run(id)` afterward if you need the final state."""
+
         payload: dict[str, Any] | None = None
         if error is not None:
             payload = {"code": error.code, "message": error.message}
         await self._socket.end_run(run_id, error=payload)
 
     async def get_run(self, run_id: str) -> Run:
-        """Fetch the current state of a Run by id."""
+
         return await self._rest.get_run(run_id)
 
     async def cancel_run(self, run_id: str) -> dict[str, Any]:

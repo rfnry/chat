@@ -20,14 +20,6 @@ _log = logging.getLogger("rfnry_chat_client.inbox")
 
 
 class InboxDispatcher:
-    """Dispatches `thread:invited` frames to registered `@on_invited` handlers.
-
-    Contract: when `auto_join=True` (the default), the dispatcher awaits
-    `client.join_thread(frame.thread.id)` BEFORE any user handler runs. This
-    lets handlers assume their socket is already subscribed to the thread
-    room, so they can e.g. `send_message` into that thread without racing.
-    """
-
     def __init__(self, *, client: ChatClient, auto_join: bool) -> None:
         self._client = client
         self._auto_join = auto_join
@@ -40,9 +32,6 @@ class InboxDispatcher:
     async def feed(self, raw: dict[str, Any]) -> None:
         frame = ThreadInvitedFrame.model_validate(raw)
         if self._auto_join:
-            # Auto-join is best-effort. Transport / HTTP failures are logged
-            # and swallowed so user handlers still fire — but programmer
-            # errors (AttributeError, TypeError, etc.) propagate normally.
             try:
                 await self._client.join_thread(frame.thread.id)
             except (SocketTransportError, ChatHttpError) as exc:

@@ -22,11 +22,7 @@ from rfnry_chat_protocol import (
 
 from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
 
-# Fixed int8 advisory-lock key used to serialize concurrent ensure_schema()
-# calls across replicas. Arbitrary value — only needs to agree across
-# processes; collides only with other code picking this exact literal in
-# the same database.
-_SCHEMA_LOCK_KEY = 0x7266636861747363  # "rfchatsc" as big-endian ASCII
+_SCHEMA_LOCK_KEY = 0x7266636861747363
 
 
 class PostgresChatStore:
@@ -267,7 +263,7 @@ class PostgresChatStore:
                 run.started_at,
                 run.completed_at,
             )
-        assert row is not None  # INSERT ... RETURNING always returns a row
+        assert row is not None
         return _row_to_run(row)
 
     async def get_run(self, run_id: str) -> Run | None:

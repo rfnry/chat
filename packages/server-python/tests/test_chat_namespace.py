@@ -12,9 +12,6 @@ from rfnry_chat_server.server import ChatServer
 
 
 class _StubStore:
-    """Minimal ChatStore stub — every method raises. Used when we only
-    need to check construction-time validation."""
-
     def __getattr__(self, name: str) -> Any:
         raise NotImplementedError(name)
 

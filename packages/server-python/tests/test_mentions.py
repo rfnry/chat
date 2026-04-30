@@ -64,8 +64,7 @@ def test_case_sensitive_id_lookup() -> None:
 
 
 def test_mid_word_at_permissive_match() -> None:
-    # Documented design choice: prefix is permissive — 'foo@engineer' matches
-    # because the suffix-up-to-whitespace rule yields token 'engineer'.
+
     assert parse_mention_ids("foo@engineer", MEMBERS) == ["engineer"]
 
 
@@ -82,9 +81,7 @@ def test_only_at_followed_by_punct() -> None:
 
 
 def test_consecutive_at_symbols_no_match() -> None:
-    # '@@engineer' starting at index 0 produces token '@engineer' which is not
-    # a member id; scan jumps past the token, so the inner @ never starts a
-    # fresh scan inside the same token.
+
     assert parse_mention_ids("@@engineer", MEMBERS) == []
 
 
@@ -118,7 +115,7 @@ def test_combined_trailing_punct() -> None:
 
 
 def test_leading_punct_not_part_of_token() -> None:
-    # '(' precedes '@' so it isn't part of the token; ')' is trailing punct → trimmed.
+
     assert parse_mention_ids("(@engineer)", MEMBERS) == ["engineer"]
 
 
@@ -128,7 +125,7 @@ def test_unicode_in_id_preserved() -> None:
 
 
 def test_id_immediately_followed_by_id_no_match() -> None:
-    # No whitespace separates them, so the token is the joined string.
+
     assert parse_mention_ids("@engineer@coordinator", MEMBERS) == []
 
 
@@ -166,17 +163,17 @@ def test_empty_member_set() -> None:
 
 
 def test_mention_inside_parentheses_then_text() -> None:
-    # '(@engineer)' inside a larger sentence should still extract.
+
     assert parse_mention_ids("see (@engineer) for review", MEMBERS) == ["engineer"]
 
 
 def test_mention_with_trailing_apostrophe() -> None:
-    # 'engineer's' is not a valid id; the apostrophe is mid-token, not trailing.
+
     assert parse_mention_ids("@engineer's note", MEMBERS) == []
 
 
 def test_apostrophe_only_trailing_trimmed() -> None:
-    # Pure trailing apostrophe should trim → 'engineer' matches.
+
     assert parse_mention_ids("@engineer'", MEMBERS) == ["engineer"]
 
 

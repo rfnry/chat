@@ -73,7 +73,6 @@ describe('useChatHandlers', () => {
       </Wrapper>
     )
 
-    // Give the useEffect time to register
     await new Promise((r) => setTimeout(r, 0))
 
     dispatch(

@@ -25,17 +25,6 @@ _log = logging.getLogger("rfnry_chat_client.frames")
 
 
 class FrameDispatcher:
-    """Dispatches transient server broadcast frames (thread:updated,
-    members:updated, run:updated, presence:joined, presence:left) to
-    registered handlers.
-
-    These frames are snapshots carried over Socket.IO room broadcasts; they
-    are NOT persisted events. For persisted events (message, tool.call, etc.)
-    use `@client.on(...)` which routes through `Dispatcher`. For the
-    `thread:invited` frame use `@client.on_invited()` (routes through
-    `InboxDispatcher`, which also handles auto-join semantics).
-    """
-
     def __init__(self) -> None:
         self._thread_updated: list[ThreadUpdatedHandler] = []
         self._members_updated: list[MembersUpdatedHandler] = []

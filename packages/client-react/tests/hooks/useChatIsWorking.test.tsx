@@ -86,12 +86,10 @@ describe('useChatIsWorking', () => {
     )
     const baseline = renderCount
 
-    // Adding a second run keeps the boolean `true` — no re-render.
     act(() => {
       store.getState().actions.upsertRun(makeRun('r2', 't_A'))
     })
 
-    // R17: the hook returns the SAME boolean reference (true), so React bails.
     expect(renderCount).toBe(baseline)
   })
 

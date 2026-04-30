@@ -29,14 +29,12 @@ async def test_list_threads_hides_non_member_threads_in_same_tenant(
 
     store = PostgresChatStore(pool=clean_db)
 
-    # Alice creates a thread. She is auto-added as member.
     alice_app = _build_app(store, alice)
     async with AsyncClient(transport=ASGITransport(app=alice_app), base_url="http://test") as alice_client:
         r = await alice_client.post("/chat/threads", json={"tenant": {"org": "A"}})
         assert r.status_code == 201
         alice_thread_id = r.json()["id"]
 
-    # Bob, same tenant but NOT a member, lists threads. Should not see Alice's thread.
     bob_app = _build_app(store, bob)
     async with AsyncClient(transport=ASGITransport(app=bob_app), base_url="http://test") as bob_client:
         r = await bob_client.get("/chat/threads")
@@ -57,7 +55,7 @@ async def test_list_threads_shows_threads_where_caller_is_member(
     async with AsyncClient(transport=ASGITransport(app=alice_app), base_url="http://test") as alice_client:
         r = await alice_client.post("/chat/threads", json={"tenant": {"org": "A"}})
         thread_id = r.json()["id"]
-        # Alice adds Bob.
+
         r = await alice_client.post(
             f"/chat/threads/{thread_id}/members",
             json={"identity": bob.model_dump(mode="json"), "role": "member"},

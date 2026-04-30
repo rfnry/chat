@@ -23,16 +23,11 @@ class SocketTransport:
     ) -> None:
         self._server = server
         self._replay_cap = replay_cap
-        # When namespace_keys is set, register under the wildcard "*" so
-        # python-socketio routes every dynamic `/A`, `/A/ws_X`, etc. to this
-        # namespace. Otherwise stay on the default `/` path.
+
         wildcard = server.namespace_keys is not None
         self._sio = socketio.AsyncServer(
             async_mode="asgi",
             cors_allowed_origins=cors_allowed_origins,
-            # `namespaces="*"` tells python-socketio's _handle_connect to
-            # accept any dynamic namespace path; without it, only paths
-            # explicitly listed (default `["/"]`) are allowed.
             namespaces="*" if wildcard else None,
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,

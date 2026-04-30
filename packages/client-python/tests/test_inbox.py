@@ -66,16 +66,14 @@ async def test_default_auto_join_invokes_thread_join() -> None:
     await client.connect()
     raw = sio.handlers["thread:invited"]
     await raw(_invited_frame_dict())
-    # FakeSioClient records thread:join calls. Verify auto-join fired.
+
     joined = [c for c in sio.calls if c[0] == "thread:join"]
     assert len(joined) == 1
     assert joined[0][1]["thread_id"] == "th_1"
 
 
 async def test_inbox_feed_fans_user_handlers_concurrently() -> None:
-    """R16: invite handlers must run concurrently after the auto-join
-    completes. Auto-join stays serialized because handlers may assume
-    they're already joined to the room."""
+
     import asyncio
 
     me = AssistantIdentity(id="a_me", name="Me")

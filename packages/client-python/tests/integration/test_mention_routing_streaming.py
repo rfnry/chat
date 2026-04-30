@@ -1,7 +1,3 @@
-"""Streaming integration: server fills recipients on the finalized streamed
-MessageEvent when the sender did not set them, and preserves sender-set
-recipients verbatim."""
-
 from __future__ import annotations
 
 import asyncio
@@ -42,9 +38,7 @@ async def _wait_until(predicate: Any, attempts: int = 80, delay: float = 0.05) -
 async def test_streamed_message_recipients_from_sender_preserved(
     live_server: tuple[str, Any],
 ) -> None:
-    """Sender opens send.message_stream(recipients=['a_helper']) and writes
-    prose containing '@u_alice'. Server respects sender-set recipients —
-    final event has recipients=['a_helper'] (NOT merged with prose)."""
+
     base, _ = live_server
     coordinator = AssistantIdentity(id="coordinator", name="Coordinator")
     thread_id = await _seed(
@@ -87,7 +81,7 @@ async def test_streamed_message_recipients_from_sender_preserved(
 
         assert await _wait_until(lambda: any(e.type == "message" for e in received))
         msg = next(e for e in received if e.type == "message")
-        # Sender-set recipients preserved exactly — NOT merged with @u_alice.
+
         assert msg.recipients == ["coordinator"]
         assert msg.content[0].text == "@u_alice please look"
     finally:
@@ -98,9 +92,7 @@ async def test_streamed_message_recipients_from_sender_preserved(
 async def test_streamed_message_no_recipients_parses_from_prose(
     live_server: tuple[str, Any],
 ) -> None:
-    """Sender opens send.message_stream() (no recipients) and writes
-    '@u_alice hello'. Server parses the finalized streamed event prose and
-    fills recipients=['u_alice']."""
+
     base, _ = live_server
     thread_id = await _seed(
         base,

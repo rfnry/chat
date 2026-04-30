@@ -93,8 +93,7 @@ describe('useChatMembers', () => {
         <Probe2 />
       </ChatContext.Provider>
     )
-    // Identical empty-array reference across renders (prevents
-    // `useSyncExternalStore` infinite-loop detection).
+
     expect(seen[0]).toBe(seen[1])
   })
 })

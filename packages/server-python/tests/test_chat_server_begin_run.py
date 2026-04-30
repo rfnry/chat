@@ -1,12 +1,3 @@
-"""Tests for ChatServer.begin_run reuse semantics.
-
-Previously `begin_run` silently returned any existing active run for the
-same (thread, actor) pair, discovered via `find_active_run`. That implicit
-reuse violated the caller's mental model and produced phantom run.started
-fan-out in multi-agent channels. The fix removes the implicit reuse path;
-the only supported reuse mechanism is the explicit `idempotency_key`.
-"""
-
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -28,17 +19,13 @@ async def _setup() -> tuple[ChatServer, RecordingBroadcaster, Thread]:
 
 
 async def test_begin_run_creates_distinct_runs_for_same_actor() -> None:
-    """Two begin_run calls with no idempotency_key produce two distinct runs
-    and two run.started events — even for the same (thread, actor)."""
+
     server, rec, thread = await _setup()
     actor = AssistantIdentity(id="a_1", name="Bot")
     user = UserIdentity(id="u_1", name="Alice")
 
     first = await server.begin_run(thread=thread, actor=actor, triggered_by=user, idempotency_key=None)
-    # End the first run before starting the second, so we do not rely on
-    # concurrent-active semantics (the Postgres store enforces a partial
-    # unique index that would reject two simultaneous active runs for the
-    # same actor; that concurrency constraint is separate from this contract).
+
     await server.end_run(run_id=first.id, error=None)
 
     second = await server.begin_run(thread=thread, actor=actor, triggered_by=user, idempotency_key=None)
@@ -50,8 +37,7 @@ async def test_begin_run_creates_distinct_runs_for_same_actor() -> None:
 
 
 async def test_begin_run_reuses_via_idempotency_key() -> None:
-    """Explicit reuse still works through idempotency_key — the ONLY
-    supported reuse path after the fix."""
+
     server, rec, thread = await _setup()
     actor = AssistantIdentity(id="a_1", name="Bot")
     user = UserIdentity(id="u_1", name="Alice")

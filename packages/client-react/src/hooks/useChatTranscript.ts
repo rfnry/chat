@@ -12,14 +12,6 @@ export type TranscriptItem =
 const EMPTY_EVENTS: Event[] = []
 const EMPTY_STREAMS: Record<string, StreamingItem> = {}
 
-/**
- * Returns the render-ready merged feed for `threadId` — persisted events
- * interleaved with live streaming partials in chronological order.
- *
- * This is the dominant rendering primitive. Map over and branch on `kind`
- * to render finalized vs in-flight bubbles. For persisted-only events use
- * {@link useChatHistory}; for live-only partials use {@link useChatStreams}.
- */
 export function useChatTranscript(threadId: string | null): TranscriptItem[] {
   const store = useChatStore()
 
@@ -40,9 +32,7 @@ export function useChatTranscript(threadId: string | null): TranscriptItem[] {
     for (const eventId in streams) {
       const s = streams[eventId]!
       if (s.threadId !== threadId) continue
-      // The store removes the streaming entry in the same update that adds
-      // the finalized event. The guard here covers any transient state where
-      // both are momentarily present.
+
       if (finalizedIds.has(eventId)) continue
       items.push({ kind: 'streaming', item: s })
     }

@@ -1,10 +1,3 @@
-"""Socket integration tests for server-side @<id> mention routing.
-
-Mirrors test_mention_routing_integration.py (REST) for the Socket.IO
-event:send and message:send paths. Uses a live server fixture pattern
-identical to test_event_send_cross_thread_run.py.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -91,9 +84,6 @@ async def _create_thread_with_members(base: str) -> str:
     return thread_id
 
 
-# === event:send path ===
-
-
 async def test_socket_event_send_with_single_mention_sets_recipients(live: tuple[str, ChatServer]) -> None:
     base, _ = live
     thread_id = await _create_thread_with_members(base)
@@ -145,7 +135,6 @@ async def test_socket_event_send_with_two_mentions_one_event(live: tuple[str, Ch
     async with httpx.AsyncClient(base_url=base) as http:
         after = (await http.get(f"/chat/threads/{thread_id}/events")).json()["items"]
 
-    # One new event, not two.
     assert len(after) == len(before) + 1
     await client.disconnect()
 
@@ -223,11 +212,7 @@ async def test_socket_event_send_content_preserved(live: tuple[str, ChatServer])
 
 
 async def test_socket_event_send_lifecycle_rejected_before_mention_parse(live: tuple[str, ChatServer]) -> None:
-    """Lifecycle types (run.started, etc.) are rejected BEFORE publish_event
-    runs, so their (impossible) prose is never parsed. The exact rejection
-    code can be either invalid_request (pydantic discriminator rejects
-    extras on lifecycle types) or forbidden (lifecycle blocklist) — either
-    proves the routing pipeline never sees this event."""
+
     base, _ = live
     thread_id = await _create_thread_with_members(base)
 
@@ -251,9 +236,7 @@ async def test_socket_event_send_lifecycle_rejected_before_mention_parse(live: t
 
 
 async def test_socket_event_send_dispatcher_filter_drops_non_recipients(live: tuple[str, ChatServer]) -> None:
-    """End-to-end: alice sends '@engineer hi'. The persisted event has
-    recipients=['engineer'] — the recipients-filter contract that
-    non-engineer client handlers will use to drop the event."""
+
     base, _ = live
     thread_id = await _create_thread_with_members(base)
 
@@ -281,9 +264,6 @@ async def test_socket_event_send_dispatcher_filter_drops_non_recipients(live: tu
     matching = [p for p in received if p.get("type") == "message" and p.get("recipients") == ["engineer"]]
     assert matching, f"expected broadcast with recipients=[engineer], got: {received}"
     await client.disconnect()
-
-
-# === message:send path (legacy/draft path) ===
 
 
 async def test_socket_message_send_with_mention_sets_recipients(live: tuple[str, ChatServer]) -> None:

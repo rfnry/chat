@@ -20,15 +20,6 @@ export type ChatPresence = {
   isHydrated: boolean
 }
 
-/**
- * Returns connection-scoped presence — who is currently online in this
- * client's namespace. Mirrors the server's namespace-wide presence
- * broadcast (`presence:joined` / `presence:left` frames carry only an
- * identity, not a thread id).
- *
- * For the canonical roster of a specific thread (database-backed), use
- * {@link useChatMembers}.
- */
 export function useChatPresence(): ChatPresence {
   const ctx = useContext(ChatContext)
   if (!ctx) throw new Error('useChatPresence must be used inside <ChatProvider>')

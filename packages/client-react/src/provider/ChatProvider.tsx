@@ -31,22 +31,9 @@ export type ChatProviderProps = ChatClientOptions & {
   queryClient?: QueryClient
   fallback?: ReactNode
   errorFallback?: ReactNode
-  /**
-   * Convenience callback for the common "someone added me to a thread" case.
-   * Receives only `(thread, addedBy)` — the invitee identity is implicit (it's
-   * the connected user). If you need the full frame including `addedMember`
-   * (e.g. for group-chat invites where you care which user was added), use
-   * the `useChatHandlers().on.invited` hook instead.
-   */
+
   onThreadInvited?: (thread: Thread, addedBy: Identity) => void
-  /**
-   * When a `thread:invited` frame arrives, automatically call
-   * `client.joinThread(frame.thread.id)` so live event delivery starts
-   * immediately. Defaults to `true`, mirroring Python's
-   * `auto_join_on_invite=True`. Set to `false` if you want to inspect the
-   * frame first (via `useChatHandlers().on.invited` or `client.on('thread:invited',
-   * ...)`) and decide whether to join.
-   */
+
   autoJoinOnInvite?: boolean
 }
 
@@ -111,11 +98,6 @@ export function ChatProvider(props: ChatProviderProps) {
         if (cancelled) return
         store.getState().actions.setConnectionStatus('connected')
 
-        // Per-thread event subscribers. The provider parses each incoming
-        // `event` frame ONCE and dispatches the typed Event to all listeners.
-        // Mounted handler hooks subscribe here instead of calling client.on('event')
-        // independently — at N mounted hooks, this drops parse calls from N+1
-        // to 1 per incoming event.
         const eventListeners = new Set<EventListener>()
         const eventRegistry: EventRegistry = {
           subscribe(listener) {
@@ -130,8 +112,7 @@ export function ChatProvider(props: ChatProviderProps) {
           client.on('event', (data) => {
             const event = toEvent(data as never)
             store.getState().actions.addEvent(event)
-            // Snapshot before iteration so a listener that subscribes another
-            // listener during dispatch doesn't get the same event re-delivered.
+
             for (const listener of [...eventListeners]) {
               try {
                 listener(event)
@@ -218,16 +199,6 @@ export function ChatProvider(props: ChatProviderProps) {
           })
         )
 
-        // Presence. Subscribe to live frames BEFORE hydrating so we never
-        // miss a `presence:left` for an identity that appears in the REST
-        // snapshot (the hydrate→subscribe order would let a
-        // delete-before-subscribe frame slip through, leaving a stale
-        // member). The inverse race — a `presence:joined` firing before
-        // hydrate completes — is benign: if the joined identity is ALSO in
-        // the REST snapshot, hydrate's Map rebuild is idempotent; if it's
-        // not, the next frame for that identity (or the next manual refresh)
-        // corrects it. See Task 4.3 notes on eventual consistency for
-        // presence.
         disposers.push(
           client.on('presence:joined', (data) => {
             presence.applyJoined(parsePresenceJoinedFrame(data))
@@ -239,12 +210,6 @@ export function ChatProvider(props: ChatProviderProps) {
           })
         )
 
-        // Publish the context value NOW — don't block on the presence REST
-        // fetch. Consumers that need presence read from an unhydrated slice
-        // and re-render once hydrate() lands (useChatPresence in Task 4.4
-        // exposes `hydrated` so UIs can show a spinner). Blocking here would
-        // mean a flaky presence endpoint delays (or prevents) the whole
-        // ChatProvider from becoming usable, which is the wrong tradeoff.
         setValue({ client, store, events: eventRegistry, presence })
 
         void client
@@ -254,8 +219,6 @@ export function ChatProvider(props: ChatProviderProps) {
             presence.hydrate(snapshot)
           })
           .catch((err) => {
-            // Don't fail the whole provider on a presence fetch miss — the
-            // slice stays unhydrated; live frames still patch.
             console.warn('[rfnry] failed to hydrate presence:', err)
           })
       } catch {
@@ -275,12 +238,6 @@ export function ChatProvider(props: ChatProviderProps) {
     }
   }, [])
 
-  // Reactive reconnect: when url or identity change after initial mount, swap
-  // identity on the existing client via `client.reconnect()` instead of letting
-  // the consumer force a full remount via `key`. This keeps a single socket
-  // per tab for its lifetime, even across role/workspace switches — old
-  // sockets never stack up on the server. Listeners are re-registered
-  // automatically by the client inside reconnect().
   useEffect(() => {
     const last = lastOptsRef.current
     const nextIdentity = clientOpts.identity ?? null

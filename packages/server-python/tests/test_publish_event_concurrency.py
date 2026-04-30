@@ -13,9 +13,7 @@ from rfnry_chat_server.store.memory.store import InMemoryChatStore
 
 
 async def test_publish_event_runs_write_and_broadcast_concurrently() -> None:
-    """Regression: publish_event should pipeline the DB write and the
-    broadcast. With both at 50ms each, total publish latency should be
-    ~50ms (parallel), not ~100ms (serial)."""
+
     store = InMemoryChatStore()
     broadcaster = RecordingBroadcaster()
 
@@ -55,5 +53,4 @@ async def test_publish_event_runs_write_and_broadcast_concurrently() -> None:
     await server.publish_event(event, thread=thread)
     elapsed = time.monotonic() - start
 
-    # Parallel: ~50ms. Serial: ~100ms. Generous slack for CI noise.
     assert elapsed < 0.08, f"publish_event took {elapsed:.3f}s — looks serial (would be ~0.1s)"

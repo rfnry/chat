@@ -8,12 +8,6 @@ export type ChatSession = {
   error?: Error
 }
 
-/**
- * Drives the join + replay effect for `threadId` and exposes the lifecycle
- * status. Mounting with a non-null id joins the thread room, replays any
- * missed events, and snapshots metadata + members in the background.
- * Unmounting leaves the thread.
- */
 export function useChatSession(threadId: string | null): ChatSession {
   const client = useChatClient()
   const store = useChatStore()

@@ -113,8 +113,7 @@ async def test_run_disconnects_when_on_connect_raises() -> None:
 
 
 async def test_begin_run_returns_run_id_string() -> None:
-    """R12.2: begin_run returns the run_id as a string, not a hydrated Run.
-    Saves the extra REST GET previously needed for hydration."""
+
     sio = FakeSioClient()
     sio.ack_replies["run:begin"] = {"run_id": "run_abc", "status": "running"}
     client = _build_client(sio)
@@ -125,7 +124,7 @@ async def test_begin_run_returns_run_id_string() -> None:
 
 
 async def test_end_run_returns_none() -> None:
-    """R12.2: end_run returns None (was: hydrated Run via extra REST GET)."""
+
     sio = FakeSioClient()
     sio.ack_replies["run:end"] = {"run_id": "run_abc", "status": "completed"}
     client = _build_client(sio)
@@ -135,8 +134,7 @@ async def test_end_run_returns_none() -> None:
 
 
 async def test_get_run_returns_hydrated_run() -> None:
-    """R12.2: callers that need the full Run object call get_run(id)
-    explicitly. This is the only path that pays the REST GET cost."""
+
     now = datetime.now(UTC).isoformat()
     run_payload = {
         "id": "run_abc",

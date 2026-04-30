@@ -93,7 +93,7 @@ describe('useChatSession initial fetch', () => {
     )
 
     await waitFor(() => expect(getByTestId('status').textContent).toBe('joined'))
-    // Flush any pending rejections
+
     await new Promise((r) => setTimeout(r, 0))
     expect(getByTestId('status').textContent).toBe('joined')
     expect(store.getState().threadMeta.th_1).toBeUndefined()

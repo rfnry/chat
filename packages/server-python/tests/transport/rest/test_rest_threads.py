@@ -231,10 +231,9 @@ async def test_clear_thread_events_wipes_history_keeps_thread(client: AsyncClien
     resp = await client.delete(f"/chat/threads/{thread_id}/events")
     assert resp.status_code == 204
 
-    # Thread still exists
     get_resp = await client.get(f"/chat/threads/{thread_id}")
     assert get_resp.status_code == 200
-    # History is gone
+
     events = await client.get(f"/chat/threads/{thread_id}/events")
     assert events.json()["items"] == []
 
@@ -254,7 +253,6 @@ async def test_clear_thread_events_tenant_mismatch_404(clean_db: asyncpg.Pool) -
         create = await alice_client.post("/chat/threads", json={"tenant": {"org": "A"}})
         thread_id = create.json()["id"]
 
-    # Bob's identity tenant doesn't match the thread
     bob_store = PostgresChatStore(pool=clean_db)
     bob_app = _build_app(bob_store, bob)
     async with AsyncClient(transport=ASGITransport(app=bob_app), base_url="http://test") as bob_client:

@@ -53,12 +53,7 @@ async def test_remove_unknown_sid_is_noop():
 
 @pytest.mark.asyncio
 async def test_concurrent_adds_yield_exactly_one_true():
-    """50 parallel first-time adds for the same identity must produce exactly one True.
 
-    This is the load-bearing invariant for broadcast correctness — without it,
-    a refactor that drops the lock would let multiple connect handlers each
-    fire `presence:joined` for the same socket.
-    """
     reg = PresenceRegistry()
     alice = UserIdentity(id="u_a", name="Alice", metadata={})
     results = await asyncio.gather(*[reg.add("u_a", f"sid{i}", alice, tenant_path="/") for i in range(50)])
@@ -67,7 +62,7 @@ async def test_concurrent_adds_yield_exactly_one_true():
 
 @pytest.mark.asyncio
 async def test_concurrent_removes_yield_exactly_one_was_last():
-    """50 parallel removes after 50 adds must produce exactly one was_last=True."""
+
     reg = PresenceRegistry()
     alice = UserIdentity(id="u_a", name="Alice", metadata={})
     for i in range(50):
@@ -78,12 +73,7 @@ async def test_concurrent_removes_yield_exactly_one_was_last():
 
 @pytest.mark.asyncio
 async def test_cross_tenant_re_add_is_rejected():
-    """Same identity re-adding under a different tenant_path raises ValueError.
 
-    In practice the auth layer prevents this — same Identity always derives
-    the same tenant_path. The assertion exists so an upstream bug surfaces
-    here rather than silently broadcasting `presence:left` on the wrong tenant.
-    """
     reg = PresenceRegistry()
     alice = UserIdentity(id="u_a", name="Alice", metadata={})
     await reg.add("u_a", "sid1", alice, tenant_path="/A")

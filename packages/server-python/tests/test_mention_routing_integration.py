@@ -1,11 +1,3 @@
-"""REST integration tests for server-side @<id> mention routing.
-
-The server resolves @<identity_id> tokens in MessageEvent prose into the
-recipients field when the sender did not set recipients explicitly.
-Sender-set recipients are never overwritten. Content text is preserved
-byte-for-byte.
-"""
-
 from __future__ import annotations
 
 import secrets
@@ -23,8 +15,7 @@ from rfnry_chat_server.store.postgres.store import PostgresChatStore
 
 @pytest.fixture
 async def setup(clean_db: asyncpg.Pool) -> tuple[AsyncClient, str]:
-    """Returns (client, thread_id) where the thread has alice (creator),
-    engineer, coordinator, and liaison as members."""
+
     store = PostgresChatStore(pool=clean_db)
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
 
@@ -65,9 +56,6 @@ async def _post_message(client: AsyncClient, thread_id: str, text: str, **kwargs
     return resp.json()
 
 
-# === Happy-path mention parsing ===
-
-
 async def test_rest_message_with_single_mention_sets_recipients(setup: tuple[AsyncClient, str]) -> None:
     client, thread_id = setup
     event = await _post_message(client, thread_id, "hi @engineer")
@@ -102,9 +90,6 @@ async def test_rest_message_three_mentions_one_event(setup: tuple[AsyncClient, s
     assert len(events_after["items"]) == count_before + 1
 
 
-# === Recipients pass-through ===
-
-
 async def test_rest_message_without_mention_leaves_recipients_none(setup: tuple[AsyncClient, str]) -> None:
     client, thread_id = setup
     event = await _post_message(client, thread_id, "hello everyone")
@@ -130,14 +115,9 @@ async def test_rest_message_with_empty_explicit_recipients_not_overwritten(setup
         "@engineer hi",
         recipients=[],
     )
-    # Sender expressed no routing intent. Mention parsing must NOT fill it in
-    # from prose. (Server's existing normalize_recipients turns [] into None;
-    # what matters is that the engineer id from prose is NOT injected.)
+
     assert event["recipients"] in (None, [])
     assert event["recipients"] != ["engineer"]
-
-
-# === Negative / unknown ids ===
 
 
 async def test_rest_message_with_unknown_mention_no_recipients_set(setup: tuple[AsyncClient, str]) -> None:
@@ -158,9 +138,6 @@ async def test_rest_message_with_name_not_id_no_match(setup: tuple[AsyncClient, 
     assert event["recipients"] is None
 
 
-# === Content text never modified ===
-
-
 async def test_rest_message_content_text_preserved_verbatim(setup: tuple[AsyncClient, str]) -> None:
     client, thread_id = setup
     text = "@engineer please look"
@@ -174,9 +151,6 @@ async def test_rest_message_content_with_emoji_punct_preserved(setup: tuple[Asyn
     event = await _post_message(client, thread_id, text)
     assert event["content"][0]["text"] == text
     assert event["recipients"] == ["engineer"]
-
-
-# === Member set used at parse time ===
 
 
 async def test_rest_message_with_id_of_non_member_no_match(clean_db: asyncpg.Pool) -> None:
@@ -194,14 +168,13 @@ async def test_rest_message_with_id_of_non_member_no_match(clean_db: asyncpg.Poo
 
     create = await client.post("/chat/threads", json={"tenant": {"org": "A"}})
     thread_id = create.json()["id"]
-    # No engineer member added. Mention should NOT route.
 
     event = await _post_message(client, thread_id, "@engineer hi")
     assert event["recipients"] is None
 
 
 async def test_rest_message_uses_member_list_at_send_time(clean_db: asyncpg.Pool) -> None:
-    """Adding a member after a past message does not retroactively route."""
+
     store = PostgresChatStore(pool=clean_db)
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
 
@@ -226,17 +199,12 @@ async def test_rest_message_uses_member_list_at_send_time(clean_db: asyncpg.Pool
         json={"identity": engineer.model_dump(mode="json"), "role": "member"},
     )
 
-    # Past message stays None.
     events = (await client.get(f"/chat/threads/{thread_id}/events")).json()
     persisted_x = next(e for e in events["items"] if e["id"] == msg_x["id"])
     assert persisted_x["recipients"] is None
 
-    # New message with engineer present routes correctly.
     msg_y = await _post_message(client, thread_id, "@engineer there you are")
     assert msg_y["recipients"] == ["engineer"]
-
-
-# === Sender-set recipients deeply preserved ===
 
 
 async def test_rest_message_explicit_recipients_deep_equal_preserved(setup: tuple[AsyncClient, str]) -> None:
@@ -247,11 +215,8 @@ async def test_rest_message_explicit_recipients_deep_equal_preserved(setup: tupl
         "@engineer @liaison please all look",
         recipients=["coordinator"],
     )
-    # Sender wanted exactly ['coordinator'] — preserved exactly, not merged.
+
     assert event["recipients"] == ["coordinator"]
-
-
-# === Cache behavior ===
 
 
 async def test_member_cache_avoids_repeat_store_calls(setup: tuple[AsyncClient, str]) -> None:

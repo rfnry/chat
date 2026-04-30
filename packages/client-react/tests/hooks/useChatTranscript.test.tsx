@@ -9,10 +9,6 @@ import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 import { createPresenceSlice } from '../../src/store/presence'
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeEvent(
   id: string,
   threadId: string,
@@ -49,10 +45,6 @@ function harness(store: ReturnType<typeof createChatStore>) {
     </ChatContext.Provider>
   )
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('useChatTranscript', () => {
   it('returns an empty array when no events or streams exist', () => {
@@ -91,7 +83,6 @@ describe('useChatTranscript', () => {
     )
 
     act(() => {
-      // Add events out of chronological order.
       store.getState().actions.addEvent(makeEvent('e2', 'th_1', '2026-01-01T00:00:02Z'))
       store.getState().actions.addEvent(makeEvent('e1', 'th_1', '2026-01-01T00:00:01Z'))
       store.getState().actions.addEvent(makeEvent('e3', 'th_1', '2026-01-01T00:00:03Z'))
@@ -179,16 +170,13 @@ describe('useChatTranscript', () => {
       store.getState().actions.appendStreamDelta('ev-fin-1', 'partial text')
     })
 
-    // Streaming entry is present.
     expect(getByTestId('count').textContent).toBe('1')
     expect(collected[collected.length - 1]![0]!.kind).toBe('streaming')
 
     act(() => {
-      // Finalized event arrives with the same id.
       store.getState().actions.addEvent(makeEvent('ev-fin-1', 'th_1', '2026-01-01T00:00:01Z'))
     })
 
-    // Streaming entry replaced by the finalized event — same count, different kind.
     expect(getByTestId('count').textContent).toBe('1')
     const last = collected[collected.length - 1]!
     expect(last[0]!.kind).toBe('event')
@@ -196,8 +184,6 @@ describe('useChatTranscript', () => {
   })
 
   it('retains streaming entry after stream:end if finalized event has not arrived yet', () => {
-    // This is the anti-flicker rule: endStream is a no-op; the entry only
-    // disappears when addEvent fires with the same id.
     const store = createChatStore()
     const Wrapper = harness(store)
 
@@ -228,7 +214,6 @@ describe('useChatTranscript', () => {
 
     expect(getByTestId('count').textContent).toBe('1')
 
-    // stream:end arrives — entry must NOT disappear.
     act(() => {
       store.getState().actions.endStream('ev-race-1')
     })
@@ -236,7 +221,6 @@ describe('useChatTranscript', () => {
     expect(getByTestId('count').textContent).toBe('1')
     expect(collected[collected.length - 1]![0]!.kind).toBe('streaming')
 
-    // Finalized event arrives — NOW the streaming entry is replaced.
     act(() => {
       store.getState().actions.addEvent(makeEvent('ev-race-1', 'th_1', '2026-01-01T00:00:01Z'))
     })
@@ -264,17 +248,9 @@ describe('useChatTranscript', () => {
     )
 
     act(() => {
-      // A finalized event at T=2.
       store.getState().actions.addEvent(makeEvent('e-finalized', 'th_1', '2026-01-01T00:00:02Z'))
     })
 
-    // Streaming entry with createdAt < finalized event (it would appear first).
-    // We can't set the exact createdAt from outside (it's set by beginStream via
-    // new Date()), so we inject the entry directly into the store using the
-    // internal beginStream action and then mutate the store state to set a
-    // known timestamp. Instead, just verify the final ordering by checking that
-    // a streaming entry inserted AFTER a finalized event (higher timestamp via
-    // the real clock) appears after in the sorted feed.
     act(() => {
       store.getState().actions.beginStream({
         eventId: 'ev-stream-later',
@@ -287,8 +263,7 @@ describe('useChatTranscript', () => {
 
     const last = collected[collected.length - 1]!
     expect(last.length).toBe(2)
-    // The finalized event has a fixed timestamp far in the past; the streaming
-    // entry was created with new Date() which is later — so finalized comes first.
+
     expect(last[0]!.kind).toBe('event')
     expect(last[1]!.kind).toBe('streaming')
   })
@@ -312,7 +287,6 @@ describe('useChatTranscript', () => {
     )
 
     act(() => {
-      // Stream on a DIFFERENT thread.
       store.getState().actions.beginStream({
         eventId: 'ev-other',
         threadId: 'th_2',
@@ -322,7 +296,6 @@ describe('useChatTranscript', () => {
       })
     })
 
-    // th_1 feed should be empty.
     expect(getByTestId('count').textContent).toBe('0')
   })
 
@@ -364,11 +337,9 @@ describe('useChatTranscript', () => {
     const baseline = renderCount
 
     act(() => {
-      // Add an event to a completely different thread.
       store.getState().actions.addEvent(makeEvent('e_unrelated', 'th_B', '2026-01-01T00:00:01Z'))
     })
 
-    // th_A's feed slice is unchanged; no re-render should occur.
     expect(renderCount).toBe(baseline)
   })
 })

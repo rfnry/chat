@@ -3,10 +3,8 @@ import { render, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ChatProvider } from '../../src/provider/ChatProvider'
 
-// Basic stub: we don't want ChatClient to actually connect
 vi.mock('../../src/client', () => ({
   ChatClient: class {
-    // minimal stub so ChatProvider mounts without throwing
     connect = vi.fn().mockResolvedValue(undefined)
     disconnect = vi.fn()
     on = vi.fn(() => () => {})
@@ -34,8 +32,7 @@ describe('ChatProvider QueryClient fallback', () => {
         />
       </ChatProvider>
     )
-    // Probe renders inside QueryClientProvider immediately (before connect resolves),
-    // but captured is set synchronously on first render.
+
     await waitFor(() => expect(captured).toBeDefined())
     const opts = captured!.getDefaultOptions().queries
     expect(opts?.staleTime).toBe(30_000)

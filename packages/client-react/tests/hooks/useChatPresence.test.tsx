@@ -136,15 +136,12 @@ describe('useChatPresence', () => {
       </Wrapper>
     )
 
-    // Trigger a parent re-render that doesn't change the slice.
     rerender(
       <Wrapper>
         <Probe />
       </Wrapper>
     )
 
-    // Applying a duplicate-join is a no-op inside the slice (early return),
-    // so no state change happens.
     act(() => {
       presence.applyJoined({
         identity: alice,
@@ -152,7 +149,6 @@ describe('useChatPresence', () => {
       })
     })
 
-    // At least two captures; all byRole references should be identical.
     expect(captures.length).toBeGreaterThanOrEqual(2)
     const first = captures[0]
     for (const snap of captures) {

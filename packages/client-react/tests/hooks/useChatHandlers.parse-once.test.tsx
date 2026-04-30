@@ -1,7 +1,3 @@
-/**
- * R15 regression: each incoming `event` frame is parsed ONCE by the provider,
- * regardless of how many `useChatHandlers` hooks are mounted.
- */
 import { render, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -12,10 +8,6 @@ import { ChatContext } from '../../src/provider/ChatContext'
 import { createChatStore } from '../../src/store/chatStore'
 import { createPresenceSlice } from '../../src/store/presence'
 
-// ---------------------------------------------------------------------------
-// Count toEvent calls via spy on the real implementation.
-// We spy at the module level so the provider's import sees the wrapper.
-// ---------------------------------------------------------------------------
 const parseCount = vi.hoisted(() => ({ n: 0 }))
 
 vi.mock('@rfnry/chat-protocol', async (importOriginal) => {
@@ -29,12 +21,7 @@ vi.mock('@rfnry/chat-protocol', async (importOriginal) => {
   }
 })
 
-// Re-import after mock is in place
 import { toEvent } from '@rfnry/chat-protocol'
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const RAW_MESSAGE = {
   id: 'evt_r15',
@@ -47,10 +34,6 @@ const RAW_MESSAGE = {
   content: [{ type: 'text', text: 'hello' }],
 }
 
-/**
- * A minimal EventRegistry that lets the test dispatch pre-parsed Events
- * to all subscribed listeners (simulating what the provider does after parsing).
- */
 function makeDispatchableRegistry(): {
   registry: EventRegistry
   dispatchRaw: (raw: unknown) => void
@@ -62,15 +45,13 @@ function makeDispatchableRegistry(): {
       return () => listeners.delete(listener)
     },
   }
-  // Simulate the provider: parse ONCE then fan out
+
   const dispatchRaw = (raw: unknown) => {
     const event = toEvent(raw as never)
     for (const l of listeners) {
       try {
         l(event)
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
   }
   return { registry, dispatchRaw }
@@ -97,10 +78,6 @@ function Wrapper({ events, children }: { events: EventRegistry; children: ReactN
   )
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('R15 — parse-once per incoming event', () => {
   it('parses each incoming event exactly once across N mounted handler hooks', async () => {
     const { registry, dispatchRaw } = makeDispatchableRegistry()
@@ -117,13 +94,10 @@ describe('R15 — parse-once per incoming event', () => {
 
     await new Promise((r) => setTimeout(r, 0))
 
-    // Reset counter after render (toEvent may be called during module init)
     parseCount.n = 0
 
-    // Dispatch one raw event — the registry calls toEvent once then fans out
     dispatchRaw(RAW_MESSAGE)
 
-    // toEvent should have been called exactly once, not 5 times (R15)
     expect(parseCount.n).toBe(1)
   })
 

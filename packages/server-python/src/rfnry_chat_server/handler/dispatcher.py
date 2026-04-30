@@ -92,10 +92,6 @@ class HandlerDispatcher:
             thread=thread,
         )
 
-        # Eager mode (default): begin_run BEFORE the handler body runs, so the
-        # client sees run.started immediately after sending the triggering event.
-        # Lazy mode: defer to first yield (preserves no-phantom-run behavior for
-        # handlers with application-level early-return guards).
         if not lazy_run:
             run_id = await _start_run()
             send.set_run_id(run_id)
@@ -103,7 +99,6 @@ class HandlerDispatcher:
         try:
             async for emitted in handler(ctx, send):  # type: ignore[union-attr]
                 if began_run_id is None:
-                    # Lazy path: open the run on first yield.
                     run_id = await _start_run()
                     send.set_run_id(run_id)
                     if emitted.run_id is None:

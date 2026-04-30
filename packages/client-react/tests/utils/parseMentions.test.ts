@@ -129,7 +129,6 @@ describe('parseMemberMentions (id-only)', () => {
   })
 
   it('multiple text parts: the parser is text-agnostic, no boundary handling', () => {
-    // Trailing apostrophe-only is a trim-set member → 'engineer' resolves.
     expect(parseMemberMentions("@engineer'", members).recipients).toEqual(['engineer'])
   })
 })

@@ -1,12 +1,3 @@
-"""Tests for the tenant-scoped thread:created / thread:deleted broadcast.
-
-ChatServer.publish_thread_{created,deleted} call the broadcaster's
-broadcast_thread_{created,deleted} methods with the thread/tenant and
-namespace_keys. The broadcaster (a SocketIOBroadcaster in production) then
-emits to the deterministic tenant room that every authenticated socket joined
-at connect time. We verify the contract via RecordingBroadcaster.
-"""
-
 from __future__ import annotations
 
 import asyncpg
@@ -91,7 +82,7 @@ async def test_reuse_via_client_id_does_not_refire_broadcast(
             "/chat/threads",
             json={"tenant": {"organization": "acme"}, "client_id": "ck-stable"},
         )
-        assert second.status_code == 200  # reuse
+        assert second.status_code == 200
 
     assert len(rec.threads_created) == 1
 

@@ -1,14 +1,6 @@
 import { useStore } from 'zustand'
 import { useChatStore } from './useChatClient'
 
-/**
- * Returns `true` if any run for `threadId` is `pending` or `running`.
- * Cheap subscription — only flips when the boolean state changes (~2x per
- * assistant turn). Use this for spinners and "thinking..." gates.
- *
- * For the latest interesting event in an active run, see
- * {@link useChatWorkingDetail}.
- */
 export function useChatIsWorking(threadId: string | null): boolean {
   const store = useChatStore()
   return useStore(store, (state) => {

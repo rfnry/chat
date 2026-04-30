@@ -7,7 +7,7 @@ _MAX_VALUE_LEN = 32
 
 
 class NamespaceViolation(ValueError):
-    """Raised when a tenant value or namespace path violates the namespace_keys contract."""
+    pass
 
 
 def validate_namespace_value(value: str) -> None:

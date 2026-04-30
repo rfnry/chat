@@ -71,9 +71,7 @@ async def test_honors_limit(store: PostgresChatStore) -> None:
 
 
 async def test_watchdog_sweep_processes_stale_runs_concurrently(clean_db: asyncpg.Pool) -> None:
-    """R14: watchdog must process stale runs concurrently. With 10 stale
-    runs and a 50ms-per-update delay, the sweep should finish in ~50ms,
-    not ~500ms."""
+
     store = PostgresChatStore(pool=clean_db)
     await store.ensure_schema()
 
@@ -112,11 +110,7 @@ async def test_watchdog_sweep_processes_stale_runs_concurrently(clean_db: asyncp
 
 
 async def test_find_runs_started_before_uses_partial_index(clean_db: asyncpg.Pool) -> None:
-    """Regression for R13: the sweep query's WHERE clause must match the
-    runs_active_started partial index predicate literally so the planner
-    picks the index.  ANY($1::text[]) prevents plan-time evaluation and
-    silently falls back to a sequential scan; the literal IN list matches
-    the index predicate exactly."""
+
     async with clean_db.acquire() as conn:
         rows = await conn.fetch(
             "EXPLAIN SELECT * FROM runs "

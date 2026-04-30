@@ -1,10 +1,3 @@
-"""Presence lifecycle: presence:joined / presence:left refcount semantics.
-
-Covers the 0→1 joined edge (Task 2.4) and the 1→0 left edge (Task 2.5). Design
-pins: the joining socket itself must not receive its own joined frame
-(skip_sid), and intermediate opens/closes (2→1, 1→2) must not re-broadcast.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -56,18 +49,13 @@ def _wire(chat_server: ChatServer) -> Any:
 
 
 async def _settle() -> None:
-    """Yield control so socket events propagate to clients."""
+
     await asyncio.sleep(0.1)
 
 
 @pytest.fixture
 async def live_multi_identity(clean_db: asyncpg.Pool) -> AsyncIterator[tuple[str, ChatServer]]:
-    """Live server that authenticates each client to a different identity,
-    selected via the `user` key in the Socket.IO handshake `auth` payload.
 
-    This lets one test spin up an observer socket plus multiple sockets for a
-    second identity and verify the 0→1 edge behavior without tenancy getting
-    in the way (both identities share the default tenant)."""
     observer = UserIdentity(id="observer", name="Obs", metadata={})
     agent = UserIdentity(id="agent-a", name="Agent A", metadata={})
     identities: dict[str, Identity] = {"observer": observer, "agent-a": agent}
@@ -94,8 +82,7 @@ async def live_multi_identity(clean_db: asyncpg.Pool) -> AsyncIterator[tuple[str
 async def test_first_socket_broadcasts_joined_second_silent(
     live_multi_identity: tuple[str, ChatServer],
 ) -> None:
-    """0→1 transition fires `presence:joined` exactly once; a second socket
-    for the same identity does not re-broadcast (refcount semantics)."""
+
     base, _ = live_multi_identity
 
     observer_received: list[tuple[str, dict[str, Any]]] = []
@@ -130,7 +117,6 @@ async def test_first_socket_broadcasts_joined_second_silent(
         assert len(joined) == 1, f"expected exactly one joined, got {joined!r}"
         assert joined[0][1]["identity"]["id"] == "agent-a"
 
-        # Second socket for same identity must not re-broadcast.
         await a2.connect(
             base,
             transports=["websocket"],
@@ -152,7 +138,7 @@ async def test_first_socket_broadcasts_joined_second_silent(
 async def test_joining_socket_does_not_receive_own_joined(
     live_multi_identity: tuple[str, ChatServer],
 ) -> None:
-    """skip_sid prevents the joining socket from getting its own joined event."""
+
     base, _ = live_multi_identity
 
     self_received: list[dict[str, Any]] = []
@@ -179,8 +165,7 @@ async def test_joining_socket_does_not_receive_own_joined(
 async def test_last_socket_broadcasts_left(
     live_multi_identity: tuple[str, ChatServer],
 ) -> None:
-    """1→0 transition fires `presence:left` exactly once. Closing a non-last
-    socket (2→1) stays silent; only the final close broadcasts."""
+
     base, _ = live_multi_identity
 
     observer_received: list[tuple[str, dict[str, Any]]] = []
@@ -214,14 +199,11 @@ async def test_last_socket_broadcasts_left(
         )
         await _settle()
 
-        # Closing one of two sockets for agent-a must NOT broadcast left
-        # (refcount 2→1).
         await a1.disconnect()
         await _settle()
         left = [e for e in observer_received if e[0] == "left"]
         assert len(left) == 0, f"2→1 disconnect leaked a presence:left: {left!r}"
 
-        # Closing the final socket (1→0) broadcasts exactly one presence:left.
         await a2.disconnect()
         await _settle()
         left = [e for e in observer_received if e[0] == "left"]

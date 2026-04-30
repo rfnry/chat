@@ -91,7 +91,7 @@ async def test_snapshot_excludes_caller_when_caller_is_also_present() -> None:
 
     alice = UserIdentity(id="u_alice", name="Alice", metadata={})
     await server.presence.add("u_alice", "sid1", alice, tenant_path="/")
-    # Caller also has a live socket — still excluded from their own snapshot.
+
     await server.presence.add("u_x", "sid_caller", caller, tenant_path="/")
 
     app = _build_app(server)

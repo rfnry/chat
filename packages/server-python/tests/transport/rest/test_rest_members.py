@@ -108,8 +108,7 @@ async def test_add_member_broadcasts_thread_invited_to_new_member(
 async def test_create_thread_does_not_emit_thread_invited_self(
     setup_with_broadcaster: tuple[AsyncClient, str, RecordingBroadcaster],
 ) -> None:
-    # The setup_with_broadcaster fixture already POSTs /threads which auto-adds alice.
-    # No thread_invited should have been emitted for the self-add.
+
     _, _, recorder = setup_with_broadcaster
     assert recorder.thread_invited == []
 
@@ -117,9 +116,7 @@ async def test_create_thread_does_not_emit_thread_invited_self(
 async def test_publish_thread_invited_short_circuits_on_self_add(
     clean_db: asyncpg.Pool,
 ) -> None:
-    # Pins the guard in ChatServer.publish_thread_invited that skips self-adds,
-    # independently of callers (rest/threads.create_thread bypasses this helper,
-    # so the existing end-to-end test cannot detect a regression here).
+
     store = PostgresChatStore(pool=clean_db)
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
 

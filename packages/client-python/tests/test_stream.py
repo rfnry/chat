@@ -153,12 +153,7 @@ async def test_reasoning_stream_final_event_is_reasoning() -> None:
 
 
 async def test_stream_allows_non_assistant_identity() -> None:
-    """Any identity can stream — role is server-validated, not client-gated.
 
-    Mirrors React's compile-time-only restriction: the TypeScript type system
-    narrows the author, but there is no runtime block. The server remains the
-    authority on who is permitted to stream in a given thread.
-    """
     client, sio = _build_client()
     user = UserIdentity(id="u_human", name="Human")
 
@@ -214,7 +209,7 @@ async def test_handler_send_message_stream_requires_client() -> None:
 
 
 async def test_message_stream_recipients_forwarded_to_final_event() -> None:
-    """message_stream(recipients=[...]) sets recipients on the finalized MessageEvent."""
+
     from rfnry_chat_client.send import Send
 
     client, sio = _build_client()

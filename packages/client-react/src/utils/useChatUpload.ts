@@ -17,11 +17,6 @@ export type UseChatUploadResult<T> = {
   reset: () => void
 }
 
-/**
- * Wraps a consumer-provided uploader function with per-file upload state
- * tracking. The hook does not own upload logic — it just tracks the state
- * machine and surfaces it to the component tree.
- */
 export function useChatUpload<T>(uploader: (file: File) => Promise<T>): UseChatUploadResult<T> {
   const [items, setItems] = useState<UploadItem<T>[]>([])
 

@@ -168,10 +168,8 @@ describe('useChatHandlers default dispatch filters', () => {
     )
     await new Promise((r) => setTimeout(r, 0))
 
-    // Even a "self-authored" event (same id as the author) gets delivered
-    // because there's no self to compare against.
     dispatch(messageFrom('u_me', null))
-    // And a non-broadcast event with a recipients list goes through too.
+
     dispatch(messageFrom('u_other', ['u_someone']))
     await waitFor(() => expect(received.length).toBe(2))
   })
@@ -188,7 +186,6 @@ describe('useChatHandlers default dispatch filters', () => {
     )
     await new Promise((r) => setTimeout(r, 0))
 
-    // Other-authored, null recipients → expected to pass through.
     dispatch(messageFrom(other.id, null))
     await waitFor(() => expect(received.length).toBe(1))
   })

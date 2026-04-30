@@ -240,13 +240,13 @@ async def test_reconnect_switches_url_and_preserves_handlers() -> None:
         received.append(ctx.event)
 
     await client.connect()
-    # Switch to a different URL with a different fake sio
+
     await client.reconnect(
         base_url="http://chat-b.test",
         socket_transport=SocketTransport(base_url="http://chat-b.test", sio_client=sio2),
         http_client=httpx.AsyncClient(transport=httpx.MockTransport(_noop_handler)),
     )
-    # The handler registered BEFORE reconnect must still fire after.
+
     raw_handler = sio2.handlers["event"]
     await raw_handler(_message_event_dict(author_id="u_other", recipients=["a_me"]))
     assert len(received) == 1
@@ -254,12 +254,8 @@ async def test_reconnect_switches_url_and_preserves_handlers() -> None:
     assert sio2.connected_url == "http://chat-b.test"
 
 
-
-
 async def test_run_uses_exponential_backoff_with_jitter(monkeypatch: pytest.MonkeyPatch) -> None:
-    """run() retries must back off exponentially with jitter — not a fixed
-    interval. Regression for R6a (thundering-herd risk when many agents
-    reconnect simultaneously after a server restart)."""
+
     sleeps: list[float] = []
 
     async def fake_sleep(delay: float) -> None:
@@ -280,16 +276,12 @@ async def test_run_uses_exponential_backoff_with_jitter(monkeypatch: pytest.Monk
     with pytest.raises(ConnectionError):
         await client.run(connect_retries=6, connect_backoff_seconds=BACKOFF, max_backoff_seconds=2.0)
 
-    # 6 retries → 5 sleeps (no sleep after the last failed attempt before raising)
     assert len(sleeps) == 5, f"expected 5 sleeps for 6 retries, got {len(sleeps)}"
-    # At least one sleep must exceed attempt-1's max jitter (0.1 * 1.5 = 0.15),
-    # which proves the exponential growth actually kicked in for some attempt > 1.
+
     assert max(sleeps) > BACKOFF * 1.5, (
         f"all sleeps within attempt-1 jitter range; exponential growth did not occur: {sleeps}"
     )
-    # +50% jitter ceiling on max_backoff_seconds=2.0 → max possible 3.0
+
     assert max(sleeps) <= 3.0, f"jitter exceeded ceiling: {sleeps}"
-    # -50% jitter floor on the smallest base 0.1 → min possible 0.05
+
     assert min(sleeps) >= 0.05, f"jitter dropped too low: {sleeps}"
-
-

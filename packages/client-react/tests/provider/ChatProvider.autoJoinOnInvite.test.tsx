@@ -3,7 +3,6 @@ import { render, waitFor } from '@testing-library/react'
 import { useContext } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Hoisted mock so the provider's `import { io } from 'socket.io-client'` sees our fake.
 const { socketOn, socketOnce, socketDisconnect, socketEmitWithAck } = vi.hoisted(() => ({
   socketOn: vi.fn(),
   socketOnce: vi.fn(),
@@ -87,7 +86,6 @@ describe('ChatProvider — autoJoinOnInvite={false}', () => {
       added_by: { role: 'assistant', id: 'a_bot', name: 'Bot', metadata: {} },
     })
 
-    // Meta hydrated, onThreadInvited fired, query invalidated.
     await waitFor(() => {
       const store = captured as unknown as ReturnType<typeof useChatStore>
       expect(store.getState().threadMeta.th_X).toBeDefined()
@@ -95,8 +93,6 @@ describe('ChatProvider — autoJoinOnInvite={false}', () => {
     await waitFor(() => expect(onInvited).toHaveBeenCalledTimes(1))
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['chat', 'threads'] })
 
-    // Critical: thread:join must NOT have been emitted.
-    // Wait a tick for any microtask-scheduled join to flush, then assert.
     await new Promise((r) => setTimeout(r, 10))
     const joinCalls = socketEmitWithAck.mock.calls.filter(([event]) => event === 'thread:join')
     expect(joinCalls).toHaveLength(0)

@@ -101,7 +101,6 @@ describe('ChatClient.openThreadWith', () => {
       throw new Error(`unexpected fetch: ${method} ${url}`)
     })
 
-    // joinThread goes through the socket.
     emitWithAck.mockImplementation(async (event: string) => {
       if (event === 'thread:join') {
         order.push('joinThread')
@@ -132,10 +131,8 @@ describe('ChatClient.openThreadWith', () => {
     expect(result.thread.id).toBe('th_new')
     expect(result.event.id).toBe('evt_sent')
 
-    // All four underlying calls, in order.
     expect(order).toEqual(['createThread', 'addMember', 'joinThread', 'sendMessage'])
 
-    // sendMessage was called with recipients: [invite.id] and the clientId we passed.
     const sendCall = fetchMock.mock.calls.find(([u, i]) => {
       const url = typeof u === 'string' ? u : (u as URL | Request).toString()
       return url.endsWith('/chat/threads/th_new/messages') && (i as RequestInit).method === 'POST'
@@ -146,7 +143,6 @@ describe('ChatClient.openThreadWith', () => {
     expect(body.client_id).toBe('c_test')
     expect(body.content).toEqual([{ type: 'text', text: 'ping' }])
 
-    // joinThread emitted with thread_id: 'th_new'.
     expect(emitWithAck).toHaveBeenCalledWith('thread:join', {
       thread_id: 'th_new',
     })
@@ -189,11 +185,10 @@ describe('ChatClient.openThreadWith', () => {
     })
 
     expect(result.thread.id).toBe('th_existing')
-    // No POST /threads (create), no POST /members (add_member).
+
     expect(methodsHit.filter((s) => s.startsWith('POST') && s.endsWith('/threads'))).toHaveLength(0)
     expect(methodsHit.filter((s) => s.includes('/members'))).toHaveLength(0)
 
-    // recipients defaults to null when no invite.
     const sendCall = fetchMock.mock.calls.find(([u, i]) => {
       const url = typeof u === 'string' ? u : (u as URL | Request).toString()
       return (

@@ -85,6 +85,6 @@ async def test_find_thread_by_client_id_returns_none_when_absent(
 async def test_create_thread_without_client_id_is_not_indexed(
     store: PostgresChatStore,
 ) -> None:
-    # Legacy path: no client_id passed in, find should not match anything.
+
     await store.create_thread(_new_thread(id="th_1"), caller_identity_id="u_alice")
     assert await store.find_thread_by_client_id("u_alice", "anything") is None

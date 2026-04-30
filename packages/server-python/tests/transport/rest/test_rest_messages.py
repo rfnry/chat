@@ -107,7 +107,6 @@ async def test_list_events_limit_capped_at_200(client: AsyncClient, clean_db: as
     create = await client.post("/chat/threads", json={"tenant": {"org": "A"}})
     thread_id = create.json()["id"]
 
-    # Seed 201 events directly via the store to avoid 201 HTTP round-trips
     now = datetime.now(UTC)
     for i in range(201):
         event = MessageEvent(
@@ -124,8 +123,7 @@ async def test_list_events_limit_capped_at_200(client: AsyncClient, clean_db: as
     assert resp.status_code == 200
     body = resp.json()
     assert len(body["items"]) == 200
-    # Capped page must carry a continuation cursor so paginating callers don't
-    # mistake it for end-of-data.
+
     assert body["next_cursor"] is not None
 
 

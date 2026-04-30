@@ -18,7 +18,7 @@ async def test_watchdog_drains_backlog_beyond_batch_size() -> None:
         watchdog_interval_seconds=0.05,
         watchdog_batch_size=5,
     )
-    # Seed 12 stale runs (started 10s ago), each with its own thread.
+
     alice = UserIdentity(id="u_alice", name="Alice")
     stale_started_at = datetime.now(UTC) - timedelta(seconds=10)
     for i in range(12):
@@ -41,7 +41,6 @@ async def test_watchdog_drains_backlog_beyond_batch_size() -> None:
         )
         await store.create_run(run)
 
-    # One sweep should drain all 12, not just batch_size=5.
     await server._sweep_stale_runs()
 
     for i in range(12):
@@ -52,7 +51,7 @@ async def test_watchdog_drains_backlog_beyond_batch_size() -> None:
 
 @pytest.mark.asyncio
 async def test_watchdog_batch_size_constructor_param_propagates() -> None:
-    """ChatServer honors watchdog_batch_size as a ctor kwarg."""
+
     server = ChatServer(store=InMemoryChatStore(), watchdog_batch_size=7)
     assert server.watchdog_batch_size == 7
 

@@ -26,23 +26,17 @@ def _inbox_room(identity_id: str) -> str:
 
 
 def tenant_path(tenant: dict[str, str], *, namespace_keys: list[str] | None) -> str:
-    """Deterministic tenant-path string for a tenant scope. Single source of
-    truth for the path used by tenant rooms, presence rooms, and REST tenant
-    filtering — callers that need the path for multiple purposes should derive
-    it once and reuse to avoid drift."""
+
     return derive_namespace_path(tenant, namespace_keys=namespace_keys)
 
 
 def _tenant_room(tenant: dict[str, str], namespace_keys: list[str] | None) -> str:
-    """Deterministic room name for a tenant scope. Reuses derive_namespace_path
-    so the same logic that defines tenant scoping defines room membership."""
+
     return f"tenant:{tenant_path(tenant, namespace_keys=namespace_keys)}"
 
 
 def _presence_room(tenant_path: str) -> str:
-    """Room name for presence-scope broadcasts. Every socket that authenticates
-    into a given tenant path enters this room; presence:joined / presence:left
-    frames go here."""
+
     return f"presence:{tenant_path}"
 
 
@@ -112,18 +106,7 @@ class SocketIOBroadcaster:
         namespace: str,
         skip_sid: str | None = None,
     ) -> None:
-        """Broadcast a presence:joined frame to the tenant's presence room.
 
-        `skip_sid` is the joining socket itself — excluded so the newly-connected
-        client doesn't receive its own "joined" event. Other sockets (same
-        identity with multiple tabs + all other identities in the same tenant
-        scope) receive it.
-
-        `namespace` is required (not defaulted to "/") because under wildcard
-        namespace mode, "/" is not a registered namespace and emitting there
-        silently no-ops. Callers in the connect/disconnect handlers already have
-        the concrete namespace in hand — pass it explicitly.
-        """
         await self._sio.emit(
             "presence:joined",
             frame.model_dump(mode="json", by_alias=True),
@@ -139,13 +122,7 @@ class SocketIOBroadcaster:
         tenant_path: str,
         namespace: str,
     ) -> None:
-        """Broadcast a presence:left frame to the tenant's presence room.
 
-        No skip_sid here: by the time we broadcast, the departing socket is
-        already disconnected and no longer in any room.
-
-        `namespace` is required for the same reason as broadcast_presence_joined.
-        """
         await self._sio.emit(
             "presence:left",
             frame.model_dump(mode="json", by_alias=True),

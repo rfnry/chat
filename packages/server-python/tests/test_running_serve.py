@@ -18,13 +18,12 @@ def _server() -> ChatServer:
 @pytest.mark.asyncio
 async def test_running_calls_start_and_stop() -> None:
     server = _server()
-    assert server._watchdog_task is None  # pre-start
+    assert server._watchdog_task is None
 
     async with server.running():
-        assert server._watchdog_task is not None  # start was called
+        assert server._watchdog_task is not None
         assert not server._watchdog_task.done()
 
-    # After exit: stop was called → watchdog task cancelled.
     assert server._watchdog_task is None or server._watchdog_task.done()
 
 
@@ -36,7 +35,6 @@ async def test_running_stop_runs_even_on_error() -> None:
             assert server._watchdog_task is not None
             raise RuntimeError("inside")
 
-    # stop still ran on error path.
     assert server._watchdog_task is None or server._watchdog_task.done()
 
 
@@ -61,7 +59,6 @@ def test_serve_wraps_lifespan_includes_router_mounts_socketio(monkeypatch) -> No
         captured["asgi"] = asgi
         captured["kwargs"] = kwargs
 
-        # drive the wrapped lifespan
         async def _drive() -> None:
             ctx = app.router.lifespan_context(app)
             await ctx.__aenter__()
@@ -75,15 +72,12 @@ def test_serve_wraps_lifespan_includes_router_mounts_socketio(monkeypatch) -> No
 
     server.serve(app, router_prefix="/chat", host="127.0.0.1", port=9999)
 
-    # uvicorn.run was called with the ASGI-mounted app (not the FastAPI app directly)
-    assert captured["asgi"] is not app  # socketio wrapper returned from mount()
+    assert captured["asgi"] is not app
     assert captured["kwargs"] == {"host": "127.0.0.1", "port": 9999}
 
-    # consumer's original lifespan was chained inside server.running()
     assert original_called["entered"] is True
     assert original_called["exited"] is True
 
-    # chat router was included at the requested prefix
     routes = [getattr(r, "path", None) for r in app.routes]
     assert any(p and p.startswith("/chat") for p in routes)
 
@@ -93,8 +87,7 @@ def test_serve_default_router_prefix_is_chat(monkeypatch) -> None:
     app = FastAPI()
 
     def fake_uvicorn_run(*a: Any, **kw: Any) -> None:
-        # Drive lifespan minimally to trigger any routing registration,
-        # though include_router happens synchronously before uvicorn.run.
+
         pass
 
     import uvicorn
@@ -108,7 +101,7 @@ def test_serve_default_router_prefix_is_chat(monkeypatch) -> None:
 
 
 def test_serve_allows_consumer_route_override(monkeypatch) -> None:
-    """Consumer route defined BEFORE serve() must win over library route."""
+
     server = _server()
     app = FastAPI()
 
@@ -125,10 +118,8 @@ def test_serve_allows_consumer_route_override(monkeypatch) -> None:
 
     server.serve(app, host="127.0.0.1", port=9999)
 
-    # Count routes at /chat/threads — should be at least 2 (consumer + library),
-    # and the consumer's should appear first (first-match wins).
     threads_routes = [r for r in app.routes if getattr(r, "path", None) == "/chat/threads"]
     assert len(threads_routes) >= 1
-    # The first one (by registration order) should be the consumer's my_threads.
+
     first = threads_routes[0]
     assert getattr(first, "endpoint", None).__name__ == "my_threads"

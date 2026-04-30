@@ -6,16 +6,6 @@ import { useChatStore } from './useChatClient'
 
 const EMPTY: Record<string, StreamingItem> = {}
 
-/**
- * Returns the currently in-flight streaming partials for `threadId`.
- *
- * Each item is the live token-accumulation state of an active
- * `streamMessage` or `streamReasoning` call. When a stream completes its
- * partial disappears from this list and a final event lands in
- * {@link useChatHistory}.
- *
- * Plural reflects that multiple streams may be in flight concurrently.
- */
 export function useChatStreams(threadId: string | null): StreamingItem[] {
   const store = useChatStore()
   const streams = useStore(

@@ -57,20 +57,6 @@ _log = logging.getLogger(__name__)
 
 
 class _LifespanNoiseFilter(logging.Filter):
-    """Silence uvicorn.error's "Exception in 'lifespan' protocol" log when
-    the underlying exception is CancelledError.
-
-    Background: a consumer's lifespan may open an outbound socketio-client
-    (e.g. via `rfnry_chat_client.ChatClient.running()`). The client's
-    background aiohttp tasks prevent uvicorn from reaching its normal
-    graceful shutdown on SIGINT, causing the lifespan task to be cancelled
-    at `await receive()`. Starlette logs this via uvicorn.error — cosmetic,
-    exit code remains 0.
-
-    Duplicated from rfnry_chat_client.client to keep the one-way import
-    rule (server must not import client). Kept in lockstep.
-    """
-
     def filter(self, record: logging.LogRecord) -> bool:
         if not isinstance(record.msg, str):
             return True
@@ -220,20 +206,7 @@ class ChatServer:
 
     @asynccontextmanager
     async def running(self) -> AsyncIterator[None]:
-        """Async context manager for running this ChatServer alongside a
-        FastAPI app's lifespan.
 
-        Plug this into your FastAPI lifespan:
-
-            @asynccontextmanager
-            async def lifespan(app):
-                async with chat_server.running():
-                    yield
-
-        Calls `start()` on enter and `stop()` on exit. Handles the watchdog
-        task lifecycle transparently so consumers don't need to remember
-        the pair.
-        """
         await self.start()
         try:
             yield
@@ -247,31 +220,7 @@ class ChatServer:
         router_prefix: str = "/chat",
         **uvicorn_kwargs: Any,
     ) -> None:
-        """Run a FastAPI (or other ASGI) app under uvicorn with this
-        ChatServer mounted + lifecycle wired up.
 
-        Internally:
-          1. Wraps `app.router.lifespan_context` with `running()` so
-             `start()` / `stop()` run around the app's existing lifespan.
-          2. Includes `self.router` at `router_prefix` (default "/chat").
-          3. Wraps the app with Socket.IO via `mount()`.
-          4. Calls `uvicorn.run(asgi_app, **uvicorn_kwargs)`.
-
-        All uvicorn kwargs (host, port, workers, ssl_*, log_config, etc.)
-        pass through to uvicorn.run.
-
-        **Route-override ordering:** Consumer-defined routes registered
-        on `app` BEFORE calling `serve()` will win over the library's
-        router (FastAPI first-match routing). This is the natural
-        ordering when using @app.get/@app.post decorators at module
-        load — `serve()` is called at the bottom of your main script
-        after all decorators have registered.
-
-        Usage:
-
-            if __name__ == "__main__":
-                chat_server.serve(app, host="0.0.0.0", port=8000)
-        """
         original_lifespan = app.router.lifespan_context
 
         @asynccontextmanager
@@ -285,11 +234,6 @@ class ChatServer:
         app.include_router(self.router, prefix=router_prefix)
         asgi = self.mount(app)
 
-        # Defensive: if the consumer's lifespan spins up an outbound
-        # socketio-client (e.g. via `chat_client.running()`), uvicorn 0.46+
-        # propagates CancelledError on SIGINT. Silence it here the same way
-        # rfnry_chat_client.serve() does (duplicated to keep the one-way
-        # import rule: server must not import client).
         _install_lifespan_noise_filter()
 
         import uvicorn
@@ -405,11 +349,6 @@ class ChatServer:
         target_id: str | None = None,
     ) -> bool:
         if self.authorize is None:
-            # Default policy: membership is the gate. Historically this check was
-            # hardcoded in every REST/socket handler next to matches(); moving it
-            # here makes access policy a single replaceable function. Consumers
-            # that want "tenant alone is enough" (e.g. workspace-is-the-room)
-            # pass their own `authorize=` callback.
             return await self.store.is_member(thread_id, identity.id)
         return await self.authorize(identity, thread_id, action, target_id=target_id)
 
@@ -506,17 +445,6 @@ class ChatServer:
             if thread is not None:
                 namespace = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
 
-        # Pipeline the DB write and the broadcast. The broadcast doesn't depend
-        # on the write completing — it carries the event payload directly. Total
-        # latency drops from write+broadcast to max(write, broadcast).
-        #
-        # Error-path note: if append_event raises, asyncio.gather propagates the
-        # exception but does NOT cancel the in-flight broadcast (default
-        # return_exceptions=False semantics). The broadcast may still complete
-        # and reach live subscribers, producing a "ghost event" they see on
-        # WebSocket but won't find in REST history. Accepted as the cost of
-        # parallelization — DB write failures are rare and the WebSocket
-        # subscriber will reconcile on reconnect/replay.
         if self.broadcaster is not None:
             appended, _ = await asyncio.gather(
                 self.store.append_event(event),
@@ -556,9 +484,7 @@ class ChatServer:
         await self.broadcaster.broadcast_thread_cleared(thread_id, namespace=namespace)
 
     async def publish_thread_created(self, thread: Thread) -> None:
-        """Fan thread:created to every connected socket whose identity tenant
-        matches the new thread, via the deterministic tenant room joined at
-        connect time."""
+
         if self.broadcaster is None:
             return
         tenant_path = derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
@@ -571,8 +497,7 @@ class ChatServer:
         )
 
     async def publish_thread_deleted(self, thread_id: str, tenant: TenantScope) -> None:
-        """Fan thread:deleted to the tenant room. Tenant is passed explicitly
-        because the row is gone by the time we broadcast."""
+
         if self.broadcaster is None:
             return
         tenant_path = derive_namespace_path(tenant, namespace_keys=self.namespace_keys)
@@ -640,14 +565,7 @@ class ChatServer:
         triggered_by: Identity,
         idempotency_key: str | None,
     ) -> Run:
-        # Explicit reuse mechanism: if the caller supplies an idempotency_key,
-        # return the existing run. This is the ONLY supported reuse path.
-        # Previously we also silently returned any active run for the same
-        # (thread, actor) pair via find_active_run — that violated the
-        # caller's mental model ("each begin_run yields its own run") and
-        # produced phantom run.started/run.completed fan-out in multi-agent
-        # channels. Callers that want de-duplication should pass an
-        # idempotency_key explicitly.
+
         if idempotency_key is not None:
             existing = await self.store.find_run_by_idempotency_key(thread.id, idempotency_key)
             if existing is not None:
@@ -670,7 +588,6 @@ class ChatServer:
     async def cancel_run(self, *, run_id: str) -> Run:
         updated = await self.store.update_run_status_if_active(run_id, "cancelled")
         if updated is None:
-            # Already terminal (idempotent) or missing.
             existing = await self.store.get_run(run_id)
             if existing is None:
                 raise LookupError(f"run not found: {run_id}")
@@ -685,7 +602,6 @@ class ChatServer:
         target_status: RunStatus = "completed" if error is None else "failed"
         updated = await self.store.update_run_status_if_active(run_id, target_status, error=error)
         if updated is None:
-            # Already terminal — idempotent no-op, no publish.
             existing = await self.store.get_run(run_id)
             if existing is None:
                 raise LookupError(f"run not found: {run_id}")
@@ -731,10 +647,6 @@ class ChatServer:
         if not isinstance(tenant_raw, dict):
             tenant: dict[str, str] = {}
         else:
-            # Drop non-string values rather than coercing via str(), so that
-            # a consumer accidentally storing a bool/number/list cannot
-            # silently pass validation — derive_namespace_path will raise a
-            # clear "missing required key" error on the dropped key instead.
             tenant = {k: v for k, v in tenant_raw.items() if isinstance(v, str)}
         derive_namespace_path(tenant, namespace_keys=self.namespace_keys)
 

@@ -19,23 +19,17 @@ from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
 
 
 class InMemoryChatStore:
-    """ChatStore backed by dicts. Zero dependencies, not thread-safe, not
-    durable — intended for examples, tests, and local development."""
-
     def __init__(self) -> None:
         self._threads: dict[str, Thread] = {}
         self._events: dict[str, Event] = {}
         self._events_by_thread: dict[str, list[str]] = {}
         self._runs: dict[str, Run] = {}
         self._members: dict[str, dict[str, ThreadMember]] = {}
-        # (caller_identity_id, client_id) -> thread_id — only set when both
-        # are provided at create-time; drives per-caller idempotent creation.
+
         self._thread_client_keys: dict[tuple[str, str], str] = {}
 
     async def ensure_schema(self) -> None:
         return
-
-    # threads
 
     async def create_thread(
         self,
@@ -105,8 +99,6 @@ class InMemoryChatStore:
             if tid == thread_id:
                 self._thread_client_keys.pop(key, None)
 
-    # events
-
     async def append_event(self, event: Event) -> Event:
         self._events[event.id] = event
         self._events_by_thread.setdefault(event.thread_id, []).append(event.id)
@@ -143,8 +135,6 @@ class InMemoryChatStore:
             last = items[-1]
             next_cursor = EventCursor(created_at=last.created_at, id=last.id)
         return Page[Event](items=items, next_cursor=next_cursor)
-
-    # runs
 
     async def create_run(self, run: Run) -> Run:
         self._runs[run.id] = run
@@ -203,8 +193,6 @@ class InMemoryChatStore:
         stale = [run for run in self._runs.values() if run.status in active and run.started_at < threshold]
         stale.sort(key=lambda r: r.started_at)
         return stale[:limit]
-
-    # members
 
     async def add_member(
         self,

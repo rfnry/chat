@@ -9,19 +9,13 @@ ClientFactory = Callable[[str], ChatClient]
 
 
 class ChatClientPool:
-    """Dict-backed pool of {base_url: ChatClient}, lazily constructed + connected.
-
-    Used by multi-server agents where the target chat server URL is not known
-    until request time (e.g. a webhook payload carries `chat_server_url`).
-    """
-
     def __init__(self, *, factory: ClientFactory) -> None:
         self._factory = factory
         self._clients: dict[str, ChatClient] = {}
         self._lock = asyncio.Lock()
 
     async def get_or_connect(self, base_url: str) -> ChatClient:
-        """Return the cached client for `base_url`, creating and connecting on miss."""
+
         async with self._lock:
             existing = self._clients.get(base_url)
             if existing is not None:
@@ -32,14 +26,14 @@ class ChatClientPool:
             return client
 
     async def close(self, base_url: str) -> None:
-        """Disconnect and remove the entry for `base_url`. No-op if absent."""
+
         async with self._lock:
             client = self._clients.pop(base_url, None)
         if client is not None:
             await client.disconnect()
 
     async def close_all(self) -> None:
-        """Disconnect and remove all entries."""
+
         async with self._lock:
             clients = list(self._clients.values())
             self._clients.clear()

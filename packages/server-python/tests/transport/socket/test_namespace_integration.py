@@ -54,10 +54,6 @@ def _make_chat_server_with_ns(store: PostgresChatStore, identity: Identity) -> C
 
 
 def _make_chat_server_multi_identity(store: PostgresChatStore, identities: dict[str, Identity]) -> ChatServer:
-    """ChatServer whose authenticate callback dispatches on the connect-time
-    auth payload (Socket.IO) or the `x-user` HTTP header (REST). Used by
-    cross-namespace isolation tests that need more than one identity on the
-    same live server."""
 
     async def auth(handshake: HandshakeData) -> Identity | None:
         user_id: str | None = None
@@ -116,7 +112,7 @@ async def test_connect_to_matching_namespace_succeeds(
 
 async def test_connect_to_wrong_namespace_rejected(clean_db: asyncpg.Pool) -> None:
     store = PostgresChatStore(pool=clean_db)
-    # Identity belongs to org B, but the client will try to connect to /A
+
     bob = UserIdentity(id="u_bob", name="Bob", metadata={"tenant": {"org": "B"}})
     chat_server = _make_chat_server_with_ns(store, bob)
     asgi = _wire(chat_server)
@@ -135,8 +131,7 @@ async def test_connect_to_root_rejected_when_keys_set(
 ) -> None:
     base, _ = live_ns_a
     client = socketio.AsyncClient()
-    # Connecting without an explicit namespace defaults to `/`, which has
-    # zero segments and therefore fails parse_namespace_path.
+
     with pytest.raises(socketio.exceptions.ConnectionError):
         await client.connect(base, transports=["websocket"], socketio_path="/chat/ws")
 
@@ -151,23 +146,16 @@ async def test_join_thread_in_matching_namespace_succeeds(
     server = _Server(asgi)
     base = await server.start()
     try:
-        # Create a thread in org A via REST
         async with httpx.AsyncClient(base_url=base) as http:
             create = await http.post("/chat/threads", json={"tenant": {"org": "A"}})
             thread_id = create.json()["id"]
 
-        # Client connects to /A and can see it
         client = socketio.AsyncClient()
         await client.connect(base, namespaces=["/A"], transports=["websocket"], socketio_path="/chat/ws")
         join = await client.call("thread:join", {"thread_id": thread_id}, namespace="/A")
         assert join["thread_id"] == thread_id
         await client.disconnect()
-        # The cross-namespace "another client in /B gets not_found" case is
-        # covered by test_broadcast_events_do_not_leak_across_namespaces
-        # (which exercises the full broadcast isolation path, not just the
-        # thread-level gate) and by test_join_thread_with_mismatched_ns_
-        # tenant_returns_not_found (which exercises the thread-level gate
-        # against a foreign-tenant thread).
+
     finally:
         await server.stop()
 
@@ -175,12 +163,6 @@ async def test_join_thread_in_matching_namespace_succeeds(
 async def test_broadcast_events_do_not_leak_across_namespaces(
     clean_db: asyncpg.Pool,
 ) -> None:
-    """The load-bearing defense-in-depth proof: a message broadcast inside
-    `/A` reaches `/A` subscribers but never leaks to a client subscribed on
-    `/B`, and vice versa. This is the property that makes `namespace_keys`
-    worth shipping — everything else is just "another check on top of the
-    existing gates." This test verifies the Socket.IO transport layer
-    actually isolates the two namespaces at broadcast time."""
 
     store = PostgresChatStore(pool=clean_db)
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
@@ -190,7 +172,6 @@ async def test_broadcast_events_do_not_leak_across_namespaces(
     server = _Server(asgi)
     base = await server.start()
     try:
-        # Each user creates a thread in their own org via REST.
         async with httpx.AsyncClient(base_url=base) as http:
             r_a = await http.post(
                 "/chat/threads",
@@ -237,13 +218,11 @@ async def test_broadcast_events_do_not_leak_across_namespaces(
             socketio_path="/chat/ws",
         )
 
-        # Each client joins their own thread.
         join_a = await alice_client.call("thread:join", {"thread_id": thread_a_id}, namespace="/A")
         assert join_a["thread_id"] == thread_a_id
         join_b = await bob_client.call("thread:join", {"thread_id": thread_b_id}, namespace="/B")
         assert join_b["thread_id"] == thread_b_id
 
-        # Alice posts a message to her thread via REST.
         async with httpx.AsyncClient(base_url=base) as http:
             r = await http.post(
                 f"/chat/threads/{thread_a_id}/messages",
@@ -255,20 +234,17 @@ async def test_broadcast_events_do_not_leak_across_namespaces(
             )
             assert r.status_code in (200, 201), r.text
 
-        # Wait up to ~1.5s for alice's client to receive the event.
         for _ in range(30):
             if alice_events:
                 break
             await asyncio.sleep(0.05)
 
-        # Alice saw her own message.
         assert len(alice_events) == 1
         assert alice_events[0]["client_id"] == "c_a1"
         assert alice_events[0]["type"] == "message"
-        # Bob MUST NOT have seen it — the whole point of the feature.
+
         assert bob_events == []
 
-        # Now bob posts to his thread and we verify the mirror case.
         async with httpx.AsyncClient(base_url=base) as http:
             r = await http.post(
                 f"/chat/threads/{thread_b_id}/messages",
@@ -287,7 +263,7 @@ async def test_broadcast_events_do_not_leak_across_namespaces(
 
         assert len(bob_events) == 1
         assert bob_events[0]["client_id"] == "c_b1"
-        # Alice's event list is still just her own message.
+
         assert len(alice_events) == 1
 
         await alice_client.disconnect()
@@ -300,18 +276,13 @@ async def test_join_thread_with_mismatched_ns_tenant_returns_not_found(
     clean_db: asyncpg.Pool,
 ) -> None:
     store = PostgresChatStore(pool=clean_db)
-    # Alice has tenant `{org: A}` — she'll connect to `/A`. We then
-    # manually insert a thread whose tenant is `{org: B}` into the
-    # store and verify that joining it over WS returns not_found, even
-    # though it exists.
+
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
     chat_server = _make_chat_server_with_ns(store, alice)
     asgi = _wire(chat_server)
     server = _Server(asgi)
     base = await server.start()
     try:
-        # Bypass the REST 400 gate by inserting directly (simulates
-        # stale data from before namespace_keys was enabled).
         async with clean_db.acquire() as conn:
             await conn.execute(
                 "INSERT INTO threads (id, tenant, metadata) VALUES ($1, $2, $3)",
@@ -340,15 +311,6 @@ async def test_join_thread_with_mismatched_ns_tenant_returns_not_found(
 async def test_thread_invited_delivered_to_inbox_room_end_to_end(
     clean_db: asyncpg.Pool,
 ) -> None:
-    """Regression anchor for the proactive-agents invite pipeline.
-
-    Alice connects as a user. Bot authenticates as a distinct assistant
-    identity, creates a thread via REST, then invites Alice by POSTing to
-    `/chat/threads/{id}/members`. Alice's socket must receive exactly one
-    `thread:invited` frame, routed via the per-identity `inbox:<id>` room
-    that `ThreadNamespace.on_connect` auto-joins. Exercises the full chain:
-    REST handler → ChatServer.publish_thread_invited → SocketIOBroadcaster
-    → Socket.IO room filtering → AsyncClient.on('thread:invited')."""
 
     store = PostgresChatStore(pool=clean_db)
 
@@ -356,8 +318,7 @@ async def test_thread_invited_delivered_to_inbox_room_end_to_end(
     bot = AssistantIdentity(id="a_bot", name="Bot", metadata={})
 
     async def auth(handshake: HandshakeData) -> Identity | None:
-        # Socket.IO clients pass creds in the `auth={...}` handshake payload;
-        # REST clients pass them in the `Authorization: Bearer ...` header.
+
         token: str = ""
         if isinstance(handshake.auth, dict):
             raw = handshake.auth.get("token")

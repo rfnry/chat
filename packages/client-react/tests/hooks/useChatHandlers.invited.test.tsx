@@ -70,8 +70,7 @@ describe('useChatHandlers().on.invited', () => {
     const frame = received[0]!
     expect(frame.thread.id).toBe('th_invited')
     expect(frame.thread.metadata).toMatchObject({ title: 'Proactive ping' })
-    // The key point: addedMember is delivered (the lossy `onThreadInvited`
-    // prop drops it).
+
     expect(frame.addedMember.id).toBe('u_alice')
     expect(frame.addedMember.name).toBe('Alice')
     expect(frame.addedBy.id).toBe('a_bot')
@@ -107,7 +106,6 @@ describe('useChatHandlers().on.invited', () => {
       </Wrapper>
     )
 
-    // No re-subscription just because the handler identity changed.
     expect(onSpy.mock.calls.length).toBe(subscriptionsAfterMount)
 
     raw!({

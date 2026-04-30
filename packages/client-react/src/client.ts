@@ -219,16 +219,6 @@ export class ChatClient {
     return this.rest.listPresence()
   }
 
-  /**
-   * Proactively open (or reuse) a thread, optionally invite a participant,
-   * join, and send a message. Returns the resulting thread and event.
-   *
-   * - If `threadId` is omitted, creates a new thread (this client becomes first member).
-   * - If `invite` is provided, adds them (add_member is idempotent server-side,
-   *   so no preflight is performed).
-   * - Joins the thread room.
-   * - Sends the message; recipients default to `[invite.id]` if invite was specified.
-   */
   async openThreadWith(opts: {
     message: ContentPart[]
     invite?: Identity
@@ -245,7 +235,6 @@ export class ChatClient {
           clientId: opts.clientId ?? crypto.randomUUID(),
         })
     if (opts.invite) {
-      // add_member is idempotent server-side — no preflight.
       await this.rest.addMember(thread.id, opts.invite)
     }
     await this.joinThread(thread.id)
@@ -508,14 +497,6 @@ export class ChatClient {
     return this.socketTransport.disconnect()
   }
 
-  /**
-   * Tear down the current transports and rebuild them with new options,
-   * preserving any listeners previously registered via `client.on(event, handler)`.
-   *
-   * Any option omitted keeps its current value. After this resolves the
-   * socket is reconnected and all prior listeners have been re-attached to
-   * the new socket — consumers do NOT need to re-register handlers.
-   */
   async reconnect(
     opts: {
       url?: string
@@ -536,8 +517,6 @@ export class ChatClient {
     if (opts.authenticate !== undefined) {
       this.authenticateFn = opts.authenticate
     } else if (opts.identity !== undefined && opts.identity !== null) {
-      // Mirror the constructor's default-authenticate behaviour when a new
-      // identity is supplied without an explicit authenticate function.
       const identity = opts.identity
       const encoded = btoa(JSON.stringify(identity))
         .replace(/\+/g, '-')
@@ -567,9 +546,7 @@ export class ChatClient {
     return () => {
       const idx = this.listeners.indexOf(entry)
       if (idx !== -1) this.listeners.splice(idx, 1)
-      // Detach from whichever transport is current — on reconnect we swap in
-      // a new socket and the old closure's `off()` would be a no-op on the
-      // now-null old socket.
+
       const sock = this.socketTransport.rawSocket
       if (sock) sock.off(event, handler)
     }

@@ -37,10 +37,5 @@ def identity_tenant(identity: Identity) -> dict[str, str]:
     raw = identity.metadata.get("tenant", {})
     if not isinstance(raw, dict):
         return {}
-    # Non-string values (booleans, numbers, lists, etc.) are dropped rather
-    # than coerced via str() so that a consumer who accidentally stores
-    # `{"org": True}` on an identity cannot silently route to a bogus
-    # `"True"` tenant key. derive_namespace_path and matches() both expect
-    # str-to-str tenants, and downstream consumers can still catch the drop
-    # via the "missing required key" error from derive_namespace_path.
+
     return {k: v for k, v in raw.items() if isinstance(v, str)}

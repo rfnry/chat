@@ -2,7 +2,6 @@ import { render, waitFor } from '@testing-library/react'
 import { useContext } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Hoisted mock so the provider's `import { io } from 'socket.io-client'` sees our fake.
 const { socketOn, socketOff, socketOnce, socketDisconnect, socketEmitWithAck } = vi.hoisted(() => ({
   socketOn: vi.fn(),
   socketOff: vi.fn(),
@@ -74,17 +73,14 @@ describe('ChatProvider presence wiring', () => {
       </ChatProvider>
     )
 
-    // Provider only publishes context AFTER connect + presence fetch resolves.
     await waitFor(() => expect(captured).not.toBeNull())
 
     const ctx = captured as unknown as ChatContextValue
 
-    // REST was called exactly once against /chat/presence.
     expect(fetchMock).toHaveBeenCalled()
     const [url] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('http://x/chat/presence')
 
-    // Slice hydrated from the snapshot.
     await waitFor(() => {
       expect(ctx.presence.isHydrated()).toBe(true)
     })
@@ -92,7 +88,6 @@ describe('ChatProvider presence wiring', () => {
     expect(initial).toHaveLength(2)
     expect(initial.map((m) => m.id).sort()).toEqual(['a_bot', 'u_alice'])
 
-    // Grab the live frame handlers the provider registered.
     const joinedCall = socketOn.mock.calls.find(([event]) => event === 'presence:joined')
     const leftCall = socketOn.mock.calls.find(([event]) => event === 'presence:left')
     expect(joinedCall).toBeDefined()
@@ -100,7 +95,6 @@ describe('ChatProvider presence wiring', () => {
     const onJoined = (joinedCall as unknown as [string, (data: unknown) => void])[1]
     const onLeft = (leftCall as unknown as [string, (data: unknown) => void])[1]
 
-    // A live `presence:joined` patches the slice.
     onJoined({
       identity: { role: 'user', id: 'u_carol', name: 'Carol', metadata: {} },
       at: '2026-04-23T12:00:00Z',
@@ -109,7 +103,6 @@ describe('ChatProvider presence wiring', () => {
     expect(afterJoin).toHaveLength(3)
     expect(afterJoin.map((m) => m.id)).toContain('u_carol')
 
-    // A live `presence:left` removes an existing member.
     onLeft({
       identity: { role: 'user', id: 'u_alice', name: 'Alice', metadata: {} },
       at: '2026-04-23T12:00:05Z',
@@ -139,7 +132,6 @@ describe('ChatProvider presence wiring', () => {
 
     await waitFor(() => expect(captured).not.toBeNull())
 
-    // Confirm the handlers were attached while mounted.
     const joinedCall = socketOn.mock.calls.find(([event]) => event === 'presence:joined')
     const leftCall = socketOn.mock.calls.find(([event]) => event === 'presence:left')
     expect(joinedCall).toBeDefined()
@@ -149,9 +141,6 @@ describe('ChatProvider presence wiring', () => {
 
     unmount()
 
-    // Provider's cleanup runs the disposer returned by client.on(), which
-    // calls socket.off(event, handler) for each subscription. Verify both
-    // presence events were detached with the exact handlers we captured.
     const offCalls = socketOff.mock.calls
     expect(offCalls).toContainEqual(['presence:joined', onJoined])
     expect(offCalls).toContainEqual(['presence:left', onLeft])
@@ -176,7 +165,6 @@ describe('ChatProvider presence wiring', () => {
       </ChatProvider>
     )
 
-    // Provider still publishes context — presence slice stays unhydrated.
     await waitFor(() => expect(captured).not.toBeNull())
     const ctx = captured as unknown as ChatContextValue
     expect(ctx.presence.isHydrated()).toBe(false)

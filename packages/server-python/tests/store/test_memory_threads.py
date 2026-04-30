@@ -101,14 +101,14 @@ async def test_clear_events_is_idempotent_on_empty_thread(
     store: InMemoryChatStore,
 ) -> None:
     await store.create_thread(_new_thread(id="th_1"))
-    # First call on an already-empty thread is fine
+
     await store.clear_events("th_1")
-    # Second call is also fine
+
     await store.clear_events("th_1")
 
 
 async def test_clear_events_on_unknown_thread_is_noop(store: InMemoryChatStore) -> None:
-    # No exception; future writes to that id still work
+
     await store.clear_events("th_missing")
     await store.create_thread(_new_thread(id="th_missing"))
     await store.append_event(_make_message("th_missing"))

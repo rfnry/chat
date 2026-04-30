@@ -88,7 +88,7 @@ async def test_on_members_updated_fires_on_frame() -> None:
 
     @client.on_members_updated()
     def handle(thread_id: str, members: list[Identity]) -> None:
-        # Sync handler — FrameDispatcher should still dispatch it correctly.
+
         received.append((thread_id, members))
 
     await client.connect()
@@ -132,8 +132,7 @@ async def test_on_run_updated_fires_on_frame() -> None:
 
 
 async def test_feed_thread_updated_fans_handlers_concurrently() -> None:
-    """R16: thread:updated handlers must run concurrently — one slow
-    handler must not block the next from starting."""
+
     import asyncio
 
     from rfnry_chat_client.frames import FrameDispatcher
@@ -158,7 +157,7 @@ async def test_feed_thread_updated_fans_handlers_concurrently() -> None:
 
 
 async def test_feed_members_updated_fans_handlers_concurrently() -> None:
-    """R16: members:updated handlers must run concurrently."""
+
     import asyncio
 
     from rfnry_chat_client.frames import FrameDispatcher
@@ -183,7 +182,7 @@ async def test_feed_members_updated_fans_handlers_concurrently() -> None:
 
 
 async def test_feed_run_updated_fans_handlers_concurrently() -> None:
-    """R16: run:updated handlers must run concurrently."""
+
     import asyncio
 
     from rfnry_chat_client.frames import FrameDispatcher
@@ -302,7 +301,7 @@ async def test_multiple_presence_left_handlers_all_fire() -> None:
 
 
 async def test_feed_presence_joined_fans_handlers_concurrently() -> None:
-    """R16: presence:joined handlers must run concurrently."""
+
     import asyncio
 
     from rfnry_chat_client.frames import FrameDispatcher
@@ -332,7 +331,7 @@ async def test_feed_presence_joined_fans_handlers_concurrently() -> None:
 
 
 async def test_feed_presence_left_fans_handlers_concurrently() -> None:
-    """R16: presence:left handlers must run concurrently."""
+
     import asyncio
 
     from rfnry_chat_client.frames import FrameDispatcher

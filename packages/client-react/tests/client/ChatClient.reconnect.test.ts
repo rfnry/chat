@@ -39,27 +39,20 @@ describe('ChatClient.reconnect', () => {
     client.on('event', handler)
     expect(mockSocket.on).toHaveBeenCalledWith('event', handler)
 
-    // Track how many io() calls have happened; reset mock call history so we
-    // can assert the reconnect path registers again on the new socket.
     mockSocket.on.mockClear()
     mockSocket.disconnect.mockClear()
     mockIo.mockClear()
 
     await client.reconnect({ url: 'http://new.test' })
 
-    // Old socket was torn down, new socket was built with new url.
     expect(mockSocket.disconnect).toHaveBeenCalled()
     expect(mockIo).toHaveBeenCalledWith(
       'http://new.test',
       expect.objectContaining({ transports: ['websocket'] })
     )
 
-    // Registered listener re-attached to the (new) socket without caller
-    // re-registering.
     expect(mockSocket.on).toHaveBeenCalledWith('event', handler)
 
-    // Find the latest handler registered against 'event' and feed it — it
-    // should be the same handler function we registered.
     const eventCalls = mockSocket.on.mock.calls.filter((c) => c[0] === 'event')
     expect(eventCalls.length).toBeGreaterThan(0)
     const attached = eventCalls[eventCalls.length - 1]![1] as (data: unknown) => void
@@ -77,7 +70,7 @@ describe('ChatClient.reconnect', () => {
     await client.connect()
 
     mockIo.mockClear()
-    await client.reconnect({}) // no changes
+    await client.reconnect({})
 
     expect(mockIo).toHaveBeenCalledTimes(1)
     expect(mockIo).toHaveBeenCalledWith(
@@ -111,8 +104,6 @@ describe('ChatClient.reconnect', () => {
     mockSocket.on.mockClear()
     await client.reconnect({ url: 'http://new.test' })
 
-    // No 'event' registration should happen after reconnect because the
-    // disposer removed the handler from the registry.
     const eventCalls = mockSocket.on.mock.calls.filter((c) => c[0] === 'event')
     expect(eventCalls).toEqual([])
   })

@@ -16,11 +16,6 @@ from rfnry_chat_client.client import ChatClient
 from rfnry_chat_client.handler.context import HandlerContext
 from rfnry_chat_client.send import Send
 
-# The live_server fixture's auth reads identity_id from the Socket.IO
-# handshake `auth` payload or — for REST — from the `x-identity-id` header.
-# Map identity_id == "a_helper" to the assistant, anything else to the user
-# "u_alice". Use those IDs so both clients authenticate to distinct
-# identities on both transports.
 ALICE = UserIdentity(id="u_alice", name="Alice")
 BOT = AssistantIdentity(id="a_helper", name="Helper")
 
@@ -38,12 +33,7 @@ def _authenticate_as(identity_id: str) -> Any:
 async def test_bot_send_to_triggers_on_invited_and_delivers_message(
     live_server: tuple[str, Any],
 ) -> None:
-    """Bot calls send_to(alice) and emits a greeting.
 
-    Asserts:
-      - Alice's on_invited handler fires exactly once with the right frame.
-      - After auto-join, Alice receives the bot's message via on_message.
-    """
     base, _chat_server = live_server
 
     alice = ChatClient(base_url=base, identity=ALICE, authenticate=_authenticate_as(ALICE.id))

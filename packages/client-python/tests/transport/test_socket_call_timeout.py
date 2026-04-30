@@ -43,7 +43,6 @@ async def test_every_call_passes_explicit_timeout() -> None:
     await transport.send_stream_start({})
     await transport.send_stream_end({})
 
-    # 9 calls, each with timeout=12.0
     assert len(sio.calls) == 9
     assert all(c[2]["timeout"] == 12.0 for c in sio.calls), sio.calls
 
@@ -58,9 +57,9 @@ async def test_default_call_timeout_is_15_seconds() -> None:
 
 @pytest.mark.asyncio
 async def test_stream_delta_is_not_timed_out() -> None:
-    """stream:delta is emit-only — no timeout semantics apply."""
+
     sio = _FakeSio()
     transport = SocketTransport(base_url="http://test", sio_client=sio)
     await transport.send_stream_delta({})
-    # emit was called (no entry in sio.calls), and no exception raised.
+
     assert sio.calls == []

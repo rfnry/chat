@@ -115,7 +115,7 @@ describe('useChatUpload', () => {
       resolvers[1]!({ url: 'https://cdn/b' })
       await p2
     })
-    // b resolved, a still uploading
+
     const aItem = latest!.items.find((i) => i.file.name === 'a.txt')!
     const bItem = latest!.items.find((i) => i.file.name === 'b.txt')!
     expect(aItem.status).toBe('uploading')

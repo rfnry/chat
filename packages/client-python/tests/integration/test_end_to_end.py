@@ -226,13 +226,7 @@ async def test_client_streams_message(live_server: tuple[str, Any]) -> None:
 async def test_event_log_ordering_run_started_before_message(
     live_server: tuple[str, Any],
 ) -> None:
-    """Regression for event-ordering bug: the server's event log, sorted by
-    `created_at`, must show run.started BEFORE the handler's message and
-    run.completed AFTER it. Before the fix, Send stamped created_at
-    at handler-yield time (before lazy begin_run), so the published message
-    carried a timestamp earlier than the run.started frame's timestamp —
-    making the log read as "message, then run.started", which is visually
-    incoherent."""
+
     base, _ = live_server
     thread_id = await _seed_thread_with_member(base, DEFAULT_ASSISTANT.model_dump(mode="json"))
 
@@ -261,7 +255,6 @@ async def test_event_log_ordering_run_started_before_message(
                 json={"client_id": "c_ord", "content": [{"type": "text", "text": "hi"}]},
             )
 
-            # Wait until the thread's event log contains the expected frames.
             async def _has_full_run() -> bool:
                 resp = await http.get(f"/chat/threads/{thread_id}/events")
                 if resp.status_code != 200:
@@ -269,11 +262,7 @@ async def test_event_log_ordering_run_started_before_message(
                 body = resp.json()
                 items = body.get("items", body) if isinstance(body, dict) else body
                 types = [e["type"] for e in items]
-                return (
-                    "run.started" in types
-                    and "run.completed" in types
-                    and types.count("message") >= 2  # user + assistant
-                )
+                return "run.started" in types and "run.completed" in types and types.count("message") >= 2
 
             for _ in range(100):
                 if await _has_full_run():
@@ -284,8 +273,6 @@ async def test_event_log_ordering_run_started_before_message(
             body = resp.json()
             items = body.get("items", body) if isinstance(body, dict) else body
 
-        # Among only the frames produced by the agent's run, the order by
-        # created_at must be: run.started -> assistant message -> run.completed.
         assistant_frames = [
             e
             for e in items
