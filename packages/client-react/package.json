@@ -1,6 +1,6 @@
 {
   "name": "@rfnry/chat-client-react",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "description": "rfnry/chat - react client",
   "author": "rfnry (https://github.com/rfnry)",
