@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 _VALUE_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 _MAX_VALUE_LEN = 32
 
 
+NamespaceViolationReason = Literal["tenant_mismatch", "no_membership", "namespace_unavailable"]
+
+
 class NamespaceViolation(ValueError):
-    pass
+    def __init__(self, message: str, *, reason: NamespaceViolationReason = "namespace_unavailable") -> None:
+        super().__init__(message)
+        self.reason: NamespaceViolationReason = reason
 
 
 def validate_namespace_value(value: str) -> None:
