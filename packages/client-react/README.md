@@ -1,140 +1,57 @@
-# rfnry/chat-client-react
+# @rfnry/chat-client-react
 
-React client for rfnry/chat. Any identity role — `UserIdentity`, `AssistantIdentity`, `SystemIdentity` — can connect through this client. The docs below describe the common case (a human user in a browser tab) but the same API supports, for example, an in-browser AI assistant or an embedded system identity; pass the appropriate `identity` to `ChatProvider`.
+React client for rfnry/chat. Hooks-shaped, render-granular, fully typed. `<ChatProvider>` plus 16 `useChatX` hooks cover everything: connection state, thread lifecycle, history, members, presence, work-in-progress indicators, file uploads. The same hook surface works for human users, in-browser AI assistants, and embedded system identities — pass the appropriate `identity` and the rest is identical.
 
-## Proactive invites
+If you've used Vercel AI SDK and want something that does multi-participant rooms instead of single-turn completions, this is the equivalent for that shape of product. The mental model mirrors the Python client one-to-one, so a frontend dev and a backend agent dev reading each other's code never have to translate.
 
-When another participant adds this connected identity to a thread, the provider
-receives a transient `thread:invited` frame from the server's inbox room,
-hydrates the thread metadata into the store, auto-joins the thread room, and
-invalidates the `['chat', 'threads']` query. Apps can observe the event via an
-optional callback:
+## Getting Started
 
-```tsx
-<ChatProvider
-  url="http://chat.internal"
-  authenticate={async () => ({ headers: { authorization: 'Bearer …' } })}
-  onThreadInvited={(thread, addedBy) => {
-    // Show a toast, navigate to the thread, play a sound, etc.
-  }}
->
-  ...
-</ChatProvider>
+```bash
+npm install @rfnry/chat-client-react
 ```
 
-The `onThreadInvited` callback receives only `(thread, addedBy)` for
-ergonomics — the invitee identity is usually implicit (it's the connected
-user). **For the full frame including `addedMember`** — useful for group
-chats or when you need to distinguish who was added from who added them —
-use the `useInviteHandler` hook, which mirrors Python's `@on_invited`:
-
 ```tsx
-import { useInviteHandler } from '@rfnry/chat-client-react'
+import { ChatProvider, useChatClient, useChatHistory, useChatSession } from '@rfnry/chat-client-react'
 
-function InviteToaster() {
-  useInviteHandler((frame) => {
-    // frame.thread, frame.addedMember, frame.addedBy
-    toast(`${frame.addedBy.name} added ${frame.addedMember.name}`)
-  })
-  return null
+function App() {
+  return (
+    <ChatProvider url="http://chat.internal" identity={{ role: 'user', id: 'u_1', name: 'Alice', metadata: {} }}>
+      <Thread id="th_1" />
+    </ChatProvider>
+  )
+}
+
+function Thread({ id }: { id: string }) {
+  const client = useChatClient()
+  const session = useChatSession(id)
+  const events = useChatHistory(id)
+
+  if (session.status !== 'joined') return <p>{session.status}…</p>
+  return (
+    <>
+      {events.map((e) => <Bubble key={e.id} event={e} />)}
+      <button onClick={() => client.sendMessage(id, { content: [{ type: 'text', text: 'hi' }] })}>send</button>
+    </>
+  )
 }
 ```
 
-**To opt out of auto-join**, pass `autoJoinOnInvite={false}` to
-`ChatProvider`. The provider will hydrate thread metadata and fire
-`onThreadInvited` / `useInviteHandler` listeners, but will not call
-`client.joinThread(...)`; you're responsible for deciding whether to join
-(e.g. based on a policy check inside `useInviteHandler`). This mirrors
-Python's `auto_join_on_invite=False` opt-out.
+`useChatSession(id)` drives the join + replay; `useChatHistory(id)` subscribes to the event log; `client.sendMessage(...)` returns a `Promise<Event>` you can `await` if you want optimistic UI hooks. Every hook is independent — adding `useChatPresence()` or `useChatIsWorking(id)` doesn't wake the others.
 
-```tsx
-<ChatProvider url="…" authenticate={…} autoJoinOnInvite={false}>
-  …
-</ChatProvider>
-```
+## Features
 
-## Default dispatch filters
+**Symmetric mental model with the backend.** `useChatHandlers().on.message(fn)` mirrors Python's `@client.on_message()`. `client.withRun(threadId, async (send) => …)` mirrors Python's `async with client.send(thread_id) as send:`. The same identity model, same event types, same recipients filter applies. A frontend dev who writes a chat reaction handler and a Python dev who writes the agent that reacts read the same shape — the only difference is whether you wrote it as a hook or a decorator.
 
-Handler hooks (`useMessageHandler`, `useToolCallHandler`, `useHandler`, etc.) apply two filters before firing, matching the Python client's behavior:
+**Render-granular by design.** Each hook subscribes to one slice of the zustand store. `useChatMembers(id)` only re-renders on member changes; `useChatHistory(id)` only on new events; `useChatIsWorking(id)` only when a boolean flips. Splitting the surface this way means a typing-indicator component costs ~2 renders per turn, not 20. The page-hook pattern (compose your view's hooks into one `usePageX` and consume the ViewModel from the component) keeps UI and chat behavior cleanly separated without sacrificing this granularity.
 
-- Events authored by this client's own identity are skipped (no self-triggering).
-- Events with a non-null `recipients` list that doesn't include this identity's id are skipped.
+**Proactive flows are first-class.** When another participant adds the connected identity to a thread, `<ChatProvider>` auto-receives the `thread:invited` frame from the server's inbox room, hydrates the thread metadata into the store, joins the thread room, and invalidates the threads query. Apps observe via `onThreadInvited` (lossy, ergonomic) or `useChatHandlers().on.invited(fn)` (the full parsed frame including who was added and who added them). Build "agent DMs the user" without polling.
 
-Both filters are inert when the client has no `identity` configured. To bypass the filters on a single handler (audit loggers, moderation tooling), pass `{ allEvents: true }`:
+**Streaming, transcript, history — three views, one truth.** `useChatTranscript(id)` is the render-ready merged feed: persisted events interleaved with in-flight streaming partials, chronologically sorted. `useChatHistory(id)` is persisted events only (audit, export). `useChatStreams(id)` is partials only (typing indicators, live cursors). Pick the slice that matches the cost you want to pay; the store maintains all three coherently.
 
-```tsx
-useMessageHandler(threadId, (event) => {...}, { allEvents: true })
-```
+**Suspense + TanStack Query under the hood.** `useChatSuspenseThread(id)` integrates with React's Suspense boundary; `useChatThreads(opts)` returns a `UseQueryResult` you can pair with mutations and invalidations. `useQueryClient` and `QueryClient` are re-exported so you don't manage two query clients.
 
-## Who am I?
+**Frame-level handlers with parse-once delivery.** `useChatHandlers()` exposes typed registration for `message`, `reasoning`, `toolCall`, `toolResult`, `anyEvent`, `invited`, `threadUpdated`, `membersUpdated`, `runUpdated`, `presenceJoined`, `presenceLeft`, plus a generic `event(type, fn)` escape hatch. Default filters skip self-authored events and recipient-mismatched ones; opt out with `{ allEvents: true }`. Every incoming wire frame is parsed once at the provider, regardless of how many handler hooks are mounted.
 
-`useIdentity()` returns the identity this client is connected as (or `null` if none was configured):
+## License
 
-```tsx
-import { useIdentity } from '@rfnry/chat-client-react'
-
-const identity = useIdentity()
-if (identity?.role === 'user') { ... }
-```
-
-## Proactive helper
-
-`ChatClient.openThreadWith({ message, invite?, threadId?, tenant?, metadata? })` composes create-or-fetch-thread → optional add-member → join → send-message into one call. Returns `{ thread, event }`. Mirrors Python's `client.open_thread_with(...)`.
-
-```ts
-const client = useChatClient()
-const { thread } = await client.openThreadWith({
-  message: [{ type: 'text', text: 'ping' }],
-  invite: bob,
-})
-```
-
-## Error handling
-
-Socket failures throw `SocketTransportError` (with `code` and `message`).
-HTTP failures throw `ChatHttpError`, or one of its subclasses:
-`ThreadNotFoundError`, `ThreadConflictError`, `ChatAuthError`. Catch them
-separately.
-
-```ts
-import {
-  ChatAuthError,
-  ChatHttpError,
-  SocketTransportError,
-  ThreadConflictError,
-  ThreadNotFoundError,
-} from '@rfnry/chat-client-react'
-
-try {
-  await client.getThread('th_missing')
-} catch (e) {
-  if (e instanceof ThreadNotFoundError) { /* ... */ }
-  else if (e instanceof ChatAuthError) { /* ... */ }
-  else if (e instanceof ChatHttpError) { /* ... */ }
-}
-
-try {
-  await client.joinThread(threadId)
-} catch (e) {
-  if (e instanceof SocketTransportError) {
-    console.error(e.code, e.message)
-  }
-}
-```
-
-## Reconnecting with new options
-
-`ChatClient.reconnect({ url?, authenticate?, identity?, path?, socketPath?, fetchImpl? })`
-tears down the REST and socket transports and rebuilds them with the supplied
-options (any option omitted keeps its current value). This mirrors Python's
-`ChatClient.reconnect(...)` — the method is URL-switchable without remounting
-the `ChatProvider`.
-
-Listeners registered via `client.on(event, handler)` are preserved: the client
-keeps an internal registry and re-attaches them to the new socket after it
-connects. Consumers do **not** need to re-register handlers.
-
-```ts
-await client.reconnect({ url: 'https://chat.staging.internal' })
-// prior `client.on('event', handler)` subscriptions still fire.
-```
+MIT — see [`LICENSE`](./LICENSE).

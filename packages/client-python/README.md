@@ -1,226 +1,55 @@
 # rfnry-chat-client
 
-Python client for rfnry/chat. Any identity role — `UserIdentity`, `AssistantIdentity`, `SystemIdentity` — can connect through this client. The example below uses an `AssistantIdentity` because that's the common case (LLM-driven agents); a headless user service would instantiate a `UserIdentity` and use the same API.
+Python client for rfnry/chat — for backend services that want to *be* a participant. Whether you're an LLM-driven assistant, a webhook-triggered monitor, or a headless user agent, you connect once with an identity and behave like any other member of a thread. Decorator-driven handler API, run lifecycle wrapped for you, proactive flow built in.
 
-## Install
+This is the SDK you reach for when you want to ship an AI that talks to people in real time without rebuilding the chat layer. Compared to agent frameworks where the chat surface is an afterthought (request/response over HTTP, tools bolted on top), this client treats the chat thread as the runtime: messages and tool calls are events you observe, runs are lifecycles you participate in, and your agent can initiate as freely as it can react.
+
+## Getting Started
 
 ```bash
 pip install rfnry-chat-client
 ```
 
-## Example
-
 ```python
 import asyncio
-
 from rfnry_chat_client import ChatClient
 from rfnry_chat_protocol import AssistantIdentity, TextPart
 
-
 async def main() -> None:
-    me = AssistantIdentity(
-        id="policies-bot",
-        name="Policies",
-        metadata={"tenant": {"org": "acme"}},
-    )
+    me = AssistantIdentity(id="policies-bot", name="Policies", metadata={})
 
     async def authenticate() -> dict:
-        return {
-            "headers": {"authorization": "Bearer <service-token>"},
-            "auth": {"identity_id": me.id},
-        }
+        return {"headers": {"authorization": "Bearer <service-token>"}}
 
-    client = ChatClient(
-        base_url="http://chat-server.internal",
-        identity=me,
-        authenticate=authenticate,
-    )
+    client = ChatClient(base_url="http://chat.internal", identity=me, authenticate=authenticate)
 
     @client.on_message()
-    async def handle(ctx, send):
-        print(f"[{ctx.event.author.name}] {ctx.event.content}")
-        yield send.message(content=[TextPart(text="acknowledged")])
+    async def reply(ctx, send):
+        async with send.message() as out:
+            out.append(TextPart(text=f"got: {ctx.event.text}"))
 
-    @client.on_tool_call("get_company_policy")
-    async def lookup(ctx, send):
-        policy = await policy_db.get(ctx.event.tool.arguments["topic"])
-        yield send.tool_result(ctx.event.tool.id, result=policy)
+    async with client.running():
+        await asyncio.Event().wait()
 
-    async def on_connect() -> None:
-        await client.join_thread("t_1")
-
-    await client.run(on_connect=on_connect)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
 ```
 
-`ChatClient.run()` handles the common long-lived-agent lifecycle: retry the initial connect with backoff, invoke an optional `on_connect` hook (the idiomatic place to join threads / subscribe), hold the task open, and disconnect cleanly on cancellation. If you need lower-level control, call `connect()` / `disconnect()` yourself.
+`@client.on_message()`, `@client.on_tool_call(name)`, `@client.on_invited()` and friends do the registration. `send` is a context manager that opens a Run, stamps the right author, and closes the Run when the block exits — happy path or exception.
 
-## Handler API
+## Features
 
-Handlers take `(ctx, send)`. Two shapes:
+**Decorator-shaped handler API.** `@on_message`, `@on_reasoning`, `@on_tool_call(name)`, `@on_tool_result`, `@on_any_event`, `@on_invited`, plus the typed protocol-frame handlers (`@on_thread_updated`, `@on_run_updated`, `@on_presence_joined`, etc.). Each handler receives a `ctx` (triggering event + thread + thread-scoped state) and a `send` (an emitter that knows your identity, the active run, and how to stamp events). Self-authored events and recipient-mismatched events are filtered by default; opt out with `all_events=True` when you genuinely need the firehose.
 
-- **Observer** — a plain async function with no `yield`. Reacts to events, emits nothing, no server round trip for run tracking.
-- **Emitter** — an async generator that yields events built from `send.message(...)` / `send.tool_call(...)` / etc. The dispatcher auto-wraps the invocation in a server-tracked `Run` (`run:begin` before, `run:end` after, `run.failed(error)` on exception). Emitted events are stamped with the run id and authored by `self.identity`.
+**Proactive openers.** `client.send_to(identity)` and `client.open_thread_with(...)` create a thread (or reuse one), invite a user, join, and send a first message in one call. Combined with the inbox rooms on the server, this lets an agent reach a user who isn't in any thread yet — the user's browser receives a `thread:invited` frame, hydrates the thread, and renders. The webhook/cron/event-bus → user-notification pattern collapses to four lines.
 
-Registration:
+**Run lifecycle handled for you.** Emitter handlers (`@on_tool_call(name)`) are wrapped in a server-acknowledged `Run` automatically. The watchdog on the server side reaps stalls so your UI never hangs on a process that died. Need finer control? `client.send(thread_id)` is a context manager you can drive manually; pass `lazy=True` to defer the Run open until the first emit.
 
-- `@client.on(event_type, *, tool=None, all_events=False)` — base.
-- `@client.on_message()`, `@client.on_reasoning()`, `@client.on_tool_result()` — sugar.
-- `@client.on_tool_call(name=None)` — sugar; `name=None` matches any tool call.
-- `@client.on_any_event()` — wildcard across every event type.
-- `@client.on_invited()` — fires when this identity is added to a thread. Receives a `ThreadInvitedFrame(thread, added_member, added_by)`. By default, the client auto-joins the thread room before the handler runs, so the handler may assume live event delivery. Pass `auto_join_on_invite=False` to `ChatClient(...)` to opt out.
+**Streaming.** `send.message_stream()` returns a `Stream` you write tokens into; `stream:start` / `stream:delta` / `stream:end` frames relay them to the thread room. The final `MessageEvent` (or `ReasoningEvent`) is committed when the stream closes. Idiomatic path is the async-generator handler — yield events from the generator and the dispatcher wraps the Run for you.
 
-Server broadcast frames (transient, not persisted events) are also surfaced via decorators — symmetric with how the React provider consumes them:
+**Multi-server agents via `ChatClientPool`.** One agent process can serve many chat servers — `ChatClientPool` holds one connected client per host, lazily, with shared authentication. `ChatClient.reconnect(base_url=...)` switches URLs at runtime if you ever need to rebind a single connection.
 
-- `@client.on_thread_updated()` — handler takes `(thread: Thread)`. Fires on thread metadata / tenant changes.
-- `@client.on_members_updated()` — handler takes `(thread_id: str, members: list[Identity])`. Fires after any add/remove of thread members, with the full current snapshot.
-- `@client.on_run_updated()` — handler takes `(run: Run)`. Fires on run lifecycle transitions (started, completed, failed, cancelled).
+**Loop prevention built in.** Handlers never fire on events they themselves authored, and `MAX_HANDLER_CHAIN_DEPTH = 8` is a hard backstop against runaway emit chains. Both are intentional and load-bearing — removing either causes infinite cascades when two agents talk to each other.
 
-Default filters (skipped for `all_events=True`):
-- Self-authored events are not dispatched (no self-triggering).
-- Events with a recipient list that does not include you are skipped.
+## License
 
-Chain-depth cap (`MAX_HANDLER_CHAIN_DEPTH = 8`) prevents runaway emit chains.
-
-## Streaming
-
-An assistant streams tokens for a message or reasoning event. Because streams require a run id, the idiomatic path is an async-generator handler (auto-wrapped in a run). If you need to stream from a plain coroutine handler, open the run manually and pass its id to `send.*_stream(run_id=...)`.
-
-```python
-# Idiomatic: generator handler, Run is auto-opened.
-@client.on_message()
-async def reply(ctx, send):
-    async with send.message_stream() as stream:
-        async for token in my_llm.stream(ctx.event):
-            await stream.write(token)
-    if False:  # keep handler a generator; no actual yield needed
-        yield  # pragma: no cover
-
-# Manual: coroutine handler opens its own run. begin_run returns the
-# run_id directly; call client.get_run(run_id) if you need the full Run.
-@client.on_message()
-async def reply(ctx, send):
-    run_id = await client.begin_run(ctx.event.thread_id, triggered_by_event_id=ctx.event.id)
-    try:
-        async with send.message_stream(run_id=run_id) as stream:
-            async for token in my_llm.stream(ctx.event):
-                await stream.write(token)
-    finally:
-        await client.end_run(run_id)
-```
-
-`begin_run` returns the `run_id` as a string (saving an HTTP round-trip). If you need the hydrated `Run` object — e.g. for status reporting — call `await client.get_run(run_id)` explicitly.
-
-Streaming is available to any connected identity (users, assistants, system).
-
-## Proactive flows
-
-`client.send_to(identity)` is the canonical entry point for agents that initiate conversations (webhook-triggered pings, cron-driven alerts, bridge gateways). It creates or reuses a thread, ensures the target is a member, joins, opens a Run-scoped emission window, and yields a `Send`:
-
-```python
-async with client.send_to(UserIdentity(id="u_alice", name="Alice")) as send:
-    await send.emit(send.message([TextPart(text="Disk usage on api-03 crossed 90%.")]))
-    # multiple emissions, streaming, etc. all work in one window
-```
-
-Idempotency: pass `client_id="op_xyz"` to reuse the same thread on retries.
-
-For known threads, use `client.send(thread_id)` directly (skips the find-or-create + add-member + join setup).
-
-```python
-# Switch the URL (or auth) at runtime without losing registered handlers.
-await client.reconnect(base_url="http://chat-other.internal")
-```
-
-For agents that need to talk to many chat servers from one process, `ChatClientPool` keeps one `ChatClient` per URL:
-
-```python
-from rfnry_chat_client import ChatClientPool
-
-pool = ChatClientPool(factory=build_client)
-client = await pool.get_or_connect("http://chat-a.internal")
-# ... use client ...
-await pool.close_all()  # or await pool.close("http://chat-a.internal")
-```
-
-See `examples/python/monitoring-assistant/` for the canonical webhook-driven shape.
-
-### Running an agent that also exposes HTTP endpoints
-
-Plug `client.running()` into a FastAPI lifespan and run uvicorn yourself.
-`running()` manages the background connect/disconnect and installs a
-logging filter that suppresses a known-harmless `uvicorn.error` traceback
-triggered when SIGINT races the outbound socketio connection.
-
-```python
-import asyncio
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from rfnry_chat_client import ChatClient
-
-client = ChatClient(base_url="http://chat.example", identity=...)
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async with client.running(on_connect=my_on_connect):
-        yield
-
-app = FastAPI(lifespan=lifespan)
-# ... routes, middleware ...
-
-if __name__ == "__main__":
-    import uvicorn
-    try:
-        uvicorn.run(app, host="0.0.0.0", port=9100)
-    except asyncio.CancelledError:
-        pass  # silence uvicorn's post-shutdown re-raise on SIGINT
-```
-
-If your consumer has **no HTTP endpoints** and is a pure background
-agent, skip FastAPI entirely and use `asyncio.run(client.run(...))`.
-
-## Error handling
-
-Socket failures raise `SocketTransportError(code, message)`. HTTP failures
-raise `ChatHttpError` — or one of its subclasses, depending on the response:
-`ThreadNotFoundError`, `ThreadConflictError`, `ChatAuthError`. They are
-deliberately distinct; catch them separately.
-
-```python
-from rfnry_chat_client import (
-    ChatAuthError,
-    ChatHttpError,
-    SocketTransportError,
-    ThreadConflictError,
-    ThreadNotFoundError,
-)
-
-try:
-    await client.rest.get_thread("th_missing")
-except ThreadNotFoundError:
-    ...
-except ChatAuthError:
-    ...
-except ChatHttpError as e:
-    # catch-all for any other HTTP failure
-    print(e.status, e.body)
-
-try:
-    await client.socket.send_message(thread_id, draft)
-except SocketTransportError as e:
-    print(e.code, e.message)
-```
-
-## Testing
-
-Unit tests mock transports. Integration tests spin up a real `rfnry-chat-server` on a dynamically allocated port, backed by the Postgres instance at `DATABASE_URL` (default `postgresql://rfnry_chat:rfnry_chat@localhost:55432/rfnry_chat_test`; start it via the `docker-compose.test.yml` in `packages/server-python`). Integration tests skip automatically if Postgres is unreachable.
-
-## Development
-
-```bash
-uv sync --extra dev
-uv run poe dev
-```
+MIT — see [`LICENSE`](./LICENSE).
