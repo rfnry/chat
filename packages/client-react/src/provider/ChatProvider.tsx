@@ -36,6 +36,14 @@ export type ChatProviderProps = ChatClientOptions & {
   onThreadInvited?: (thread: Thread, addedBy: Identity) => void
 
   autoJoinOnInvite?: boolean
+
+  /**
+   * When the `identity` prop changes (different id, role, or name), the
+   * provider tears down the existing client+store+presence and rebuilds
+   * with the new identity. Defaults to `true`. Set `false` to keep the
+   * existing connection (advanced use only — handle re-auth yourself).
+   */
+  resetOnIdentityChange?: boolean
 }
 
 export function identitiesEqual(a?: Identity | null, b?: Identity | null): boolean {
@@ -52,6 +60,7 @@ export function ChatProvider(props: ChatProviderProps) {
     errorFallback,
     onThreadInvited,
     autoJoinOnInvite = true,
+    resetOnIdentityChange = true,
     ...clientOpts
   } = props
   const optsRef = useRef(clientOpts)
@@ -256,14 +265,22 @@ export function ChatProvider(props: ChatProviderProps) {
     if (clientOpts.url === last.url && identitiesEqual(nextIdentity, last.identity)) {
       return
     }
+    const identityChanged = !identitiesEqual(nextIdentity, last.identity)
     lastOptsRef.current = { url: clientOpts.url, identity: nextIdentity }
 
     const client = clientRef.current
     const currentValue = value
     if (!client || !currentValue) return
 
+    if (identityChanged && !resetOnIdentityChange) {
+      return
+    }
+
     const store = currentValue.store
     store.getState().actions.reset()
+    if (identityChanged) {
+      currentValue.presence.reset()
+    }
     qcRef.current.invalidateQueries({ queryKey: ['chat'] })
 
     void (async () => {
@@ -275,7 +292,7 @@ export function ChatProvider(props: ChatProviderProps) {
         store.getState().actions.setConnectionStatus('disconnected')
       }
     })()
-  }, [clientOpts.url, clientOpts.identity, value])
+  }, [clientOpts.url, clientOpts.identity, value, resetOnIdentityChange])
 
   let body: ReactNode
   if (value) {

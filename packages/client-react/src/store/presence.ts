@@ -17,6 +17,7 @@ export type PresenceSlice = StoreApi<PresenceSliceState> & {
   applyLeft(frame: PresenceLeftFrame): void
   list(): Identity[]
   isHydrated(): boolean
+  reset(): void
 }
 
 export type PresenceStore = ReturnType<typeof createPresenceSlice>
@@ -57,6 +58,9 @@ export function createPresenceSlice(): PresenceSlice {
     },
     isHydrated() {
       return store.getState().hydrated
+    },
+    reset() {
+      store.setState(initialState(), true)
     },
   }
 }
