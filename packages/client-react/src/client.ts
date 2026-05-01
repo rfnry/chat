@@ -190,8 +190,26 @@ export class ChatClient {
     return event
   }
 
-  listEvents(threadId: string, opts: { limit?: number } = {}): Promise<Page<Event>> {
+  listEvents(
+    threadId: string,
+    opts: { limit?: number; before?: { createdAt: string; id: string } } = {}
+  ): Promise<Page<Event>> {
     return this.rest.listEvents(threadId, opts)
+  }
+
+  async backfill(
+    threadId: string,
+    opts: { before: { createdAt: string; id: string }; limit?: number }
+  ): Promise<{ events: Event[]; hasMore: boolean }> {
+    const requested = opts.limit ?? 100
+    const page = await this.rest.listEvents(threadId, {
+      before: opts.before,
+      limit: requested,
+    })
+    return {
+      events: page.items,
+      hasMore: page.items.length >= requested,
+    }
   }
 
   listMembers(threadId: string): Promise<ThreadMember[]> {

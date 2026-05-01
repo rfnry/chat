@@ -129,9 +129,16 @@ export class RestTransport {
     return toEvent(wire as never)
   }
 
-  async listEvents(threadId: string, opts: { limit?: number } = {}): Promise<Page<Event>> {
+  async listEvents(
+    threadId: string,
+    opts: { limit?: number; before?: { createdAt: string; id: string } } = {}
+  ): Promise<Page<Event>> {
     const params = new URLSearchParams()
     if (opts.limit !== undefined) params.set('limit', String(opts.limit))
+    if (opts.before) {
+      params.set('before_created_at', opts.before.createdAt)
+      params.set('before_id', opts.before.id)
+    }
     const qs = params.toString()
     const wire = await this.req<{ items: unknown[]; next_cursor?: unknown }>(
       'GET',

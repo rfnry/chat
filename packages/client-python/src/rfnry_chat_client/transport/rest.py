@@ -117,10 +117,19 @@ class RestTransport:
         payload = await self._request("POST", f"/threads/{thread_id}/messages", json_body=draft)
         return parse_event(payload)
 
-    async def list_events(self, thread_id: str, *, limit: int | None = None) -> dict[str, Any]:
+    async def list_events(
+        self,
+        thread_id: str,
+        *,
+        limit: int | None = None,
+        before: tuple[str, str] | None = None,
+    ) -> dict[str, Any]:
         params: dict[str, Any] = {}
         if limit is not None:
             params["limit"] = limit
+        if before is not None:
+            params["before_created_at"] = before[0]
+            params["before_id"] = before[1]
         payload = await self._request("GET", f"/threads/{thread_id}/events", params=params or None)
         return {
             "items": [parse_event(item) for item in payload["items"]],

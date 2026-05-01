@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from rfnry_chat_protocol import Event, EventDraft, Identity, MessageEvent, matches
 
 from rfnry_chat_server.recipients import RecipientNotMemberError
-from rfnry_chat_server.store.types import Page
+from rfnry_chat_server.store.types import EventCursor, Page
 from rfnry_chat_server.transport.rest.deps import get_server, identity_tenant, resolve_identity
 
 MAX_EVENTS_LIMIT = 200
@@ -58,6 +58,8 @@ def build_router() -> APIRouter:
         thread_id: str,
         request: Request,
         limit: int = 100,
+        before_created_at: str | None = None,
+        before_id: str | None = None,
         identity: Identity = Depends(resolve_identity),
     ) -> Page[Event]:
         server = get_server(request)
@@ -66,6 +68,16 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="thread not found")
         if not await server.check_authorize(identity, thread_id, "thread.read"):
             raise HTTPException(status_code=403, detail="not authorized: thread.read")
-        return await server.store.list_events(thread_id, limit=max(1, min(limit, MAX_EVENTS_LIMIT)))
+        until: EventCursor | None = None
+        if before_created_at is not None and before_id is not None:
+            until = EventCursor(
+                created_at=datetime.fromisoformat(before_created_at),
+                id=before_id,
+            )
+        return await server.store.list_events(
+            thread_id,
+            until=until,
+            limit=max(1, min(limit, MAX_EVENTS_LIMIT)),
+        )
 
     return router

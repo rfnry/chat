@@ -301,6 +301,17 @@ class ChatClient:
     async def leave_thread(self, thread_id: str) -> dict[str, Any]:
         return await self._socket.leave_thread(thread_id)
 
+    async def backfill(
+        self,
+        thread_id: str,
+        *,
+        before: tuple[str, str],
+        limit: int = 100,
+    ) -> tuple[list[Event], bool]:
+        page = await self._rest.list_events(thread_id, limit=limit, before=before)
+        items: list[Event] = page["items"]
+        return items, len(items) >= limit
+
     async def send_message(
         self,
         thread_id: str,

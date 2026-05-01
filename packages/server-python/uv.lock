@@ -1224,7 +1224,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "rfnry-chat-server"
-version = "0.2.2"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },

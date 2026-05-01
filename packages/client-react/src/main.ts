@@ -53,6 +53,7 @@ export {
   ThreadConflictError,
   ThreadNotFoundError,
 } from './errors'
+export { type ChatBackfill, useChatBackfill } from './hooks/useChatBackfill'
 export { useChatClient, useChatStore } from './hooks/useChatClient'
 export {
   type ChatHandlers,
