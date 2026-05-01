@@ -95,6 +95,23 @@ export function createChatStore() {
             streams = { ...streams }
             delete streams[event.id]
           }
+          if (
+            (event.type === 'run.completed' ||
+              event.type === 'run.failed' ||
+              event.type === 'run.cancelled') &&
+            event.runId
+          ) {
+            let dirty = streams !== state.streams
+            for (const evtId in streams) {
+              if (streams[evtId]!.runId === event.runId) {
+                if (!dirty) {
+                  streams = { ...streams }
+                  dirty = true
+                }
+                delete streams[evtId]
+              }
+            }
+          }
           return {
             events: { ...state.events, [event.threadId]: next },
             activeRuns,
