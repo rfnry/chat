@@ -104,6 +104,7 @@ export class ChatClient {
   private readonly reconnectionAttempts: number | undefined
   private readonly onReconnectFailed: (() => void) | undefined
   private readonly listeners: ListenerEntry[] = []
+  private readonly domainEventListeners: Array<(event: Event) => void> = []
 
   constructor(opts: ChatClientOptions) {
     this.url = opts.url.replace(/\/$/, '')
@@ -183,8 +184,10 @@ export class ChatClient {
     return this.rest.clearThreadEvents(threadId)
   }
 
-  sendMessage(threadId: string, draft: EventDraft): Promise<Event> {
-    return this.rest.sendMessage(threadId, draft)
+  async sendMessage(threadId: string, draft: EventDraft): Promise<Event> {
+    const event = await this.rest.sendMessage(threadId, draft)
+    this._emitDomainEvent(event)
+    return event
   }
 
   listEvents(threadId: string, opts: { limit?: number } = {}): Promise<Page<Event>> {
@@ -263,7 +266,27 @@ export class ChatClient {
   }
 
   async emitEvent(event: Record<string, unknown> & { threadId: string }): Promise<Event> {
-    return this.socket.sendEvent(event.threadId, toEventWire(event))
+    const result = await this.socket.sendEvent(event.threadId, toEventWire(event))
+    this._emitDomainEvent(result)
+    return result
+  }
+
+  onDomainEvent(listener: (event: Event) => void): () => void {
+    this.domainEventListeners.push(listener)
+    return () => {
+      const idx = this.domainEventListeners.indexOf(listener)
+      if (idx !== -1) this.domainEventListeners.splice(idx, 1)
+    }
+  }
+
+  private _emitDomainEvent(event: Event): void {
+    for (const listener of [...this.domainEventListeners]) {
+      try {
+        listener(event)
+      } catch (err) {
+        console.warn('[rfnry] domain event listener error:', err)
+      }
+    }
   }
 
   async beginRun(

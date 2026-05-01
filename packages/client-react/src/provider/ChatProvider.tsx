@@ -4,6 +4,7 @@ import type {
   StreamStartFrameWire,
 } from '@rfnry/chat-protocol'
 import {
+  type Event as ChatEvent,
   type Identity,
   parsePresenceJoinedFrame,
   parsePresenceLeftFrame,
@@ -108,20 +109,31 @@ export function ChatProvider(props: ChatProviderProps) {
           },
         }
 
+        const recentEventIds = new Map<string, true>()
+        const RECENT_EVENT_LIMIT = 256
+        const dispatchEvent = (event: ChatEvent) => {
+          if (recentEventIds.has(event.id)) return
+          recentEventIds.set(event.id, true)
+          if (recentEventIds.size > RECENT_EVENT_LIMIT) {
+            const oldest = recentEventIds.keys().next().value
+            if (oldest !== undefined) recentEventIds.delete(oldest)
+          }
+          store.getState().actions.addEvent(event)
+          for (const listener of [...eventListeners]) {
+            try {
+              listener(event)
+            } catch (err) {
+              console.error('[rfnry] handler error for event type "%s":', event.type, err)
+            }
+          }
+        }
+
         disposers.push(
           client.on('event', (data) => {
-            const event = toEvent(data as never)
-            store.getState().actions.addEvent(event)
-
-            for (const listener of [...eventListeners]) {
-              try {
-                listener(event)
-              } catch (err) {
-                console.error('[rfnry] handler error for event type "%s":', event.type, err)
-              }
-            }
+            dispatchEvent(toEvent(data as never))
           })
         )
+        disposers.push(client.onDomainEvent(dispatchEvent))
         disposers.push(
           client.on('run:updated', (data) => {
             store.getState().actions.upsertRun(toRun(data as never))

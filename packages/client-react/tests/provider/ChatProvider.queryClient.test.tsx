@@ -8,6 +8,7 @@ vi.mock('../../src/client', () => ({
     connect = vi.fn().mockResolvedValue(undefined)
     disconnect = vi.fn()
     on = vi.fn(() => () => {})
+    onDomainEvent = vi.fn(() => () => {})
     listPresence = vi.fn().mockResolvedValue({ members: [] })
   },
 }))
