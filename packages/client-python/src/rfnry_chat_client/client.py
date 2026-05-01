@@ -7,7 +7,7 @@ import random
 import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, TypedDict
 
 import httpx
 from rfnry_chat_protocol import (
@@ -35,6 +35,12 @@ from rfnry_chat_client.members_cache import MembersCache
 from rfnry_chat_client.send import Send
 from rfnry_chat_client.transport.rest import RestTransport
 from rfnry_chat_client.transport.socket import SocketTransport
+
+
+class JoinThreadResult(TypedDict):
+    thread_id: str
+    replayed: list[Event]
+    replay_truncated: bool
 
 AuthenticatePayload = dict[str, Any]
 AuthenticateCallable = Callable[[], Awaitable[AuthenticatePayload]]
@@ -284,8 +290,13 @@ class ChatClient:
             with contextlib.suppress(asyncio.CancelledError, TimeoutError, Exception):
                 await asyncio.wait_for(task, timeout=disconnect_timeout)
 
-    async def join_thread(self, thread_id: str, since: dict[str, str] | None = None) -> dict[str, Any]:
-        return await self._socket.join_thread(thread_id, since=since)
+    async def join_thread(self, thread_id: str, since: dict[str, str] | None = None) -> JoinThreadResult:
+        reply = await self._socket.join_thread(thread_id, since=since)
+        return JoinThreadResult(
+            thread_id=reply.get("thread_id", thread_id),
+            replayed=[parse_event(e) for e in reply.get("replayed", [])],
+            replay_truncated=bool(reply.get("replay_truncated", False)),
+        )
 
     async def leave_thread(self, thread_id: str) -> dict[str, Any]:
         return await self._socket.leave_thread(thread_id)

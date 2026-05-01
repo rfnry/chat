@@ -1,4 +1,4 @@
-from rfnry_chat_client.client import ChatClient
+from rfnry_chat_client.client import ChatClient, JoinThreadResult
 from rfnry_chat_client.errors import (
     ChatAuthError,
     ChatHttpError,
@@ -31,6 +31,7 @@ __all__ = [
     "Send",
     "InboxDispatcher",
     "InviteHandler",
+    "JoinThreadResult",
     "RestTransport",
     "Stream",
     "SocketTransport",

@@ -6,6 +6,7 @@ export type SessionStatus = 'idle' | 'joining' | 'joined' | 'error'
 export type ChatSession = {
   status: SessionStatus
   error?: Error
+  replayTruncated?: boolean
 }
 
 export function useChatSession(threadId: string | null): ChatSession {
@@ -35,7 +36,7 @@ export function useChatSession(threadId: string | null): ChatSession {
           store.getState().actions.setEventsBulk(threadId, result.replayed)
         }
         store.getState().actions.addJoinedThread(threadId)
-        setState({ status: 'joined' })
+        setState({ status: 'joined', replayTruncated: result.replayTruncated })
 
         void client.getThread(threadId).then(
           (thread) => {
