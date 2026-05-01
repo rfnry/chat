@@ -90,6 +90,15 @@ export { type UseChatThreadsOptions, useChatThreads } from './hooks/useChatThrea
 export { type TranscriptItem, useChatTranscript } from './hooks/useChatTranscript'
 export { useChatWorkingDetail } from './hooks/useChatWorkingDetail'
 export { ChatContext, type ChatContextValue } from './provider/ChatContext'
+export {
+  ChatErrorBoundary,
+  type ChatErrorBoundaryProps,
+  type ChatErrorFallback,
+  type ChatErrorFallbackContext,
+  type ChatErrorKey,
+  classifyChatError,
+  useChatErrorReport,
+} from './provider/ChatErrorBoundary'
 export { ChatProvider, type ChatProviderProps } from './provider/ChatProvider'
 export {
   type ChatStore,

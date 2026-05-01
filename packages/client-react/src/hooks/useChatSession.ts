@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useChatErrorReport } from '../provider/ChatErrorBoundary'
 import { useChatClient, useChatStore } from './useChatClient'
 
 export type SessionStatus = 'idle' | 'joining' | 'joined' | 'error'
@@ -68,6 +69,8 @@ export function useChatSession(threadId: string | null): ChatSession {
       store.getState().actions.removeJoinedThread(threadId)
     }
   }, [client, store, threadId])
+
+  useChatErrorReport(state.status === 'error' ? (state.error ?? null) : null)
 
   return state
 }
