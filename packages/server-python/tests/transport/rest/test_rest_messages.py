@@ -69,6 +69,36 @@ async def test_list_events_returns_appended(client: AsyncClient) -> None:
     assert [e["client_id"] for e in body["items"]] == ["cid_0", "cid_1", "cid_2"]
 
 
+async def test_list_events_before_cursor_returns_older_only(client: AsyncClient) -> None:
+    create = await client.post("/chat/threads", json={"tenant": {"org": "A"}})
+    thread_id = create.json()["id"]
+
+    appended: list[dict[str, str]] = []
+    for i in range(5):
+        resp = await client.post(
+            f"/chat/threads/{thread_id}/messages",
+            json={
+                "client_id": f"cid_{i}",
+                "content": [{"type": "text", "text": f"m{i}"}],
+            },
+        )
+        appended.append(resp.json())
+
+    anchor = appended[3]
+    resp = await client.get(
+        f"/chat/threads/{thread_id}/events",
+        params={
+            "before_created_at": anchor["created_at"],
+            "before_id": anchor["id"],
+            "limit": 100,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    returned_ids = [e["client_id"] for e in body["items"]]
+    assert returned_ids == ["cid_0", "cid_1", "cid_2"]
+
+
 async def test_send_message_requires_membership(clean_db: asyncpg.Pool) -> None:
     store = PostgresChatStore(pool=clean_db)
     alice = UserIdentity(id="u_alice", name="Alice", metadata={"tenant": {"org": "A"}})
