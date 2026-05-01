@@ -308,14 +308,18 @@ class ChatClient:
         if recipients is not None:
             draft["recipients"] = recipients
         reply = await self._socket.send_message(thread_id, draft)
-        return parse_event(reply["event"])
+        result = parse_event(reply["event"])
+        await self._dispatcher.feed_event(result)
+        return result
 
     async def emit_event(self, event: Event) -> Event:
         reply = await self._socket.send_event(
             event.thread_id,
             event.model_dump(mode="json", by_alias=True),
         )
-        return parse_event(reply["event"])
+        result = parse_event(reply["event"])
+        await self._dispatcher.feed_event(result)
+        return result
 
     async def begin_run(
         self,

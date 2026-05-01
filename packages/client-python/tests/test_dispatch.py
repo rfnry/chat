@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 from datetime import UTC, datetime
 from typing import Any
 
@@ -34,6 +35,9 @@ class _StubClient:
         return {"run_id": run_id, "status": "completed"}
 
 
+_event_id_seq = itertools.count(1)
+
+
 def _msg(
     *,
     author_id: str = "u_1",
@@ -41,11 +45,12 @@ def _msg(
     recipients: list[str] | None = None,
     tool_name: str | None = None,
     event_type: str = "message",
+    event_id: str | None = None,
 ) -> dict[str, Any]:
     author = {"role": author_role, "id": author_id, "name": author_id, "metadata": {}}
     now = datetime.now(UTC).isoformat()
     base: dict[str, Any] = {
-        "id": "evt_1",
+        "id": event_id or f"evt_{next(_event_id_seq)}",
         "thread_id": "t_1",
         "run_id": None,
         "author": author,

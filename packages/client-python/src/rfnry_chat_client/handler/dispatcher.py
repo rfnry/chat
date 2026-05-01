@@ -35,11 +35,15 @@ class _Registration:
     idempotency_key: IdempotencyKeyFn | None
 
 
+_RECENT_EVENT_LIMIT = 256
+
+
 class HandlerDispatcher:
     def __init__(self, *, identity: Identity, client: ChatClient) -> None:
         self._identity = identity
         self._client = client
         self._registrations: list[_Registration] = []
+        self._recent_event_ids: dict[str, bool] = {}
 
     def register(
         self,
@@ -63,7 +67,16 @@ class HandlerDispatcher:
         )
 
     async def feed(self, raw: dict[str, Any]) -> None:
-        event = parse_event(raw)
+        await self.feed_event(parse_event(raw))
+
+    async def feed_event(self, event: Event) -> None:
+        if event.id in self._recent_event_ids:
+            return
+        self._recent_event_ids[event.id] = True
+        if len(self._recent_event_ids) > _RECENT_EVENT_LIMIT:
+            oldest = next(iter(self._recent_event_ids))
+            del self._recent_event_ids[oldest]
+
         if _chain_depth.get() >= MAX_HANDLER_CHAIN_DEPTH:
             return
         matches: list[_Registration] = []

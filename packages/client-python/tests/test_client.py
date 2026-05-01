@@ -30,10 +30,10 @@ def _message_event_dict(*, author_id: str = "u_other", recipients: list[str] | N
     }
 
 
-def _tool_call_event_dict(*, tool_name: str) -> dict[str, Any]:
+def _tool_call_event_dict(*, tool_name: str, event_id: str | None = None) -> dict[str, Any]:
     now = datetime.now(UTC).isoformat()
     return {
-        "id": "evt_2",
+        "id": event_id or f"evt_tool_{tool_name}",
         "thread_id": "t_1",
         "run_id": None,
         "author": {"role": "user", "id": "u_1", "name": "U", "metadata": {}},
