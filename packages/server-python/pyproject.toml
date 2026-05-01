@@ -1,6 +1,6 @@
 [project]
 name = "rfnry-chat-server"
-version = "0.2.2"
+version = "0.1.0"
 description = "rfnry/chat — python server"
 readme = "README.md"
 license = "MIT"
