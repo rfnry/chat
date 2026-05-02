@@ -13,6 +13,6 @@ class Telemetry(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    async def record_run(self, row: TelemetryRow) -> None:
+    async def write(self, row: TelemetryRow) -> None:
         with contextlib.suppress(Exception):
             await self.sink.write(row)

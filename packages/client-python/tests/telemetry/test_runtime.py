@@ -32,7 +32,7 @@ def _row() -> TelemetryRow:
 async def test_record_run_writes_row() -> None:
     sink = _Capture()
     tel = Telemetry(sink=sink)
-    await tel.record_run(_row())
+    await tel.write(_row())
     assert len(sink.rows) == 1
 
 
@@ -43,4 +43,4 @@ async def test_record_run_suppresses_sink_failure() -> None:
             raise RuntimeError("nope")
 
     tel = Telemetry(sink=_Broken())
-    await tel.record_run(_row())
+    await tel.write(_row())

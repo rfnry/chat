@@ -731,7 +731,7 @@ class ChatServer:
                     tool_errors=accum.tool_errors,
                     stream_deltas=accum.stream_deltas,
                 )
-                await self.telemetry.record_run(row)
+                await self.telemetry.write(row)
         return updated
 
     async def broadcast_stream_start(self, frame: StreamStartFrame, *, thread: Thread) -> None:

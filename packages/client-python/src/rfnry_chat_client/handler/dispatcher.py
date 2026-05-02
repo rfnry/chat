@@ -223,7 +223,7 @@ class HandlerDispatcher:
                     error_code="handler_error",
                     error_message=str(exc),
                 )
-                await self._client.telemetry.record_run(row)
+                await self._client.telemetry.write(row)
             raise
         if began_run_id is not None:
             await self._client.socket.end_run(began_run_id)
@@ -235,7 +235,7 @@ class HandlerDispatcher:
                 error_code=None,
                 error_message=None,
             )
-            await self._client.telemetry.record_run(row)
+            await self._client.telemetry.write(row)
 
     def _build_telemetry_row(
         self,
