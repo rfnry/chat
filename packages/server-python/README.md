@@ -43,6 +43,38 @@ The mounted app exposes the REST surface (`/threads`, `/events`, `/members`, `/r
 
 **Pluggable storage.** `ChatStore` is a `Protocol`. The package ships `InMemoryChatStore` (tests, prototyping) and `PostgresChatStore` (production, asyncpg-based). Anything implementing the protocol works — bring your own database. Schema for the Postgres impl ships in `store/postgres/schema.sql`; the in-memory impl is for fast iteration without the migration tax.
 
+### Always-on observability + telemetry
+
+`ChatServer` ships two structured-data modules wired by default:
+
+- **Observability** — one `ObservabilityRecord` per meaningful boundary (run begin/end, stream start/end, thread invitations, namespace violations, handler errors, watchdog failures). Default sink picks **Pretty stderr** in a TTY, **JSONL stderr** elsewhere. Override with the `RFNRY_OBSERVABILITY_FORMAT=json|pretty` env var or `NO_COLOR=1`.
+- **Telemetry** — one `TelemetryRow` per `Run` written at `end_run` (including watchdog-driven timeouts). Default sink is `NullTelemetrySink`; pass `data_root=Path("./var")` to `ChatServer(...)` to auto-wire `SqliteTelemetrySink` writing per-tenant `<data_root>/<scope_leaf>/state.db`.
+
+Sink failures are wrapped in `contextlib.suppress(Exception)` — observability never breaks a turn. Records carry `schema_version: int = 1`; bump on rename/retype/remove.
+
+```python
+from pathlib import Path
+
+from rfnry_chat_server import ChatServer
+from rfnry_chat_server.observability import JsonlFileSink, Observability
+from rfnry_chat_server.telemetry import SqliteTelemetrySink, Telemetry
+
+server = ChatServer(
+    store=...,
+    observability=Observability(sink=JsonlFileSink(path=Path("logs/chat.jsonl"))),
+    telemetry=Telemetry(sink=SqliteTelemetrySink(agent_root=Path("./var"))),
+)
+```
+
+Admin-UI rollup query example (per-tenant Run counts and average duration in the last hour):
+
+```sql
+SELECT scope_leaf, status, COUNT(*) AS runs, AVG(duration_ms) AS avg_ms
+FROM telemetry
+WHERE at >= datetime('now', '-1 hour')
+GROUP BY scope_leaf, status;
+```
+
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).
