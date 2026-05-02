@@ -4,13 +4,16 @@ import asyncio
 import contextlib
 import logging
 import secrets
+import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter
 from rfnry_chat_protocol import (
+    AssistantIdentity,
     Event,
     Identity,
     MessageEvent,
@@ -53,6 +56,7 @@ from rfnry_chat_server.run_events import (
 )
 from rfnry_chat_server.send import Send
 from rfnry_chat_server.store.protocol import ChatStore
+from rfnry_chat_server.telemetry import ActorKind, Telemetry, TelemetryRow
 
 _log = logging.getLogger(__name__)
 
@@ -145,9 +149,12 @@ class ChatServer:
         watchdog_batch_size: int = 100,
         member_cache_ttl_seconds: float = 5.0,
         observability: Observability | None = None,
+        telemetry: Telemetry | None = None,
     ) -> None:
         self.store = store
         self.observability = observability or Observability()
+        self.telemetry = telemetry or Telemetry()
+        self._run_accum: dict[str, _RunAccumulator] = {}
         self._members_cache = MembersCache(
             store,
             ttl_seconds=member_cache_ttl_seconds,
@@ -611,6 +618,15 @@ class ChatServer:
         created = await self.store.create_run(run)
         await self.publish_run_updated(created, thread=thread)
         await self.publish_event(_run_started_event(created, thread, actor), thread=thread)
+        self._run_accum[created.id] = _RunAccumulator(
+            actor_kind=_actor_kind(actor),
+            actor_id=actor.id,
+            worker_id=actor.id,
+            triggered_by_id=triggered_by.id,
+            thread_id=thread.id,
+            scope_leaf=self.scope_leaf_for_thread(thread),
+            idempotency_key=idempotency_key,
+        )
         await self.observability.log(
             "run.begin",
             level="info",
@@ -639,6 +655,7 @@ class ChatServer:
         return updated
 
     async def end_run(self, *, run_id: str, error: RunError | None) -> Run:
+        accum = self._run_accum.pop(run_id, None)
         target_status: RunStatus = "completed" if error is None else "failed"
         updated = await self.store.update_run_status_if_active(run_id, target_status, error=error)
         if updated is None:
@@ -667,6 +684,28 @@ class ChatServer:
                     "error_code": error.code if error else None,
                 },
             )
+            if accum is not None:
+                duration_ms = int((time.monotonic() - accum.started_monotonic) * 1000)
+                row = TelemetryRow(
+                    at=datetime.now(UTC),
+                    scope_leaf=accum.scope_leaf,
+                    thread_id=accum.thread_id,
+                    run_id=updated.id,
+                    actor_kind=accum.actor_kind,
+                    actor_id=accum.actor_id,
+                    worker_id=accum.worker_id,
+                    triggered_by_id=accum.triggered_by_id,
+                    idempotency_key=accum.idempotency_key,
+                    status=updated.status,
+                    error_code=error.code if error else None,
+                    error_message=error.message if error else None,
+                    duration_ms=duration_ms,
+                    events_emitted=accum.events_emitted,
+                    tool_calls=accum.tool_calls,
+                    tool_errors=accum.tool_errors,
+                    stream_deltas=accum.stream_deltas,
+                )
+                await self.telemetry.record_run(row)
         return updated
 
     async def broadcast_stream_start(self, frame: StreamStartFrame, *, thread: Thread) -> None:
@@ -743,3 +782,27 @@ class ChatServer:
         self.broadcaster = SocketIOBroadcaster(sio_server.sio)
         self._socketio = sio_server
         return sio_server.asgi_app(fastapi_app)
+
+
+def _actor_kind(identity: Identity) -> ActorKind:
+    if isinstance(identity, AssistantIdentity):
+        return "assistant"
+    if isinstance(identity, SystemIdentity):
+        return "system"
+    return "user"
+
+
+@dataclass
+class _RunAccumulator:
+    started_monotonic: float = field(default_factory=time.monotonic)
+    events_emitted: int = 0
+    tool_calls: int = 0
+    tool_errors: int = 0
+    stream_deltas: int = 0
+    actor_kind: ActorKind = "user"
+    actor_id: str = ""
+    worker_id: str = ""
+    triggered_by_id: str = ""
+    thread_id: str = ""
+    scope_leaf: str = "default"
+    idempotency_key: str | None = None
