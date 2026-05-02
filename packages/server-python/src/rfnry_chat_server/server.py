@@ -643,6 +643,11 @@ class ChatServer:
             return None
         return derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys)
 
+    def scope_leaf_for_thread(self, thread: Thread) -> str:
+        if self.namespace_keys is None:
+            return "default"
+        return derive_namespace_path(thread.tenant, namespace_keys=self.namespace_keys).lstrip("/")
+
     def enforce_namespace_on_identity(self, identity: Identity) -> None:
         if self.namespace_keys is None:
             return
