@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
@@ -56,7 +57,7 @@ from rfnry_chat_server.run_events import (
 )
 from rfnry_chat_server.send import Send
 from rfnry_chat_server.store.protocol import ChatStore
-from rfnry_chat_server.telemetry import ActorKind, Telemetry, TelemetryRow
+from rfnry_chat_server.telemetry import ActorKind, SqliteTelemetrySink, Telemetry, TelemetryRow
 
 _log = logging.getLogger(__name__)
 
@@ -150,10 +151,19 @@ class ChatServer:
         member_cache_ttl_seconds: float = 5.0,
         observability: Observability | None = None,
         telemetry: Telemetry | None = None,
+        data_root: Path | None = None,
     ) -> None:
         self.store = store
         self.observability = observability or Observability()
-        self.telemetry = telemetry or Telemetry()
+        self.data_root = data_root
+        if telemetry is not None:
+            self.telemetry = telemetry
+        elif data_root is not None:
+            self.telemetry = Telemetry(
+                sink=SqliteTelemetrySink(agent_root=data_root, data_root=data_root)
+            )
+        else:
+            self.telemetry = Telemetry()
         self._run_accum: dict[str, _RunAccumulator] = {}
         # maps an active stream's event_id to its run_id so broadcast_stream_delta
         # (whose frame doesn't carry run_id) can find the right accumulator.

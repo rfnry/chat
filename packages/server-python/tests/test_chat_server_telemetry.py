@@ -232,6 +232,23 @@ async def test_watchdog_timeout_emits_row_with_failed_status() -> None:
     assert timed_out.error_message  # non-empty timeout message
 
 
+@pytest.mark.asyncio
+async def test_server_data_root_defaults_to_sqlite_sink(tmp_path) -> None:
+    from rfnry_chat_server.telemetry import SqliteTelemetrySink
+
+    server = ChatServer(store=InMemoryChatStore(), data_root=tmp_path)
+    assert isinstance(server.telemetry.sink, SqliteTelemetrySink)
+
+
+@pytest.mark.asyncio
+async def test_server_explicit_telemetry_overrides_data_root(tmp_path) -> None:
+    """When telemetry is explicitly passed, data_root has no effect on it."""
+    sink = _Capture()
+    explicit = Telemetry(sink=sink)
+    server = ChatServer(store=InMemoryChatStore(), data_root=tmp_path, telemetry=explicit)
+    assert server.telemetry is explicit
+
+
 async def _create_thread(server: ChatServer, identity: UserIdentity):
     """Helper that calls store.create_thread with whatever signature this version uses.
 
