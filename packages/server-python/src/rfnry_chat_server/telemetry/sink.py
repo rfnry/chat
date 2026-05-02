@@ -57,6 +57,7 @@ _TELEMETRY_INDEXES = (
 class SqliteTelemetrySink(BaseModel):
     agent_root: Path
     data_root: Path | None = None
+    member_name: str | None = None
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -64,8 +65,13 @@ class SqliteTelemetrySink(BaseModel):
     _lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
 
     def _db_path(self, scope_leaf: str) -> Path:
-        base = self.data_root if self.data_root is not None else self.agent_root / "data"
-        return base / scope_leaf / "state.db"
+        if self.data_root is not None:
+            base = self.data_root / scope_leaf
+            if self.member_name:
+                base = base / self.member_name
+        else:
+            base = self.agent_root / "data" / scope_leaf
+        return base / "state.db"
 
     async def write(self, row: TelemetryRow) -> None:
         path = self._db_path(row.scope_leaf)

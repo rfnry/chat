@@ -53,6 +53,13 @@ async def test_sqlite_sink_uses_data_root_override(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_sqlite_sink_uses_member_name(tmp_path: Path) -> None:
+    sink = SqliteTelemetrySink(agent_root=tmp_path, data_root=tmp_path, member_name="agent_a")
+    await sink.write(_row())
+    assert (tmp_path / "acme/u1" / "agent_a" / "state.db").exists()
+
+
+@pytest.mark.asyncio
 async def test_sqlite_sink_idempotent_replace(tmp_path: Path) -> None:
     sink = SqliteTelemetrySink(agent_root=tmp_path)
     await sink.write(_row(events_emitted=1))
