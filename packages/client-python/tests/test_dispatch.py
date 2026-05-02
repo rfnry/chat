@@ -8,6 +8,7 @@ from rfnry_chat_protocol import AssistantIdentity, UserIdentity
 
 from rfnry_chat_client.handler.context import HandlerContext
 from rfnry_chat_client.handler.dispatcher import HandlerDispatcher
+from rfnry_chat_client.observability import NullSink, Observability
 from rfnry_chat_client.send import Send
 
 
@@ -16,6 +17,7 @@ class _StubClient:
         self.emitted: list[Any] = []
         self.runs: list[str] = []
         self._next_run_id = 0
+        self.observability = Observability(sink=NullSink())
 
     async def emit_event(self, event: Any) -> Any:
         self.emitted.append(event)

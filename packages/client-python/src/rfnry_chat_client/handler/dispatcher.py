@@ -157,6 +157,15 @@ class HandlerDispatcher:
                 emitted = emitted.model_copy(update=updates)
                 await self._client.emit_event(emitted)
         except Exception as exc:
+            await self._client.observability.log(
+                "handler.error",
+                level="error",
+                thread_id=event.thread_id,
+                run_id=began_run_id,
+                worker_id=self._identity.id,
+                context={"event_type": event.type, "event_id": event.id},
+                error=exc,
+            )
             if began_run_id is not None:
                 await self._client.socket.end_run(
                     began_run_id,

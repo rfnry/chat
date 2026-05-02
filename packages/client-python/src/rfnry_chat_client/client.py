@@ -32,6 +32,7 @@ from rfnry_chat_client.handler.dispatcher import HandlerDispatcher
 from rfnry_chat_client.handler.types import HandlerCallable
 from rfnry_chat_client.inbox import InboxDispatcher, InviteHandler
 from rfnry_chat_client.members_cache import MembersCache
+from rfnry_chat_client.observability import Observability
 from rfnry_chat_client.send import Send
 from rfnry_chat_client.transport.rest import RestTransport
 from rfnry_chat_client.transport.socket import SocketTransport
@@ -97,9 +98,11 @@ class ChatClient:
         auto_join_on_invite: bool = True,
         socket_call_timeout: float = 15.0,
         member_cache_ttl_seconds: float = 5.0,
+        observability: Observability | None = None,
     ) -> None:
         self._identity = identity
         self._member_cache_ttl_seconds = member_cache_ttl_seconds
+        self.observability = observability or Observability()
 
         if authenticate is None:
             import base64
@@ -186,12 +189,22 @@ class ChatClient:
 
         try:
             await self._socket.disconnect()
-        except Exception:
-            pass
+        except Exception as exc:
+            await self.observability.log(
+                "reconnect.disconnect_failed",
+                level="warn",
+                context={"transport": "socket"},
+                error=exc,
+            )
         try:
             await self._rest.aclose()
-        except Exception:
-            pass
+        except Exception as exc:
+            await self.observability.log(
+                "reconnect.aclose_failed",
+                level="warn",
+                context={"transport": "rest"},
+                error=exc,
+            )
 
         if authenticate is not None:
             self._authenticate = authenticate
