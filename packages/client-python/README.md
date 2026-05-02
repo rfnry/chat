@@ -50,6 +50,30 @@ asyncio.run(main())
 
 **Loop prevention built in.** Handlers never fire on events they themselves authored, and `MAX_HANDLER_CHAIN_DEPTH = 8` is a hard backstop against runaway emit chains. Both are intentional and load-bearing — removing either causes infinite cascades when two agents talk to each other.
 
+### Always-on observability + telemetry
+
+`ChatClient` ships the same two structured-data modules as the server:
+
+- **Observability** — one `ObservabilityRecord` per handler error or reconnect failure. Default sink: Pretty stderr in TTY, JSONL stderr otherwise. Override via `RFNRY_OBSERVABILITY_FORMAT=json|pretty` or `NO_COLOR=1`.
+- **Telemetry** — one `TelemetryRow` per handler-driven Run (events_emitted, tool_calls, tool_errors, duration_ms, error metadata). Default sink: `NullTelemetrySink`. Pass `data_root=Path("./var")` to `ChatClient(...)` to auto-wire `SqliteTelemetrySink`.
+
+Sink failures are suppressed — logging cannot break handler execution. Records carry `schema_version: int = 1`. For an admin-UI rollup query example, see the [server README](../server-python/README.md#always-on-observability--telemetry) — the SQL is the same.
+
+```python
+from pathlib import Path
+
+from rfnry_chat_client import ChatClient
+from rfnry_chat_client.observability import JsonlFileSink, Observability
+from rfnry_chat_client.telemetry import SqliteTelemetrySink, Telemetry
+
+client = ChatClient(
+    base_url="...",
+    identity=...,
+    observability=Observability(sink=JsonlFileSink(path=Path("logs/agent.jsonl"))),
+    telemetry=Telemetry(sink=SqliteTelemetrySink(agent_root=Path("./var"))),
+)
+```
+
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).
