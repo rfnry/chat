@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
+from pydantic import ValidationError
 from rfnry_chat_protocol import (
     AssistantIdentity,
     Event,
@@ -119,18 +120,19 @@ async def _identity_from_handshake(handshake: HandshakeData) -> Identity | None:
         if not encoded:
             return None
         import base64
+        import binascii
         import json as _json
 
         try:
             padded = encoded + "=" * (-len(encoded) % 4)
             raw = _json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
-        except Exception:
+        except (binascii.Error, UnicodeDecodeError, ValueError):
             return None
         if not isinstance(raw, dict):
             return None
     try:
         return parse_identity(raw)
-    except Exception:
+    except ValidationError:
         return None
 
 
@@ -277,7 +279,7 @@ class ChatServer:
                 await self._sweep_stale_runs()
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001  # watchdog must survive any store-level error; structured-logged below
                 _log.exception("watchdog sweep failed; continuing")
                 await self.observability.log(
                     "watchdog.sweep_failed",
@@ -295,7 +297,7 @@ class ChatServer:
                         message=f"run exceeded {self.run_timeout_seconds}s without end signal",
                     ),
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001  # one failed timeout must not abort the gather; structured-logged below
                 _log.exception("watchdog failed to timeout run %s", run_id)
                 await self.observability.log(
                     "watchdog.timeout_failed",

@@ -202,7 +202,7 @@ class ChatClient:
 
         try:
             await self._socket.disconnect()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001  # best-effort cleanup before reconnect; structured-logged
             await self.observability.log(
                 "reconnect.disconnect_failed",
                 level="warn",
@@ -211,7 +211,7 @@ class ChatClient:
             )
         try:
             await self._rest.aclose()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001  # best-effort cleanup before reconnect; structured-logged
             await self.observability.log(
                 "reconnect.aclose_failed",
                 level="warn",
@@ -261,7 +261,7 @@ class ChatClient:
                 _log.info("connected on attempt=%d", attempt)
                 last_error = None
                 break
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001  # connect-retry must back off on any transport error; surfaced via raise after loop
                 last_error = exc
                 _log.debug("connect retry=%d: %s", attempt, exc)
                 if attempt < connect_retries:
