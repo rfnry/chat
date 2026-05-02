@@ -147,7 +147,12 @@ class ChatServer:
         observability: Observability | None = None,
     ) -> None:
         self.store = store
-        self._members_cache = MembersCache(store, ttl_seconds=member_cache_ttl_seconds)
+        self.observability = observability or Observability()
+        self._members_cache = MembersCache(
+            store,
+            ttl_seconds=member_cache_ttl_seconds,
+            observability=self.observability,
+        )
         self._authenticate_is_default = authenticate is None
         self.authenticate = authenticate or _identity_from_handshake
         self.authorize = authorize
@@ -158,7 +163,6 @@ class ChatServer:
         self.run_timeout_seconds = run_timeout_seconds
         self.watchdog_interval_seconds = watchdog_interval_seconds
         self.watchdog_batch_size = watchdog_batch_size
-        self.observability = observability or Observability()
         self._socketio: Any = None
         self._system_identity = system_identity or SystemIdentity(id="system", name="system")
         self._handlers = HandlerRegistry()
@@ -253,8 +257,13 @@ class ChatServer:
                 await self._sweep_stale_runs()
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 _log.exception("watchdog sweep failed; continuing")
+                await self.observability.log(
+                    "watchdog.sweep_failed",
+                    level="error",
+                    error=exc,
+                )
 
     async def _sweep_stale_runs(self) -> None:
         async def _timeout_one(run_id: str) -> None:
@@ -266,8 +275,14 @@ class ChatServer:
                         message=f"run exceeded {self.run_timeout_seconds}s without end signal",
                     ),
                 )
-            except Exception:
+            except Exception as exc:
                 _log.exception("watchdog failed to timeout run %s", run_id)
+                await self.observability.log(
+                    "watchdog.timeout_failed",
+                    level="error",
+                    run_id=run_id,
+                    error=exc,
+                )
 
         while True:
             threshold = datetime.now(UTC) - timedelta(seconds=self.run_timeout_seconds)

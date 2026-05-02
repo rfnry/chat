@@ -107,6 +107,16 @@ class HandlerDispatcher:
                     emitted = emitted.model_copy(update={"run_id": began_run_id})
                 await self._server.publish_event(emitted, thread=ctx.thread)
         except Exception as exc:
+            await self._server.observability.log(
+                "handler.error",
+                level="error",
+                thread_id=thread.id,
+                run_id=began_run_id,
+                worker_id=self._system.id,
+                scope_leaf=self._server.scope_leaf_for_thread(thread),
+                context={"event_type": event.type, "event_id": event.id},
+                error=exc,
+            )
             if began_run_id is not None:
                 await self._server.end_run(
                     run_id=began_run_id,

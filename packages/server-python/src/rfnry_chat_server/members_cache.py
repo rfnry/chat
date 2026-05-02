@@ -6,16 +6,25 @@ from typing import TYPE_CHECKING
 
 from rfnry_chat_protocol import ThreadMember
 
+from rfnry_chat_server.observability import Observability
+
 if TYPE_CHECKING:
     from rfnry_chat_server.store.protocol import ChatStore
 
 
 class MembersCache:
-    def __init__(self, store: ChatStore, *, ttl_seconds: float = 5.0) -> None:
+    def __init__(
+        self,
+        store: ChatStore,
+        *,
+        ttl_seconds: float = 5.0,
+        observability: Observability | None = None,
+    ) -> None:
         self._store = store
         self._ttl = ttl_seconds
         self._entries: dict[str, tuple[float, list[ThreadMember]]] = {}
         self._inflight: dict[str, asyncio.Future[list[ThreadMember]]] = {}
+        self._observability = observability
 
     @property
     def enabled(self) -> bool:
@@ -38,6 +47,13 @@ class MembersCache:
         try:
             members = await self._store.list_members(thread_id)
         except BaseException as exc:
+            if self._observability is not None:
+                await self._observability.log(
+                    "members_cache.fetch_failed",
+                    level="error",
+                    thread_id=thread_id,
+                    error=exc,
+                )
             if not future.done():
                 future.set_exception(exc)
             self._inflight.pop(thread_id, None)
