@@ -63,6 +63,7 @@ dev = [
     "fastapi>=0.136.0",
     "uvicorn>=0.44.0",
 ]
+postgres = ["asyncpg>=0.31.0"]
 
 [tool.ruff]
 line-length = 120
