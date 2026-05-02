@@ -203,7 +203,7 @@ class ChatClient:
         try:
             await self._socket.disconnect()
         except Exception as exc:  # noqa: BLE001  # best-effort cleanup before reconnect; structured-logged
-            await self.observability.log(
+            await self.observability.emit(
                 "reconnect.disconnect_failed",
                 level="warn",
                 context={"transport": "socket"},
@@ -212,7 +212,7 @@ class ChatClient:
         try:
             await self._rest.aclose()
         except Exception as exc:  # noqa: BLE001  # best-effort cleanup before reconnect; structured-logged
-            await self.observability.log(
+            await self.observability.emit(
                 "reconnect.aclose_failed",
                 level="warn",
                 context={"transport": "rest"},

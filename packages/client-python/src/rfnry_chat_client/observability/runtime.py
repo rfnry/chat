@@ -27,7 +27,7 @@ class Observability(BaseModel):
     def _enabled(self, level: ObservabilityLevel) -> bool:
         return _LEVEL_ORDER[level] >= _LEVEL_ORDER[self.level]
 
-    async def log(
+    async def emit(
         self,
         kind: str,
         message: str = "",

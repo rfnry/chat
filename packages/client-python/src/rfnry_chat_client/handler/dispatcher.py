@@ -201,7 +201,7 @@ class HandlerDispatcher:
                     if tool is not None and getattr(tool, "error", None) is not None:
                         accum.tool_errors += 1
         except Exception as exc:
-            await self._client.observability.log(
+            await self._client.observability.emit(
                 "handler.error",
                 level="error",
                 thread_id=event.thread_id,

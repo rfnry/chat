@@ -16,7 +16,7 @@ class _Capture:
 async def test_log_emits_record_with_metadata() -> None:
     sink = _Capture()
     obs = Observability(sink=sink)
-    await obs.log(
+    await obs.emit(
         "thread.create",
         message="created",
         level="info",
@@ -38,10 +38,10 @@ async def test_log_emits_record_with_metadata() -> None:
 async def test_log_drops_below_level() -> None:
     sink = _Capture()
     obs = Observability(sink=sink, level="warn")
-    await obs.log("debug.event", level="debug")
-    await obs.log("info.event", level="info")
-    await obs.log("warn.event", level="warn")
-    await obs.log("error.event", level="error")
+    await obs.emit("debug.event", level="debug")
+    await obs.emit("info.event", level="info")
+    await obs.emit("warn.event", level="warn")
+    await obs.emit("error.event", level="error")
     kinds = [r.kind for r in sink.records]
     assert kinds == ["warn.event", "error.event"]
 
@@ -53,7 +53,7 @@ async def test_log_captures_error_metadata() -> None:
     try:
         raise ValueError("boom")
     except ValueError as exc:
-        await obs.log("handler.error", level="error", error=exc)
+        await obs.emit("handler.error", level="error", error=exc)
     rec = sink.records[0]
     assert rec.error_type == "ValueError"
     assert rec.error_message == "boom"
@@ -68,4 +68,4 @@ async def test_log_suppresses_sink_failure() -> None:
             raise RuntimeError("nope")
 
     obs = Observability(sink=_Broken())
-    await obs.log("anything")
+    await obs.emit("anything")

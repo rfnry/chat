@@ -107,7 +107,7 @@ class HandlerDispatcher:
                     emitted = emitted.model_copy(update={"run_id": began_run_id})
                 await self._server.publish_event(emitted, thread=ctx.thread)
         except Exception as exc:
-            await self._server.observability.log(
+            await self._server.observability.emit(
                 "handler.error",
                 level="error",
                 thread_id=thread.id,

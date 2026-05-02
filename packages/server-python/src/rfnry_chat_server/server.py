@@ -281,7 +281,7 @@ class ChatServer:
                 raise
             except Exception as exc:  # noqa: BLE001  # watchdog must survive any store-level error; structured-logged below
                 _log.exception("watchdog sweep failed; continuing")
-                await self.observability.log(
+                await self.observability.emit(
                     "watchdog.sweep_failed",
                     level="error",
                     error=exc,
@@ -299,7 +299,7 @@ class ChatServer:
                 )
             except Exception as exc:  # noqa: BLE001  # one failed timeout must not abort the gather; structured-logged below
                 _log.exception("watchdog failed to timeout run %s", run_id)
-                await self.observability.log(
+                await self.observability.emit(
                     "watchdog.timeout_failed",
                     level="error",
                     run_id=run_id,
@@ -597,7 +597,7 @@ class ChatServer:
             added_by=added_by,
         )
         await self.broadcaster.broadcast_thread_invited(frame, namespace=namespace)
-        await self.observability.log(
+        await self.observability.emit(
             "inbox.invite_emitted",
             level="info",
             scope_leaf=self.scope_leaf_for_thread(thread),
@@ -653,7 +653,7 @@ class ChatServer:
             scope_leaf=self.scope_leaf_for_thread(thread),
             idempotency_key=idempotency_key,
         )
-        await self.observability.log(
+        await self.observability.emit(
             "run.begin",
             level="info",
             scope_leaf=self.scope_leaf_for_thread(thread),
@@ -698,7 +698,7 @@ class ChatServer:
                 else _run_failed_event(updated, thread, updated.actor, error)
             )
             await self.publish_event(event, thread=thread)
-            await self.observability.log(
+            await self.observability.emit(
                 "run.end",
                 level="info" if error is None else "warn",
                 scope_leaf=self.scope_leaf_for_thread(thread),
@@ -742,7 +742,7 @@ class ChatServer:
         # Remember which run this stream belongs to so subsequent delta frames
         # (which do not carry run_id) can locate the accumulator.
         self._stream_run_id[frame.event_id] = frame.run_id
-        await self.observability.log(
+        await self.observability.emit(
             "stream.start",
             level="info",
             scope_leaf=self.scope_leaf_for_thread(thread),
@@ -769,7 +769,7 @@ class ChatServer:
         await self.broadcaster.broadcast_stream_end(frame, namespace=namespace)
         # Drop the event_id -> run_id mapping; further deltas with this event_id are no-ops.
         self._stream_run_id.pop(frame.event_id, None)
-        await self.observability.log(
+        await self.observability.emit(
             "stream.end",
             level="info",
             scope_leaf=self.scope_leaf_for_thread(thread),

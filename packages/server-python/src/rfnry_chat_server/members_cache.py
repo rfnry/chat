@@ -48,7 +48,7 @@ class MembersCache:
             members = await self._store.list_members(thread_id)
         except BaseException as exc:
             if self._observability is not None:
-                await self._observability.log(
+                await self._observability.emit(
                     "members_cache.fetch_failed",
                     level="error",
                     thread_id=thread_id,
