@@ -36,6 +36,7 @@ from rfnry_chat_server.handler.types import HandlerCallable
 from rfnry_chat_server.members_cache import MembersCache
 from rfnry_chat_server.mentions import extract_text, parse_mention_ids
 from rfnry_chat_server.namespace import NamespaceViolation, derive_namespace_path
+from rfnry_chat_server.observability import Observability
 from rfnry_chat_server.presence import PresenceRegistry
 from rfnry_chat_server.recipients import RecipientNotMemberError, normalize_recipients
 from rfnry_chat_server.run_events import (
@@ -143,6 +144,7 @@ class ChatServer:
         watchdog_interval_seconds: float = 30.0,
         watchdog_batch_size: int = 100,
         member_cache_ttl_seconds: float = 5.0,
+        observability: Observability | None = None,
     ) -> None:
         self.store = store
         self._members_cache = MembersCache(store, ttl_seconds=member_cache_ttl_seconds)
@@ -156,6 +158,7 @@ class ChatServer:
         self.run_timeout_seconds = run_timeout_seconds
         self.watchdog_interval_seconds = watchdog_interval_seconds
         self.watchdog_batch_size = watchdog_batch_size
+        self.observability = observability or Observability()
         self._socketio: Any = None
         self._system_identity = system_identity or SystemIdentity(id="system", name="system")
         self._handlers = HandlerRegistry()
