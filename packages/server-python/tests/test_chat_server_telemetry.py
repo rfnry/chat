@@ -208,6 +208,30 @@ async def test_run_counters_accumulate_events_emitted() -> None:
     assert row.stream_deltas == 3
 
 
+@pytest.mark.asyncio
+async def test_watchdog_timeout_emits_row_with_failed_status() -> None:
+    import asyncio
+
+    sink = _Capture()
+    server = ChatServer(
+        store=InMemoryChatStore(),
+        telemetry=Telemetry(sink=sink),
+        run_timeout_seconds=0,
+        watchdog_interval_seconds=0.05,
+    )
+    user = UserIdentity(id="u", name="u")
+    thread = await _create_thread(server, user)
+    async with server.running():
+        await server.begin_run(thread=thread, actor=user, triggered_by=user, idempotency_key=None)
+        # Wait for the watchdog to time it out
+        await asyncio.sleep(0.2)
+    statuses = [r.status for r in sink.rows]
+    assert "failed" in statuses
+    timed_out = next(r for r in sink.rows if r.status == "failed")
+    assert timed_out.error_code == "timeout"
+    assert timed_out.error_message  # non-empty timeout message
+
+
 async def _create_thread(server: ChatServer, identity: UserIdentity):
     """Helper that calls store.create_thread with whatever signature this version uses.
 
