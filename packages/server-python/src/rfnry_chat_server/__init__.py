@@ -48,11 +48,6 @@ from rfnry_chat_protocol import (
     parse_identity,
 )
 
-from rfnry_chat_server.analytics.collector import (
-    AnalyticsEvent,
-    AssistantAnalytics,
-    OnAnalyticsCallback,
-)
 from rfnry_chat_server.auth import AuthenticateCallback, AuthorizeCallback, HandshakeData
 from rfnry_chat_server.auth_cache import cached_authenticate
 from rfnry_chat_server.broadcast.protocol import Broadcaster
@@ -80,8 +75,6 @@ from rfnry_chat_server.store.types import EventCursor, Page, ThreadCursor
 from rfnry_chat_server.stream import Stream as Stream
 
 __all__ = [
-    "AnalyticsEvent",
-    "AssistantAnalytics",
     "AssistantIdentity",
     "AudioPart",
     "AuthenticateCallback",
@@ -103,7 +96,6 @@ __all__ = [
     "InMemoryChatStore",
     "MessageEvent",
     "NamespaceViolation",
-    "OnAnalyticsCallback",
     "Page",
     "PostgresChatStore",
     "PresenceRegistry",

@@ -14,6 +14,10 @@ All notable changes to `rfnry-chat-server` are documented here. Format follows [
 
 - Every persisted record carries `schema_version: int = 1`. Bump on rename/retype/remove. Additive changes do not bump.
 
+### Removed
+
+- `rfnry_chat_server.analytics` module (`AnalyticsEvent`, `AssistantAnalytics`, `OnAnalyticsCallback`). Use `observability/` + `telemetry/` instead.
+
 ## [0.1.0] — 2026-05-01
 
 Inaugural release. Earlier `0.2.x` line was a prototype shape that has been retired; this is the first version intended for production use, on the foundation of the participant-first refactor.
