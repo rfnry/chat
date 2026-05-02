@@ -7,8 +7,8 @@ All notable changes to `rfnry-chat-client` are documented here. Format follows [
 ### Added
 
 - `observability/` — `ObservabilityRecord`, `Observability` runtime, 5 sinks (`PrettyStderrSink`, `JsonlStderrSink`, `JsonlFileSink`, `MultiSink`, `NullSink`), `default_observability_sink()` (TTY-aware factory). Always-on; replace sink to redirect.
-- `telemetry/` — `TelemetryRow`, `Telemetry.record_run(row)`, 4 sinks (`SqliteTelemetrySink` default, `JsonlTelemetrySink`, `MultiTelemetrySink`, `NullTelemetrySink`). One row per handler-driven Run (events_emitted, tool_calls, tool_errors, duration_ms, error metadata). `ChatClient(data_root=Path(...))` auto-wires `SqliteTelemetrySink`.
-- Structured `obs.log(...)` calls at handler-error and reconnect-failure boundaries.
+- `telemetry/` — `TelemetryRow`, `Telemetry.write(row)`, 4 sinks (`SqliteTelemetrySink` default with optional `member_name`, `JsonlTelemetrySink`, `MultiTelemetrySink`, `NullTelemetrySink`) plus optional `PostgresTelemetrySink` (gated on `asyncpg`, available via the `postgres` extra). One row per handler-driven Run (events_emitted, tool_calls, tool_errors, duration_ms, error metadata). `ChatClient(data_root=Path(...))` auto-wires `SqliteTelemetrySink`.
+- Structured `obs.emit(...)` calls at handler-error and reconnect-failure boundaries.
 
 ### Schema
 

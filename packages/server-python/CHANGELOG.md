@@ -7,8 +7,8 @@ All notable changes to `rfnry-chat-server` are documented here. Format follows [
 ### Added
 
 - `observability/` — `ObservabilityRecord`, `Observability` runtime, 5 sinks (`PrettyStderrSink`, `JsonlStderrSink`, `JsonlFileSink`, `MultiSink`, `NullSink`), `default_observability_sink()` (TTY-aware factory). Always-on; replace sink to redirect.
-- `telemetry/` — `TelemetryRow`, `Telemetry.record_run(row)`, 4 sinks (`SqliteTelemetrySink` default, `JsonlTelemetrySink`, `MultiTelemetrySink`, `NullTelemetrySink`). One row per `Run` written at `end_run`. `ChatServer(data_root=Path(...))` auto-wires `SqliteTelemetrySink`.
-- Structured `obs.log(...)` calls at run/stream/invite boundaries and at silent-swallow sites (watchdog, handler dispatcher, members cache, transport).
+- `telemetry/` — `TelemetryRow`, `Telemetry.write(row)`, 4 sinks (`SqliteTelemetrySink` default with optional `member_name`, `JsonlTelemetrySink`, `MultiTelemetrySink`, `NullTelemetrySink`) plus optional `PostgresTelemetrySink` (gated on `asyncpg`). One row per `Run` written at `end_run`. `ChatServer(data_root=Path(...))` auto-wires `SqliteTelemetrySink`.
+- Structured `obs.emit(...)` calls at run/stream/invite boundaries and at silent-swallow sites (watchdog, handler dispatcher, members cache, transport).
 
 ### Schema
 
