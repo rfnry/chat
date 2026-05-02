@@ -564,6 +564,16 @@ class ChatServer:
             added_by=added_by,
         )
         await self.broadcaster.broadcast_thread_invited(frame, namespace=namespace)
+        await self.observability.log(
+            "inbox.invite_emitted",
+            level="info",
+            scope_leaf=self.scope_leaf_for_thread(thread),
+            thread_id=thread.id,
+            context={
+                "added_member": added_member.id,
+                "added_by": added_by.id,
+            },
+        )
 
     async def publish_run_updated(self, run: Run, *, thread: Thread | None = None) -> None:
         if self.broadcaster is not None:
@@ -601,6 +611,18 @@ class ChatServer:
         created = await self.store.create_run(run)
         await self.publish_run_updated(created, thread=thread)
         await self.publish_event(_run_started_event(created, thread, actor), thread=thread)
+        await self.observability.log(
+            "run.begin",
+            level="info",
+            scope_leaf=self.scope_leaf_for_thread(thread),
+            thread_id=thread.id,
+            run_id=created.id,
+            worker_id=actor.id,
+            context={
+                "triggered_by": triggered_by.id,
+                "idempotency_key": idempotency_key,
+            },
+        )
         return created
 
     async def cancel_run(self, *, run_id: str) -> Run:
@@ -633,6 +655,18 @@ class ChatServer:
                 else _run_failed_event(updated, thread, updated.actor, error)
             )
             await self.publish_event(event, thread=thread)
+            await self.observability.log(
+                "run.end",
+                level="info" if error is None else "warn",
+                scope_leaf=self.scope_leaf_for_thread(thread),
+                thread_id=thread.id,
+                run_id=updated.id,
+                worker_id=updated.actor.id,
+                context={
+                    "status": updated.status,
+                    "error_code": error.code if error else None,
+                },
+            )
         return updated
 
     async def broadcast_stream_start(self, frame: StreamStartFrame, *, thread: Thread) -> None:
@@ -640,6 +674,14 @@ class ChatServer:
             return
         namespace = self.namespace_for_thread(thread)
         await self.broadcaster.broadcast_stream_start(frame, namespace=namespace)
+        await self.observability.log(
+            "stream.start",
+            level="info",
+            scope_leaf=self.scope_leaf_for_thread(thread),
+            thread_id=thread.id,
+            run_id=frame.run_id,
+            context={"event_id": frame.event_id},
+        )
 
     async def broadcast_stream_delta(self, frame: StreamDeltaFrame, *, thread: Thread) -> None:
         if self.broadcaster is None:
@@ -652,6 +694,13 @@ class ChatServer:
             return
         namespace = self.namespace_for_thread(thread)
         await self.broadcaster.broadcast_stream_end(frame, namespace=namespace)
+        await self.observability.log(
+            "stream.end",
+            level="info",
+            scope_leaf=self.scope_leaf_for_thread(thread),
+            thread_id=thread.id,
+            context={"event_id": frame.event_id},
+        )
 
     def namespace_for_thread(self, thread: Thread) -> str | None:
         if self.namespace_keys is None:
