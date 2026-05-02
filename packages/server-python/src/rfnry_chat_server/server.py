@@ -155,6 +155,9 @@ class ChatServer:
         self.observability = observability or Observability()
         self.telemetry = telemetry or Telemetry()
         self._run_accum: dict[str, _RunAccumulator] = {}
+        # maps an active stream's event_id to its run_id so broadcast_stream_delta
+        # (whose frame doesn't carry run_id) can find the right accumulator.
+        self._stream_run_id: dict[str, str] = {}
         self._members_cache = MembersCache(
             store,
             ttl_seconds=member_cache_ttl_seconds,
@@ -483,6 +486,17 @@ class ChatServer:
         if thread is not None:
             asyncio.create_task(self._handler_dispatcher.dispatch(appended, thread))
 
+        if appended.run_id is not None:
+            accum = self._run_accum.get(appended.run_id)
+            if accum is not None:
+                accum.events_emitted += 1
+                if appended.type == "tool.call":
+                    accum.tool_calls += 1
+                elif appended.type == "tool.result":
+                    tool = getattr(appended, "tool", None)
+                    if tool is not None and getattr(tool, "error", None) is not None:
+                        accum.tool_errors += 1
+
         return appended
 
     async def publish_thread_updated(self, thread: Thread) -> None:
@@ -713,6 +727,9 @@ class ChatServer:
             return
         namespace = self.namespace_for_thread(thread)
         await self.broadcaster.broadcast_stream_start(frame, namespace=namespace)
+        # Remember which run this stream belongs to so subsequent delta frames
+        # (which do not carry run_id) can locate the accumulator.
+        self._stream_run_id[frame.event_id] = frame.run_id
         await self.observability.log(
             "stream.start",
             level="info",
@@ -727,12 +744,19 @@ class ChatServer:
             return
         namespace = self.namespace_for_thread(thread)
         await self.broadcaster.broadcast_stream_delta(frame, namespace=namespace)
+        run_id = self._stream_run_id.get(frame.event_id)
+        if run_id is not None:
+            accum = self._run_accum.get(run_id)
+            if accum is not None:
+                accum.stream_deltas += 1
 
     async def broadcast_stream_end(self, frame: StreamEndFrame, *, thread: Thread) -> None:
         if self.broadcaster is None:
             return
         namespace = self.namespace_for_thread(thread)
         await self.broadcaster.broadcast_stream_end(frame, namespace=namespace)
+        # Drop the event_id -> run_id mapping; further deltas with this event_id are no-ops.
+        self._stream_run_id.pop(frame.event_id, None)
         await self.observability.log(
             "stream.end",
             level="info",

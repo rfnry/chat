@@ -90,6 +90,124 @@ async def test_accumulator_drains_when_run_lookup_fails() -> None:
     assert len(sink.rows) == 0
 
 
+@pytest.mark.asyncio
+async def test_run_counters_accumulate_events_emitted() -> None:
+    from datetime import UTC, datetime
+
+    from rfnry_chat_protocol import (
+        MessageEvent,
+        StreamDeltaFrame,
+        StreamEndFrame,
+        StreamStartFrame,
+        TextPart,
+        ToolCall,
+        ToolCallEvent,
+        ToolResult,
+        ToolResultEvent,
+    )
+
+    from rfnry_chat_server.broadcast.recording import RecordingBroadcaster
+
+    sink = _Capture()
+    server = ChatServer(
+        store=InMemoryChatStore(),
+        telemetry=Telemetry(sink=sink),
+        broadcaster=RecordingBroadcaster(),
+    )
+    user = UserIdentity(id="u", name="u")
+    thread = await _create_thread(server, user)
+    run = await server.begin_run(thread=thread, actor=user, triggered_by=user, idempotency_key=None)
+
+    # plain message event — increments events_emitted only
+    msg = MessageEvent(
+        id="evt_1",
+        thread_id=thread.id,
+        author=user,
+        content=[TextPart(text="hi")],
+        run_id=run.id,
+        created_at=datetime.now(UTC),
+    )
+    await server.publish_event(msg, thread=thread)
+
+    # tool.call event — increments events_emitted AND tool_calls
+    tc = ToolCallEvent(
+        id="evt_2",
+        thread_id=thread.id,
+        author=user,
+        run_id=run.id,
+        created_at=datetime.now(UTC),
+        tool=ToolCall(id="t_1", name="get_stock", arguments={}),
+    )
+    await server.publish_event(tc, thread=thread)
+
+    # tool.result event with no error — increments events_emitted only
+    tr_ok = ToolResultEvent(
+        id="evt_3",
+        thread_id=thread.id,
+        author=user,
+        run_id=run.id,
+        created_at=datetime.now(UTC),
+        tool=ToolResult(id="t_1", result={"ok": True}),
+    )
+    await server.publish_event(tr_ok, thread=thread)
+
+    # tool.result event with error — increments events_emitted AND tool_errors
+    tr_err = ToolResultEvent(
+        id="evt_4",
+        thread_id=thread.id,
+        author=user,
+        run_id=run.id,
+        created_at=datetime.now(UTC),
+        tool=ToolResult(id="t_2", error={"code": "boom", "message": "x"}),
+    )
+    await server.publish_event(tr_err, thread=thread)
+
+    # event with no run_id — must not increment any counter, must not crash
+    msg_norun = MessageEvent(
+        id="evt_5",
+        thread_id=thread.id,
+        author=user,
+        content=[TextPart(text="bare")],
+        created_at=datetime.now(UTC),
+    )
+    await server.publish_event(msg_norun, thread=thread)
+
+    # stream deltas — start frame registers run_id, deltas increment counter
+    start = StreamStartFrame(
+        event_id="strm_1",
+        thread_id=thread.id,
+        run_id=run.id,
+        target_type="message",
+        author=user,
+    )
+    await server.broadcast_stream_start(start, thread=thread)
+    for i in range(3):
+        await server.broadcast_stream_delta(
+            StreamDeltaFrame(event_id="strm_1", thread_id=thread.id, text=f"chunk{i}"),
+            thread=thread,
+        )
+    await server.broadcast_stream_end(
+        StreamEndFrame(event_id="strm_1", thread_id=thread.id),
+        thread=thread,
+    )
+
+    # delta with unknown event_id — must not crash, must not increment
+    await server.broadcast_stream_delta(
+        StreamDeltaFrame(event_id="strm_unknown", thread_id=thread.id, text="x"),
+        thread=thread,
+    )
+
+    await server.end_run(run_id=run.id, error=None)
+
+    row = sink.rows[0]
+    # events_emitted counts: msg + tool.call + tool.result(ok) + tool.result(err) = 4
+    # plus run.started + run.completed which carry run_id and are published by the server itself
+    assert row.events_emitted >= 4
+    assert row.tool_calls == 1
+    assert row.tool_errors == 1
+    assert row.stream_deltas == 3
+
+
 async def _create_thread(server: ChatServer, identity: UserIdentity):
     """Helper that calls store.create_thread with whatever signature this version uses.
 
