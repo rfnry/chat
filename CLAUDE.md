@@ -125,6 +125,14 @@ Self-adds (creator joining their own new thread) are suppressed.
 
 `ChatStore` is a `Protocol`. Two impls ship: `InMemoryChatStore` (tests, prototyping) and `PostgresChatStore` (production, asyncpg-based; schema in `store/postgres/schema.sql`). Anything new must implement the protocol — don't reach into the postgres class directly.
 
+### Observability + Telemetry (always on)
+
+Both Python packages (`rfnry-chat-server` and `rfnry-chat-client`) ship `observability/` and `telemetry/` modules wired by default. Records carry `schema_version: int = 1`; bump on rename/retype/remove. Sink failures are suppressed via `contextlib.suppress(Exception)` so logging never breaks a turn. To swap backends, pass a custom `Observability(sink=...)` or `Telemetry(sink=...)` to `ChatServer` / `ChatClient`. Sibling tools across the rfnry ecosystem use the **same** `RFNRY_OBSERVABILITY_FORMAT` env var and identical class names so admin tooling is interchangeable.
+
+The unit-of-work for chat is the `Run`. One `TelemetryRow` is written at `end_run` (including watchdog timeouts), keyed on `(scope_leaf, thread_id, run_id)`. Default storage path: `<data_root>/<scope_leaf>/state.db` (per-tenant SQLite). Pass `data_root=Path(...)` to the engine constructor to auto-wire the SQLite sink.
+
+`scope_leaf` is the namespace path with no leading slash — e.g. `"acme/team-x"` for multi-tenant deployments or the literal `"default"` for single-tenant. (`derive_namespace_path` returns slash-prefixed paths for socket.io; `ChatServer.scope_leaf_for_thread` strips the slash for telemetry/observability use.)
+
 ### Streaming
 
 `stream:start` / `stream:delta` / `stream:end` relay token streams from a participant to the thread room. Streams require a `run_id`. Idiomatic path: an async-generator handler (Run auto-opened) using `send.message_stream()`. Manual path: open the run yourself with `client.begin_run(...)` and pass `run_id=` into the stream factory.
