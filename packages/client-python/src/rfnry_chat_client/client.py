@@ -7,6 +7,7 @@ import random
 import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, TypedDict
 
 import httpx
@@ -34,6 +35,7 @@ from rfnry_chat_client.inbox import InboxDispatcher, InviteHandler
 from rfnry_chat_client.members_cache import MembersCache
 from rfnry_chat_client.observability import Observability
 from rfnry_chat_client.send import Send
+from rfnry_chat_client.telemetry import SqliteTelemetrySink, Telemetry
 from rfnry_chat_client.transport.rest import RestTransport
 from rfnry_chat_client.transport.socket import SocketTransport
 
@@ -99,10 +101,21 @@ class ChatClient:
         socket_call_timeout: float = 15.0,
         member_cache_ttl_seconds: float = 5.0,
         observability: Observability | None = None,
+        telemetry: Telemetry | None = None,
+        data_root: Path | None = None,
     ) -> None:
         self._identity = identity
         self._member_cache_ttl_seconds = member_cache_ttl_seconds
         self.observability = observability or Observability()
+        self.data_root = data_root
+        if telemetry is not None:
+            self.telemetry = telemetry
+        elif data_root is not None:
+            self.telemetry = Telemetry(
+                sink=SqliteTelemetrySink(agent_root=data_root, data_root=data_root)
+            )
+        else:
+            self.telemetry = Telemetry()
 
         if authenticate is None:
             import base64
