@@ -2,6 +2,18 @@
 
 All notable changes to `rfnry-chat-server` are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `observability/` — `ObservabilityRecord`, `Observability` runtime, 5 sinks (`PrettyStderrSink`, `JsonlStderrSink`, `JsonlFileSink`, `MultiSink`, `NullSink`), `default_observability_sink()` (TTY-aware factory). Always-on; replace sink to redirect.
+- `telemetry/` — `TelemetryRow`, `Telemetry.record_run(row)`, 4 sinks (`SqliteTelemetrySink` default, `JsonlTelemetrySink`, `MultiTelemetrySink`, `NullTelemetrySink`). One row per `Run` written at `end_run`. `ChatServer(data_root=Path(...))` auto-wires `SqliteTelemetrySink`.
+- Structured `obs.log(...)` calls at run/stream/invite boundaries and at silent-swallow sites (watchdog, handler dispatcher, members cache, transport).
+
+### Schema
+
+- Every persisted record carries `schema_version: int = 1`. Bump on rename/retype/remove. Additive changes do not bump.
+
 ## [0.1.0] — 2026-05-01
 
 Inaugural release. Earlier `0.2.x` line was a prototype shape that has been retired; this is the first version intended for production use, on the foundation of the participant-first refactor.
